@@ -14,10 +14,12 @@ published — nothing here requires it at runtime.
 | 1 · tamper-evident | SHA-256 manifest in every verdict | **built** |
 | 2 · out-of-scope | gates live outside the collector's folder | **built** |
 | 3 · capability-denied | row-writer spawned without network tools | **built** (`agents/`) |
-| 4 · **tamper-proof** | CI re-runs gates from a pinned version | **written, not yet green** — needs a git remote |
+| 4 · **tamper-proof** | CI re-runs gates from a pinned version | **enforced** — required status checks on `main` |
 
-⛔ Levels 1–3 are **tamper-evident**, not uneditable. Until CI runs, that is
-the only claim this package supports.
+⛔ Levels 1–3 are **tamper-evident**, not uneditable. Only level 4 is a gate:
+the gates run on infrastructure the collecting agent cannot reach, from a
+pinned tag it cannot edit, and a red result blocks the merge rather than
+merely reporting it.
 
 ## Install
 
