@@ -90,6 +90,62 @@ def test_enum_values_are_disclosed_deliberately(fx, capsys):
     assert "outcome" in out
 
 
+def _fenced(tmp_path, vendor_term="REST API", extra=""):
+    """The serialisation the collector actually writes: a fenced JSON array."""
+    f = tmp_path / "_collect-devdocs-staging.md"
+    f.write_text(
+        "---\n"
+        "code: X-1\nnature: catalogue\nstage: silver\n"
+        "entity: Acme\ntype: collect\nstatus: draft\n"
+        "last_updated: 2026-08-02\n"
+        "---\n\n"
+        "```json\n"
+        "[\n"
+        "{\n"
+        '  "id": "acme.rest",\n'
+        f'  "vendor_term": "{vendor_term}",\n'
+        '  "what_it_does": "Programmatic access to the platform.",\n'
+        '  "source_url": "https://docs.acme.test/rest",\n'
+        '  "source_quote": "The REST API accepts JSON payloads.",\n'
+        '  "access_date": "2026-08-02"' + extra + "\n"
+        "}\n"
+        "]\n"
+        "```\n",
+        encoding="utf-8",
+    )
+    return f
+
+
+def test_short_values_do_not_leak_from_the_fenced_format(tmp_path, capsys):
+    """Regression: redaction was length-based and let short values through.
+
+    On the pretty-printed array format every value sits on its own line, so a
+    short product name reached the report verbatim. Length is not a proxy for
+    sensitivity — a product name is usually short.
+    """
+    f = _fenced(tmp_path, vendor_term="REST API")
+    out = _probe(capsys, "--staging", str(f))
+    assert "REST API" not in out, "short vendor_term leaked from a fenced array"
+    assert "Programmatic access" not in out
+    assert "accepts JSON payloads" not in out
+    assert "docs.acme.test" not in out
+
+
+def test_fenced_array_is_detected_and_parsed(tmp_path, capsys):
+    f = _fenced(tmp_path)
+    out = _probe(capsys, "--staging", str(f))
+    assert "detected format               : fenced-array" in out
+    assert "rows parsed                   : 1" in out
+    assert "VERDICT: parser MATCHES this file" in out
+
+
+def test_fenced_array_reports_fields_outside_the_contract(tmp_path, capsys):
+    f = _fenced(tmp_path, extra=',\n  "node_kind": "PLATFORM"')
+    out = _probe(capsys, "--staging", str(f))
+    assert "node_kind" in out, "an unknown field must be surfaced, not silently dropped"
+    assert "in rows, absent from contract" in out
+
+
 # --------------------------------------------------------------------------
 # Format reporting
 # --------------------------------------------------------------------------
@@ -98,7 +154,8 @@ def test_reports_naive_count_matching_the_spec_crosscheck(fx, capsys):
     d = fx("good")
     out = _probe(capsys, "--staging", str(d / "_collect-widgets-staging.md"))
     assert 'lines matching ^{"id"' in out
-    assert "parse as JSON objects" in out
+    assert "rows parsed" in out
+    assert "detected format               : jsonl" in out
 
 
 def test_flags_fields_outside_the_contract(fx, capsys):

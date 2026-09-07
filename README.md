@@ -55,6 +55,31 @@ python -m kbqa g3 --staging <f> --capture <f> \
 Exit **2 means DECLINED and nothing else.** A usage error exits 1, never 2 — a
 typo must not be readable as a permission decision.
 
+## Report — the checker's output to the maker
+
+```bash
+python -m kbqa report --vendor-dir Competitors/Acme --batch widgets --vendor Acme \
+  [--denominator <f>] [--stops <f>] [--log _qa-log.jsonl]
+```
+
+Runs G1–G3 (and G4 with a denominator), writes each verdict to `_qa/`, appends
+to the log, and renders `_qa/<batch>.report.md`.
+
+A verdict says a batch failed. It does not say what may legitimately change, and
+that distinction is the point. A maker agent handed *"G3 FAILED, 14 rows"* will
+edit fourteen quotes until the gate goes green — which is the defect this
+package exists to catch, not a repair of it. So every finding is classified:
+
+| class | meaning |
+|---|---|
+| **structural** | not repairable by editing rows. A missing capture is an absent Bronze artifact, not a defect in the staging file |
+| **planner** | scope or fetch-list work — an uncovered index item, a cited page nobody fetched |
+| **fixable** | the rows disagree with the contract or their own evidence, and correcting them is legitimate |
+
+Each carries an explicit remedy, including what is *not* a fix. Every finding
+code a gate can emit has one, enforced by `tests/test_report.py` — a report that
+falls back to "see the message" for its most important findings is not a report.
+
 ## Probe — confirm the format without disclosing the data
 
 ```bash
