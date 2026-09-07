@@ -14,10 +14,12 @@ published — nothing here requires it at runtime.
 | 1 · tamper-evident | SHA-256 manifest in every verdict | **built** |
 | 2 · out-of-scope | gates live outside the collector's folder | **built** |
 | 3 · capability-denied | row-writer spawned without network tools | **built** (`agents/`) |
-| 4 · **tamper-proof** | CI re-runs gates from a pinned version | **written, not yet green** — needs a git remote |
+| 4 · **tamper-proof** | CI re-runs gates from a pinned version | **enforced** — required status checks on `main` |
 
-⛔ Levels 1–3 are **tamper-evident**, not uneditable. Until CI runs, that is
-the only claim this package supports.
+⛔ Levels 1–3 are **tamper-evident**, not uneditable. Only level 4 is a gate:
+the gates run on infrastructure the collecting agent cannot reach, from a
+pinned tag it cannot edit, and a red result blocks the merge rather than
+merely reporting it.
 
 ## Install
 
@@ -52,6 +54,23 @@ python -m kbqa g3 --staging <f> --capture <f> \
 
 Exit **2 means DECLINED and nothing else.** A usage error exits 1, never 2 — a
 typo must not be readable as a permission decision.
+
+## Probe — confirm the format without disclosing the data
+
+```bash
+python -m kbqa probe --staging <f> [--capture <f>]
+```
+
+The staging format the gates read is **inferred from a specification, not
+observed** — this package was built with no access to the estate it validates.
+The probe closes that gap without reopening it: it reports field names, value
+types, string lengths, and marker syntax, then says whether the shipped parser
+agrees with the file.
+
+It never reports quotes, URLs, vendor terms, or free text. That is a tested
+guarantee, not an intention — `tests/test_probe.py` fails if row content reaches
+the report. The output is meant to be pasted to someone who must not read
+your data.
 
 ## Run sequence
 
