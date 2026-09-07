@@ -1,0 +1,1 @@
+- https://docs.acme.test/widgets/never-fetched: 404 at fetch time on 2026-08-23

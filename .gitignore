@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.DS_Store
+
+# Machine-specific and private. Both stay on disk; neither is published.
+#
+# settings.json holds absolute paths naming the operator's home directory and
+# the private estate it is denied access to. See settings.example.json for a
+# placeholder copy that documents the boundary without disclosing the layout.
+.claude/settings.json
+.claude/settings.local.json
+
+# The commissioning specification is private: it names vendors under study and
+# the scale of the collection. The gates were built from it, but nothing in
+# this package requires it at runtime.
+Requirements/

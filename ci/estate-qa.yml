@@ -1,0 +1,87 @@
+# Template — copy to the ESTATE repo as .github/workflows/qa.yml
+#
+# This is where level 4 actually bites.
+#
+# kb-qa's own CI proves the gates still fail correctly. THIS workflow runs those
+# gates against real vendor data on every push to the estate — from a PINNED
+# kbqa version the collecting agent cannot edit, on a machine it cannot reach.
+#
+# Two things make it real, and it is worth being blunt about them:
+#   1. `@v1.0.0` below is a TAG, not a branch. A branch would let someone change
+#      the gates and the data in one push, which is the whole failure mode.
+#   2. Branch protection must require this check. Without that, a red run is a
+#      notification, not a gate.
+
+name: qa
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install kbqa from a pinned tag
+        # KBQA_TOKEN: a fine-grained PAT with read-only Contents access to the
+        # kb-qa repo, stored as a secret in THIS repo. Needed because kb-qa is
+        # private. If you later make kb-qa public, drop the token entirely.
+        run: |
+          pip install --upgrade pip
+          pip install "git+https://x-access-token:${KBQA_TOKEN}@github.com/ramygwprod/kb-qa.git@v1.0.0"
+          python -m kbqa --manifest
+        env:
+          KBQA_TOKEN: ${{ secrets.KBQA_TOKEN }}
+
+      - name: Estate-wide integrity (G6)
+        run: python -m kbqa g6 --root .
+
+      - name: Per-batch gates (G1, G2, G3)
+        run: |
+          set -euo pipefail
+          failed=0
+          shopt -s nullglob
+          for staging in Competitors/*/_collect-*-staging.md; do
+            vendor_dir="$(dirname "$staging")"
+            base="$(basename "$staging")"
+            batch="${base#_collect-}"; batch="${batch%-staging.md}"
+            capture="$vendor_dir/_capture-${batch}.raw.txt"
+
+            echo "::group::$vendor_dir  batch=$batch"
+            for gate in \
+              "g1 --staging $staging --capture $capture" \
+              "g2 --staging $staging" \
+              "g3 --staging $staging --capture $capture"
+            do
+              # shellcheck disable=SC2086
+              if ! python -m kbqa $gate > /dev/null; then
+                echo "::error file=$staging::${gate%% *} FAILED for $vendor_dir/$batch"
+                # shellcheck disable=SC2086
+                python -m kbqa $gate || true
+                failed=1
+              fi
+            done
+            echo "::endgroup::"
+          done
+
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::one or more gates failed"
+            exit 1
+          fi
+
+          # An empty sweep is not a pass. If the glob matched nothing, the
+          # discovery pattern is wrong and every batch went unchecked.
+          count=$(ls Competitors/*/_collect-*-staging.md 2>/dev/null | wc -l)
+          if [ "$count" -eq 0 ]; then
+            echo "::error::no staging files discovered — the sweep checked nothing"
+            exit 1
+          fi
+          echo "checked $count batches"

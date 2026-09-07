@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+
+  "//": [
+    "Placeholder copy of the maker/checker boundary. The real settings.json is",
+    "machine-specific and is not published: it names absolute paths.",
+    "",
+    "Replace <HOME> with your home directory, <CHECKER> with the absolute path",
+    "to this repository, and <ESTATE> with the absolute path to the data estate",
+    "this checker must NOT read.",
+    "",
+    "Why this exists: a checker that can read the collector's output, prior",
+    "validators, or past fixes inherits the collector's blind spots. The gates",
+    "in this package were written from a specification alone, with the estate",
+    "unreachable at the OS level rather than merely off-limits by instruction.",
+    "",
+    "Restart Claude Code after creating .claude/settings.json — a settings file",
+    "added mid-session is not picked up, and an unenforced boundary reads",
+    "exactly like an enforced one until you probe it."
+  ],
+
+  "permissions": {
+    "deny": [
+      "Read(<ESTATE>/**)",
+      "Edit(<ESTATE>/**)",
+      "Write(<ESTATE>/**)",
+
+      "Read(~/.claude/**)",
+      "Edit(~/.claude/**)",
+      "Write(~/.claude/**)",
+
+      "Edit(<CHECKER>/.claude/settings.json)",
+      "Write(<CHECKER>/.claude/settings.json)",
+
+      "Bash(cd:*)",
+      "Bash(pushd:*)",
+      "Bash(open:*)",
+      "Bash(mdfind:*)"
+    ]
+  },
+
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "allowUnsandboxedCommands": false,
+    "autoAllowBashIfSandboxed": false,
+    "filesystem": {
+      "denyRead": ["<HOME>"],
+      "allowRead": ["<CHECKER>"]
+    }
+  }
+}

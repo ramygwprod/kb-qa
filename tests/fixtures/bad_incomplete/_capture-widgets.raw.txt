@@ -1,0 +1,11 @@
+=====BEGIN https://docs.acme.test/widgets/overview=====
+Widgets Overview
+
+Acme Widgets let you compose reusable UI blocks. Each widget is scoped to a
+workspace and can be exported as JSON.
+=====END https://docs.acme.test/widgets/overview=====
+=====BEGIN https://docs.acme.test/widgets/syntax-reference=====
+Widget Syntax Reference
+
+A widget definiton must declare a `type` field.
+=====END https://docs.acme.test/widgets/syntax-reference=====

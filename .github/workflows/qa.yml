@@ -1,0 +1,54 @@
+name: qa
+
+# Level 4 — the only tamper-proof layer.
+#
+# Everything local is tamper-EVIDENT: a manifest hash makes edited gates
+# visible to a human reading verdicts. This workflow is the part that cannot
+# be edited by whatever is running on a developer's disk, because it re-runs
+# the gates from the pinned commit on push.
+#
+# Until this is green on a real repository, "uneditable" is aspirational.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+
+      - name: Rebuild fixtures from source
+        # Fixtures are generated, not hand-edited. If a committed fixture
+        # differs from what the generator produces, someone edited a fixture
+        # to make a gate pass — which is the failure mode this whole package
+        # exists to catch.
+        run: |
+          python tests/build_fixtures.py
+          if ! git diff --quiet -- tests/fixtures; then
+            echo "::error::committed fixtures differ from generated fixtures"
+            git diff --stat -- tests/fixtures
+            exit 1
+          fi
+
+      - name: Gates must fail when they should
+        run: pytest tests/ -q
+
+      - name: Record the manifest
+        run: python -m kbqa --manifest
