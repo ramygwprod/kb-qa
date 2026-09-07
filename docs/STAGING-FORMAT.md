@@ -15,6 +15,35 @@ If the real collector writes something different, **this document and
 `src/kbqa/parsing.py` change — the gate logic does not.** The gates are written
 against parsed structures, not against bytes.
 
+## Confirming the format without disclosing the data
+
+There is an obvious way to settle this and a correct one. The obvious way is to
+show the checker a real staging file, which forfeits the independence the whole
+design rests on: a checker that has read the collector's output is no longer
+independent of it.
+
+Instead, run the probe against a real file and share **its output**:
+
+```bash
+python -m kbqa probe --staging <real staging file> --capture <its capture>
+```
+
+It reports field *names*, value *types*, string *lengths*, marker *syntax*, and
+whether the shipped parser agrees with the file. It does not report quotes,
+URLs, vendor terms, or any free-text value — that boundary is enforced by tests
+in `tests/test_probe.py`, which fail if row content reaches the report.
+
+The last line is the answer:
+
+```
+VERDICT: parser MATCHES this file
+VERDICT: parser DOES NOT MATCH this file
+```
+
+On a mismatch, the sections above it say where — a missing `---`, a different
+marker syntax, fields outside the contract, rows that do not parse. That is
+enough to correct `parsing.py` without anyone having read a row.
+
 ## What the inference rests on
 
 | Inference | Evidence in the spec |
