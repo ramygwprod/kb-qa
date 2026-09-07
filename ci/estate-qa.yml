@@ -31,15 +31,13 @@ jobs:
           python-version: "3.12"
 
       - name: Install kbqa from a pinned tag
-        # KBQA_TOKEN: a fine-grained PAT with read-only Contents access to the
-        # kb-qa repo, stored as a secret in THIS repo. Needed because kb-qa is
-        # private. If you later make kb-qa public, drop the token entirely.
+        # No token: kb-qa is public, so this needs no credential and the estate
+        # repo needs no secret. The estate itself stays private — only the
+        # validator is published.
         run: |
           pip install --upgrade pip
-          pip install "git+https://x-access-token:${KBQA_TOKEN}@github.com/ramygwprod/kb-qa.git@v1.0.0"
+          pip install "git+https://github.com/ramygwprod/kb-qa.git@v1.0.0"
           python -m kbqa --manifest
-        env:
-          KBQA_TOKEN: ${{ secrets.KBQA_TOKEN }}
 
       - name: Estate-wide integrity (G6)
         run: python -m kbqa g6 --root .
