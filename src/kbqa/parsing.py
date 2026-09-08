@@ -121,30 +121,69 @@ def _find_json_fences(lines: List[str]) -> List[Tuple[int, int]]:
     return spans
 
 
-def _parse_fenced_arrays(lines: List[str]) -> Tuple[List[RowParse], List[str]]:
-    """Parse every ```json fence as a JSON array of row objects.
+def _parse_jsonl_lines(lines: List[str], start: int, stop: int) -> List[RowParse]:
+    """Parse a line range as one JSON object per line."""
+    rows: List[RowParse] = []
+    for n in range(start, stop):
+        line = lines[n - 1]
+        stripped = line.strip()
+        if not stripped.startswith("{"):
+            continue
+        try:
+            obj = json.loads(stripped)
+        except json.JSONDecodeError as exc:
+            rows.append(RowParse(n, line, None, f"invalid JSON: {exc.msg}"))
+            continue
+        if not isinstance(obj, dict):
+            rows.append(RowParse(n, line, None, "row is not a JSON object"))
+            continue
+        rows.append(RowParse(n, line, obj, None))
+    return rows
 
-    Object line numbers are approximated by locating each object's `"id"` key,
-    so a G2 finding points at somewhere useful in a 4,000-line file rather than
-    at the fence.
+
+def _parse_fences(lines: List[str]) -> Tuple[List[RowParse], List[str], str]:
+    """Parse every ```json fence. Returns (rows, errors, format).
+
+    A fence holds one of two things, and the estate contains both:
+
+      fenced-array  a pretty-printed JSON array — the whole body is one value
+      fenced-jsonl  one JSON object per line, concatenated inside the fence
+
+    The second is not valid JSON as a whole: `json.loads` on the body fails with
+    "Extra data" at the second object. Treating that as an unreadable fence
+    reported 181 real rows as zero — silently, on the only batches in the estate
+    that had captures and could therefore be grounded at all.
+
+    So a decode failure is a signal to try the other shape, not a verdict. Only
+    when neither yields a row is the fence genuinely unreadable.
     """
     rows: List[RowParse] = []
     errors: List[str] = []
+    shapes: List[str] = []
 
     for open_at, close_at in _find_json_fences(lines):
         body = "\n".join(lines[open_at:close_at - 1])
         if not body.strip():
             continue
+
         try:
             payload = json.loads(body)
         except json.JSONDecodeError as exc:
+            jsonl_rows = _parse_jsonl_lines(lines, open_at + 1, close_at)
+            if any(r.obj is not None for r in jsonl_rows):
+                rows.extend(jsonl_rows)
+                shapes.append("fenced-jsonl")
+                continue
             errors.append(
-                f"```json fence at line {open_at} is not valid JSON: "
-                f"{exc.msg} (line {open_at + exc.lineno}, col {exc.colno})"
+                f"```json fence at line {open_at} parses as neither a JSON array "
+                f"nor one object per line: {exc.msg} "
+                f"(line {open_at + exc.lineno}, col {exc.colno})"
             )
             continue
 
         items = payload if isinstance(payload, list) else [payload]
+        # Line numbers are approximated from each object's `"id"` key so a
+        # finding points somewhere useful in a 4,000-line file, not at the fence.
         id_lines = [
             n for n in range(open_at, close_at) if NAIVE_KEY_RE.match(lines[n - 1])
         ]
@@ -154,17 +193,33 @@ def _parse_fenced_arrays(lines: List[str]) -> Tuple[List[RowParse], List[str]]:
                 rows.append(RowParse(line_no, "", None, "row is not a JSON object"))
                 continue
             rows.append(RowParse(line_no, "", obj, None))
+        shapes.append("fenced-array")
 
-    return rows, errors
+    fmt = "fenced-array"
+    if shapes:
+        fmt = "fenced-jsonl" if all(s == "fenced-jsonl" for s in shapes) else (
+            "fenced-mixed" if len(set(shapes)) > 1 else shapes[0]
+        )
+    return rows, errors, fmt
 
 
 def parse_staging(path: Path) -> StagingParse:
-    """Parse a staging file in either serialisation the estate contains.
+    """Parse a staging file in any serialisation the estate contains.
 
-    The spec describes JSONL (`grep -c '^{"id"'`). The collector actually writes
-    a pretty-printed JSON array inside a ```json fence. Both are accepted, and
-    `row_format` records which was found — a silent fallback between formats is
-    how a parser starts disagreeing with the file it claims to have read.
+    Three exist, written by different collector eras:
+
+      jsonl         one object per line at column 0 — what the spec describes
+      fenced-array  a pretty-printed JSON array inside a ```json fence
+      fenced-jsonl  one object per line, inside a ```json fence
+
+    `row_format` records which was found. A silent fallback between formats is
+    how a parser starts disagreeing with the file it claims to have read, so the
+    format is reported rather than inferred and forgotten.
+
+    The naive cross-check (§G2) is per-format: `^{"id"` counts nothing in a
+    pretty-printed array, and `^\\s*"id":` counts nothing in JSONL. Using the
+    wrong one would make the cross-check disagree with a correct parse and fail
+    the batch for a reason that is not true of it.
     """
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
@@ -172,16 +227,17 @@ def parse_staging(path: Path) -> StagingParse:
 
     fences = _find_json_fences(lines)
     if fences:
-        rows, fence_errors = _parse_fenced_arrays(lines)
+        rows, fence_errors, fmt = _parse_fences(lines)
+        naive_re = NAIVE_ROW_RE if fmt == "fenced-jsonl" else NAIVE_KEY_RE
         naive_count = sum(
             1
             for open_at, close_at in fences
             for n in range(open_at, close_at)
-            if NAIVE_KEY_RE.match(lines[n - 1])
+            if naive_re.match(lines[n - 1])
         )
         if fence_errors and not rows:
             rows = [RowParse(fences[0][0], "", None, e) for e in fence_errors]
-        return StagingParse(fm, rows, naive_count, fm_err, "fenced-array")
+        return StagingParse(fm, rows, naive_count, fm_err, fmt)
 
     rows = []
     naive_count = 0

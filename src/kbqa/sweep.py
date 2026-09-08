@@ -43,12 +43,37 @@ def batch_name(staging: Path) -> str:
     return staging.name[len("_collect-"):-len("-staging.md")]
 
 
-def audit_batch(staging: Path) -> dict:
+def vendor_of(staging: Path, root: Optional[Path], depth: int = 2) -> str:
+    """Name the vendor from position under the estate root, not the parent dir.
+
+    Estates nest: `<root>/<container>/<Vendor>/` and sometimes
+    `<root>/<container>/<Vendor>/<subfolder>/`. Using the immediate parent
+    labelled a folder called `_to_delete` as a vendor and counted it in the
+    totals as live data.
+
+    `depth` is which component under root names the vendor (1-based), so the
+    default of 2 reads `<container>/<Vendor>`. Falls back to the parent
+    directory when the path is shallower than that.
+    """
+    if root is not None:
+        try:
+            parts = staging.relative_to(root).parts[:-1]  # drop the filename
+        except ValueError:
+            parts = ()
+        if len(parts) >= depth:
+            return parts[depth - 1]
+        if parts:
+            return parts[-1]
+    return staging.parent.name
+
+
+def audit_batch(staging: Path, root: Optional[Path] = None, depth: int = 2) -> dict:
     """Classify one batch. Never raises: a batch that cannot be read is a result."""
     batch = batch_name(staging)
     capture = staging.parent / f"_capture-{batch}.raw.txt"
     rec = {
-        "vendor": staging.parent.name,
+        "vendor": vendor_of(staging, root, depth),
+        "path": str(staging.relative_to(root)) if root else str(staging),
         "batch": batch,
         "staging": str(staging),
         "capture": str(capture) if capture.exists() else None,
@@ -131,9 +156,29 @@ def field_distribution(stagings: List[Path], cap: int = 40) -> Dict[str, dict]:
     return out
 
 
-def build(root: Path, with_fields: bool = False) -> Tuple[str, dict]:
-    stagings = sorted(root.glob(STAGING_GLOB))
-    batches = [audit_batch(s) for s in stagings]
+def build(
+    root: Path,
+    with_fields: bool = False,
+    exclude: Optional[List[str]] = None,
+    depth: int = 2,
+) -> Tuple[str, dict]:
+    import fnmatch
+
+    exclude = exclude or []
+    all_stagings = sorted(root.glob(STAGING_GLOB))
+
+    # Excluded paths are counted and named, never silently dropped. A batch that
+    # vanishes from a total without explanation is indistinguishable from one
+    # that was never there.
+    stagings, excluded = [], []
+    for s in all_stagings:
+        rel = str(s.relative_to(root))
+        if any(fnmatch.fnmatch(rel, pat) for pat in exclude):
+            excluded.append(rel)
+        else:
+            stagings.append(s)
+
+    batches = [audit_batch(s, root, depth) for s in stagings]
 
     by_vendor: Dict[str, List[dict]] = defaultdict(list)
     for b in batches:
@@ -187,6 +232,18 @@ def build(root: Path, with_fields: bool = False) -> Tuple[str, dict]:
         a(f"| {vendor} | {len(bs)} | {v} | {sum(b['rows'] for b in bs)} | "
           f"{conf}/{len(bs)} | {viol} |")
     a("")
+
+    if excluded:
+        a("## Excluded by pattern")
+        a("")
+        a(f"{len(excluded)} batch(es) matched `--exclude` and are **not** in any "
+          "figure above.")
+        a("")
+        for rel in excluded[:20]:
+            a(f"- `{rel}`")
+        if len(excluded) > 20:
+            a(f"- … and {len(excluded) - 20} more")
+        a("")
 
     checked = [b for b in verifiable if b["grounded"] is not None]
     if checked:
@@ -263,6 +320,7 @@ def build(root: Path, with_fields: bool = False) -> Tuple[str, dict]:
             "verifiable_row_pct": pct,
         },
         "batches": batches,
+        "excluded": excluded,
         "fields": fields,
     }
     return "\n".join(lines) + "\n", machine
@@ -272,6 +330,8 @@ def run(argv: List[str]) -> int:
     root: Optional[Path] = None
     out: Optional[Path] = None
     with_fields = False
+    exclude: List[str] = []
+    depth = 2
     i = 0
     while i < len(argv):
         arg = argv[i]
@@ -280,6 +340,15 @@ def run(argv: List[str]) -> int:
             root = Path(nxt); i += 2; continue
         if arg == "--out" and nxt:
             out = Path(nxt); i += 2; continue
+        if arg == "--exclude" and nxt:
+            exclude.append(nxt); i += 2; continue
+        if arg == "--vendor-depth" and nxt:
+            try:
+                depth = int(nxt)
+            except ValueError:
+                print(f"sweep: --vendor-depth must be an integer, got {nxt!r}")
+                return 1
+            i += 2; continue
         if arg == "--field-values":
             with_fields = True; i += 1; continue
         print(f"sweep: unexpected argument {arg!r}")
@@ -292,7 +361,7 @@ def run(argv: List[str]) -> int:
         print(f"sweep: not a directory: {root}")
         return 1
 
-    markdown, machine = build(root, with_fields)
+    markdown, machine = build(root, with_fields, exclude, depth)
 
     target = out or (root / "_qa-estate-audit.md")
     target.parent.mkdir(parents=True, exist_ok=True)

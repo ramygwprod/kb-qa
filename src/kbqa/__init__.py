@@ -5,4 +5,4 @@ page capture. This package reads a data estate and writes verdicts. It never
 mutates collected data.
 """
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"

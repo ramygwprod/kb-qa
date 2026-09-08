@@ -16,6 +16,46 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [2.1.0] — 2026-09-08
+
+Found by running 2.0.0 against the real estate for the first time. The audit
+reported **0% of rows verifiable**; that figure was a parser defect, not a fact
+about the data.
+
+### Fixed
+
+- **A third serialisation was unreadable: JSONL inside a ```` ```json ```` fence.**
+  The parser recognised the fence, assumed the body was a JSON array, and
+  `json.loads` failed with "Extra data" at the second object. The batch was then
+  reported as **zero rows** — silently, and specifically on the only nine
+  batches in the estate that have captures and can therefore be grounded at all.
+  A decode failure in one shape is now a signal to try the other, not a verdict
+  about the file. `row_format` reports `fenced-jsonl` when found.
+- **The §G2 naive cross-check now follows the detected format.** `^{"id"` counts
+  nothing in a pretty-printed array and `^\s*"id":` counts nothing in JSONL, so
+  the wrong pattern would fail a batch for a reason that is not true of it.
+- **`sweep` named a subfolder as a vendor.** Vendor was taken from the immediate
+  parent directory, so `<root>/kk/Zendesk/_to_delete/` reported vendor
+  `_to_delete` — and a folder plainly named for deletion was counted in the
+  totals as live data. Vendor now comes from position under the estate root.
+
+### Added
+
+- `sweep --exclude <glob>` (repeatable). Excluded batches are **counted and
+  named** in their own report section, never silently dropped — a batch that
+  vanishes from a total without explanation is indistinguishable from one that
+  was never collected. Nothing is excluded by default.
+- `sweep --vendor-depth N` — which path component under the root names the
+  vendor. Defaults to 2, for the common `<root>/<container>/<Vendor>/` layout.
+
+### Notes
+
+127 tests. `tests/test_parsing.py` covers all three serialisations and asserts
+the naive count agrees with the parse in each, so this class of defect fails
+loudly rather than reporting zero.
+
+---
+
 ## [2.0.0] — 2026-09-08
 
 First release reconciled with a real estate. v1 was written from the
