@@ -129,3 +129,94 @@ skipping is recorded.*
 between the collector and the repository, §0's clause stops holding, and this
 decision must be revisited. GitHub Team (~$4/user/month) is then the cheap
 answer.
+
+---
+
+## D-004 · Schema v3 evidence — estate-wide field distribution
+
+**Date** 2026-09-09 · **Status** OPEN — needs rulings · **Evidence** `kbqa sweep --field-values` over 183 batches / 12,728 rows
+
+D-001 typed five fields `Optional[str]` rather than as enums, reasoning that a
+value set observed in ONE batch would reject the next batch's legitimate values.
+The estate-wide sweep settles it — and shows that caution was right twice and
+wrong once.
+
+### Where the one-batch inference was WRONG
+
+| field | seen in 1 batch | seen estate-wide | verdict |
+|---|---|---|---|
+| `vendor_category` | 1 value | **622 distinct** | free text, not an enum |
+| `plan_gating` | 1 value | **133 distinct** | free text, not an enum |
+
+Had these been frozen as single-value enums from the Intercom sample, they would
+now reject ~750 legitimate values. Keep them `Optional[str]`.
+
+### Where they ARE enums, and can be constrained in v3
+
+| field | distinct | values |
+|---|---|---|
+| `node_kind` | 11 | CERTIFICATION, FEATURE, HEADING, MODULE, PLATFORM, PRODUCT, SERVICE, SOLUTION, SUITE, TOOL, UNCLASSIFIED |
+| `deployment` | 8 | air-gapped, cloud, cloud-saas, hybrid, on-prem, unknown, vendor-managed — **plus** `cloud, on AWS infrastructure` |
+| `vendor_category_source` | 8 | assignment-slug, breadcrumb, nav, none, portfolio-taxonomy, self-classification, url-path — **plus** `breadcrumb: 1. Communications APIs` |
+
+Both marked entries are free text leaking into an otherwise clean enum: one row
+elaborating where the others classify. Constraining these would catch that.
+
+### Two defects in fields ALREADY in the contract
+
+**`depth_level` is being written two ways.** Observed:
+`2, 3, 4, 5, 6, feature, module, product-line, sub-feature, sub-module`. Some
+batches record a numeric depth, others the named level. The contract permits
+only the names, so every numeric row fails G2 today. One convention has to win,
+and the other has to be migrated — this is not a contract question but a
+collector question.
+
+**`evidence_grade` records `verify`; the contract expects `[verify]`.** Every
+such row fails. Either the brackets are dropped from the enum or the collector
+stops emitting the bare form. Trivial, but it is currently a silent source of
+violations.
+
+### The accumulation §2 warned about, in progress
+
+**32 fields appear in rows and not in the contract. Seventeen of them hold two
+or fewer distinct values across the entire estate:**
+
+`id_prefix` (vonage) · `vendor` (Vonage) · `round` (1a) · `region` (eu1, us1) ·
+`language_count_observed` (89) · `undisclosed_amount` (True) ·
+`prior_tree_mechanism` · `locale_scope` (*"en-in only — no English original"*) ·
+`limit` (*"values true/false; default value true"*) · `node_count` ·
+`children_enumerated` · `real_href` · `regulator` · `tagline_for` · `version` ·
+`mechanism_third_party` · `batch`
+
+Several are not fields at all but prose stuffed into a key — `limit` and
+`locale_scope` hold sentences. Others are batch-level facts recorded per row:
+`vendor`, `batch` and `id_prefix` belong in frontmatter, not repeated on every
+row of a batch.
+
+A separate cluster shadows two contract fields with raw and reported variants:
+`mechanism_raw` (78), `mechanism_reported` (45), `mechanism_via` (148),
+`outcome_raw` (179), `outcome_reported` (48). That may be deliberate provenance
+— keeping the vendor's own wording alongside the normalised value is defensible
+— but it is five fields carrying it, and nothing records that intent.
+
+### What is NOT decided here
+
+Which of the 32 are schema and which are cruft is a judgement about the data
+model, not about validation. Admitting all 32 would make `extra="forbid"`
+decorative; forbidding all 32 would fail most of the estate.
+
+Recommended shape for v3, pending rulings:
+
+1. Constrain `node_kind`, `deployment`, `vendor_category_source` as enums
+2. Keep `vendor_category`, `plan_gating` as `Optional[str]` — proven free text
+3. Fix `evidence_grade` to accept what the collector writes, or change the collector
+4. Rule on `depth_level`: numeric or named, then migrate the other
+5. Admit the `*_raw` / `*_reported` cluster **only if** its purpose is recorded here
+6. Move `vendor`, `batch`, `id_prefix` to frontmatter; drop the single-value
+   annotations, or name them deliberately
+
+### Reversal condition
+
+Re-run `kbqa sweep --field-values` after any collector change. A field that
+gains a second value was real; one still at distinct=1 after another collection
+round is an unexercised default and should go.
