@@ -45,6 +45,39 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
     parsed = parse_staging(staging)
     cap = parse_capture(capture)
 
+    # A capture with no BEGIN/END markers at all cannot be split into pages, so
+    # per-page grounding is not merely failing — it is impossible. Falling
+    # through would emit one `url_not_in_capture` per row: on a real batch that
+    # was 181 findings saying "this quote is not on its page" when the truth was
+    # "this file records no pages". Loud, specific, and completely wrong.
+    #
+    # Reported once, as a structural gap in Bronze. NOT degraded to
+    # whole-capture matching: §G3 scopes to the row's own page precisely so a
+    # quote lifted from a different page cannot pass, and the
+    # bad_quote_from_wrong_page fixture exists to keep that honest.
+    rows_present = len([r for r in parsed.rows if r.obj is not None])
+    if not cap.blocks and capture.stat().st_size > 0:
+        findings.append(
+            Finding(
+                "capture_has_no_page_blocks",
+                f"capture contains no =====BEGIN <url>===== markers, so it cannot "
+                f"be split into pages and no row can be grounded to the page it "
+                f"cites; {rows_present} row(s) are unassessable, not ungrounded",
+                where=str(capture),
+            )
+        )
+        return (
+            Verdict(
+                GATE,
+                FAIL,
+                inputs,
+                {"rows": rows_present, "checked": 0, "grounded": 0,
+                 "unassessable": rows_present, "capture_blocks": 0, "failed": 1},
+                findings,
+            ),
+            EXIT_FAIL,
+        )
+
     # Normalise every block once.
     norm_blocks = {url: normalise_for_match(text) for url, text in cap.blocks.items()}
     whole_capture_norm = normalise_for_match("\n".join(cap.blocks.values()))

@@ -51,6 +51,8 @@ class StagingParse(NamedTuple):
     naive_count: int
     frontmatter_error: Optional[str]
     row_format: str = "unknown"
+    declared_pages: Tuple[str, ...] = ()
+    pages_source: str = "none"
 
 
 class CaptureParse(NamedTuple):
@@ -82,26 +84,97 @@ def _parse_frontmatter(text: str) -> Tuple[dict, Optional[str]]:
 
     out: dict = {}
     current_list_key: Optional[str] = None
+    current_scalar_key: Optional[str] = None
     for i, line in enumerate(lines[1:], start=2):
         if line.strip() == FRONTMATTER_DELIM:
             return out, None
         if not line.strip():
             continue
+
         list_item = re.match(r"^\s+-\s+(?P<item>.+?)\s*$", line)
         if list_item and current_list_key:
             out[current_list_key].append(_parse_scalar(list_item.group("item")))
             continue
+
+        # Indented continuation of the previous scalar — a folded value:
+        #
+        #   scope: |
+        #     The 8 pages under
+        #     https://example/..., fetched as .md.
+        #
+        # Real collector frontmatter uses these for prose. Rejecting them made
+        # the whole frontmatter unparseable, which cascaded into false
+        # `no_declared_pages` and `capture_hash_absent` findings on batches
+        # whose frontmatter was fine.
+        if line[:1] in (" ", "\t"):
+            if current_scalar_key is not None:
+                out[current_scalar_key] = (
+                    f"{out[current_scalar_key]} {line.strip()}".strip()
+                )
+                continue
+            # `key:` with nothing after it, then indented prose rather than
+            # list items — a block scalar whose shape only became clear here.
+            if current_list_key is not None and out.get(current_list_key) == []:
+                current_scalar_key, current_list_key = current_list_key, None
+                out[current_scalar_key] = line.strip()
+                continue
+
         kv = re.match(r"^(?P<key>[A-Za-z_][A-Za-z0-9_]*):\s*(?P<val>.*)$", line)
         if not kv:
             return out, f"unparseable frontmatter at line {i}: {line!r}"
         key, val = kv.group("key"), kv.group("val").strip()
-        if val == "":
-            out[key] = []
-            current_list_key = key
+        if val == "" or val in ("|", ">", "|-", ">-"):
+            # Either a list about to follow, or a block scalar. Which it is
+            # only becomes clear on the next line, so allow both.
+            out[key] = [] if val == "" else ""
+            current_list_key = key if val == "" else None
+            current_scalar_key = None if val == "" else key
         else:
             out[key] = _parse_scalar(val)
             current_list_key = None
+            current_scalar_key = key
     return out, "frontmatter is not terminated by '---'"
+
+
+MD_TABLE_URL_RE = re.compile(r"^\s*\|[^|]*?(?P<url>https?://[^\s|]+)")
+
+
+def _declared_pages(fm: dict, lines: List[str], fences) -> Tuple[Tuple[str, ...], str]:
+    """The batch's per-page declaration — §G1's "staging per-page declaration".
+
+    Two conventions exist in the estate and both are legitimate:
+
+      frontmatter   `pages:` as a YAML list
+      table         a markdown table whose first cell is the page URL
+
+    G1 originally read only the frontmatter, so a batch declaring its pages in a
+    table was reported `no_declared_pages` — a finding that was simply untrue of
+    it, and which would have sent a maker looking for a list that was never the
+    convention there.
+
+    Rows inside a ```json fence are excluded: a `source_url` in a row is a
+    citation, not a declaration, and counting it would make the declaration
+    agree with the rows by construction.
+    """
+    fm_pages = fm.get("pages")
+    if isinstance(fm_pages, list) and fm_pages:
+        return tuple(str(p).strip() for p in fm_pages), "frontmatter"
+
+    in_fence = {
+        n for open_at, close_at in fences for n in range(open_at, close_at + 1)
+    }
+    urls: List[str] = []
+    for n, line in enumerate(lines, start=1):
+        if n in in_fence:
+            continue
+        m = MD_TABLE_URL_RE.match(line)
+        if m:
+            url = m.group("url").rstrip(",.;")
+            if url not in urls:
+                urls.append(url)
+    if urls:
+        return tuple(urls), "table"
+    return (), "none"
 
 
 def _find_json_fences(lines: List[str]) -> List[Tuple[int, int]]:
@@ -228,6 +301,7 @@ def parse_staging(path: Path) -> StagingParse:
     fences = _find_json_fences(lines)
     if fences:
         rows, fence_errors, fmt = _parse_fences(lines)
+        pages, pages_src = _declared_pages(fm, lines, fences)
         naive_re = NAIVE_ROW_RE if fmt == "fenced-jsonl" else NAIVE_KEY_RE
         naive_count = sum(
             1
@@ -237,7 +311,7 @@ def parse_staging(path: Path) -> StagingParse:
         )
         if fence_errors and not rows:
             rows = [RowParse(fences[0][0], "", None, e) for e in fence_errors]
-        return StagingParse(fm, rows, naive_count, fm_err, fmt)
+        return StagingParse(fm, rows, naive_count, fm_err, fmt, pages, pages_src)
 
     rows = []
     naive_count = 0
@@ -257,7 +331,8 @@ def parse_staging(path: Path) -> StagingParse:
             continue
         rows.append(RowParse(line_no, line, obj, None))
 
-    return StagingParse(fm, rows, naive_count, fm_err, "jsonl")
+    pages, pages_src = _declared_pages(fm, lines, [])
+    return StagingParse(fm, rows, naive_count, fm_err, "jsonl", pages, pages_src)
 
 
 def parse_capture(path: Path) -> CaptureParse:
