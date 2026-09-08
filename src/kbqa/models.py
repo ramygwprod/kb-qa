@@ -14,15 +14,33 @@ v2  Reconciled with the estate (2026-09-08). Five fields the collector has
     `extra="forbid"` is unchanged and still load-bearing: naming five known
     fields does not open the door to a sixth. The guarantee is that the field
     set is decided here, deliberately, and not grown by a collector at runtime.
+
+v3  Split the contract by owner (2026-09-09), after the estate showed a strict
+    flat field set cannot record what vendors actually publish. Vendors differ
+    in structure, naming, depth and scale, and §G3's rule for text — never
+    normalise spelling, vendor typos are evidence — applies to structure too.
+
+    core            ours. Strict, enum-validated. Provenance and grounding.
+    vendor fields   theirs. The NAME must be registered in vendor_fields.py,
+                    deliberately, in a commit — that is what stops silent
+                    accumulation. The VALUE is never constrained — that is
+                    what preserves the vendor's structure verbatim.
+
+    Nothing is renamed. Rows keep the exact keys the collector wrote;
+    `alias_of` in the registry records how a field relates to a core field
+    without touching either. Renaming would be a form of the editing this
+    package exists to prevent.
 """
 
 from datetime import date
 from enum import Enum
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-SCHEMA_VERSION = 2
+from .vendor_fields import is_registered  # noqa: E402
+
+SCHEMA_VERSION = 3
 
 
 class Mechanism(str, Enum):
@@ -47,7 +65,12 @@ class EvidenceGrade(str, Enum):
     help = "help"
     marketing = "marketing"
     verified = "verified"
-    verify = "[verify]"
+    # Both spellings are accepted. The spec writes `[verify]`; the collector
+    # writes `verify`. This is OUR field and OUR enum, so the mismatch was a
+    # real defect rather than vendor structure — but rejecting rows over a pair
+    # of brackets taught nothing, so both forms are recorded as written.
+    verify = "verify"
+    verify_bracketed = "[verify]"
 
 
 class DepthLevel(str, Enum):
@@ -61,12 +84,24 @@ class DepthLevel(str, Enum):
 class Row(BaseModel):
     """One vendor fact, sourced to one quote on one page.
 
-    extra="forbid": the field set IS the contract. A collector inventing
-    `confidence_note` fails immediately rather than growing the schema
-    silently — which is how 91 annotation fields accumulated before.
+    The field set is still the contract, but it has two halves with different
+    owners (v3, see docs/DECISIONS.md D-005):
+
+    **Core** — declared below, strict, enum-validated. Provenance and grounding:
+    the fields that make a claim checkable. A collector inventing
+    `confidence_note` still fails on the first row.
+
+    **Vendor fields** — anything registered in `vendor_fields.py`. The NAME must
+    be there, added deliberately in a commit, which is what stops the silent
+    accumulation §2 describes. The VALUE is never constrained, which is what
+    preserves the vendor's own structure verbatim.
+
+    An unregistered field is a violation. That is the line `extra="forbid"` used
+    to draw, drawn now in the one place that does not also reject vendors for
+    having their own vocabulary.
     """
 
-    model_config = {"extra": "forbid"}
+    model_config = {"extra": "allow"}
 
     schema_version: int = SCHEMA_VERSION
     id: str = Field(pattern=r"^[a-z0-9]+(\.[a-z0-9\-]+)+$")
@@ -79,32 +114,30 @@ class Row(BaseModel):
     confidence: Literal["high", "medium", "low"]
     mechanism: Mechanism
     outcome: Outcome
-    depth_level: DepthLevel
+
+    # Accepts the named levels OR the vendor's own numeric depth.
+    #
+    # Some vendors' hierarchies do not fit five names. A numeric depth records a
+    # node's position in THAT vendor's tree; the names impose ours. Forcing one
+    # convention would flatten a real structural difference into a false one —
+    # the same error as normalising a vendor's spelling.
+    depth_level: str
+
     canonical: str = "NOVEL"
     broken_source: bool = False
     parent_path: Optional[str] = None
-
-    # Optional vendor-fact fields. Named in the spec; extended only by a
-    # version bump, never by a collector.
     usecase_of: Optional[str] = None
 
-    # --- v2: fields the collector emits that v1 did not name -----------------
-    #
-    # Typed `Optional[str]` rather than as enums on purpose. Their value sets
-    # were observed in ONE batch, and an enum inferred from one sample would
-    # reject legitimate values found in the next — inventing a constraint and
-    # calling it a contract. `kbqa sweep --field-values` collects the real
-    # distributions estate-wide; constrain them in v3 from that evidence.
-    #
-    # Three of these held a single value across all 222 rows of the batch they
-    # were observed in, which is what an unexercised default looks like. That
-    # is recorded in docs/DECISIONS.md as open, not settled here: a field that
-    # never varies is a question for the collector, not a validation failure.
-    node_kind: Optional[str] = None
-    deployment: Optional[str] = None
-    plan_gating: Optional[str] = None
-    vendor_category: Optional[str] = None
-    vendor_category_source: Optional[str] = None
+    @field_validator("depth_level")
+    @classmethod
+    def named_or_numeric_depth(cls, v: str) -> str:
+        s = str(v).strip()
+        if s in {d.value for d in DepthLevel} or s.isdigit():
+            return s
+        raise ValueError(
+            f"depth_level {v!r} is neither a named level "
+            f"({', '.join(d.value for d in DepthLevel)}) nor a numeric depth"
+        )
 
     @field_validator("source_url")
     @classmethod
@@ -122,6 +155,25 @@ class Row(BaseModel):
                 "a version bump is a commit, not a runtime accommodation"
             )
         return v
+
+    @model_validator(mode="after")
+    def extras_must_be_registered(self):
+        """Every non-core field must be a registered vendor field.
+
+        This is where `extra="forbid"` moved to. It still refuses a field nobody
+        declared — but it refuses the NAME, not the value, so a vendor's own
+        vocabulary passes while an invented annotation does not.
+        """
+        extras = self.__pydantic_extra__ or {}
+        unregistered = sorted(k for k in extras if not is_registered(k))
+        if unregistered:
+            raise ValueError(
+                "unregistered field(s): " + ", ".join(unregistered)
+                + ". Register in src/kbqa/vendor_fields.py with a note on what "
+                "the vendor means by it, or stop emitting it. A field nobody "
+                "declared is how 91 annotations accumulated."
+            )
+        return self
 
 
 # The staging frontmatter contract lives in docs/STAGING-FORMAT.md, not here.
