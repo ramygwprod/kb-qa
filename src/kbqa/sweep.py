@@ -36,7 +36,15 @@ from .verdict import PASS, utc_now_iso
 STAGING_GLOB = "**/_collect-*-staging.md"
 
 VERIFIABLE = "verifiable"
+UNASSESSABLE = "unassessable-no-page-markers"
 UNVERIFIABLE = "unverifiable-no-capture"
+
+TIER_MEANING = {
+    VERIFIABLE: "capture exists and splits into pages — every quote can be checked",
+    UNASSESSABLE: "capture exists but records no page boundaries — grounding is "
+                  "impossible, though nothing is shown wrong",
+    UNVERIFIABLE: "no capture — the page text was never stored",
+}
 
 
 def batch_name(staging: Path) -> str:
@@ -77,7 +85,12 @@ def audit_batch(staging: Path, root: Optional[Path] = None, depth: int = 2) -> d
         "batch": batch,
         "staging": str(staging),
         "capture": str(capture) if capture.exists() else None,
+        # Three states, not two. A capture that exists but has no page markers
+        # cannot ground anything — but that is not the same as having no capture,
+        # and neither is the same as being wrong. Collapsing them would report
+        # rows as unverifiable when the text is right there, unsplittable.
         "tier": VERIFIABLE if capture.exists() else UNVERIFIABLE,
+        "capture_blocks": None,
         "rows": 0,
         "rows_unparseable": 0,
         "row_format": "unknown",
@@ -85,6 +98,7 @@ def audit_batch(staging: Path, root: Optional[Path] = None, depth: int = 2) -> d
         "schema_violations": 0,
         "grounded": None,
         "ungrounded_rows": None,
+        "unassessable_rows": None,
         "error": None,
     }
 
@@ -115,11 +129,21 @@ def audit_batch(staging: Path, root: Optional[Path] = None, depth: int = 2) -> d
     # evidence that does not exist.
     if capture.exists():
         try:
-            v, _ = g3_grounding.run(
-                ["--staging", str(staging), "--capture", str(capture)]
-            )
-            rec["grounded"] = v.verdict == PASS
-            rec["ungrounded_rows"] = v.counts.get("failed")
+            from .parsing import parse_capture
+
+            blocks = len(parse_capture(capture).blocks)
+            rec["capture_blocks"] = blocks
+            if blocks == 0:
+                rec["tier"] = UNASSESSABLE
+                rec["unassessable_rows"] = rec["rows"]
+                rec["ungrounded_rows"] = 0
+            else:
+                v, _ = g3_grounding.run(
+                    ["--staging", str(staging), "--capture", str(capture)]
+                )
+                rec["grounded"] = v.verdict == PASS
+                rec["unassessable_rows"] = v.counts.get("unassessable", 0)
+                rec["ungrounded_rows"] = v.counts.get("failed")
         except Exception as exc:  # noqa: BLE001
             rec["error"] = f"g3: {type(exc).__name__}: {exc}"
 
@@ -185,10 +209,12 @@ def build(
         by_vendor[b["vendor"]].append(b)
 
     verifiable = [b for b in batches if b["tier"] == VERIFIABLE]
+    unassessable = [b for b in batches if b["tier"] == UNASSESSABLE]
     unverifiable = [b for b in batches if b["tier"] == UNVERIFIABLE]
     rows_v = sum(b["rows"] for b in verifiable)
+    rows_x = sum(b["rows"] for b in unassessable)
     rows_u = sum(b["rows"] for b in unverifiable)
-    total_rows = rows_v + rows_u
+    total_rows = rows_v + rows_x + rows_u
 
     lines: List[str] = []
     a = lines.append
@@ -207,17 +233,23 @@ def build(
     a("")
     a("| tier | batches | rows | what a reader can do |")
     a("|---|---|---|---|")
-    a(f"| **{VERIFIABLE}** | {len(verifiable)} | {rows_v} | check every quote against stored page text |")
+    a(f"| **{VERIFIABLE}** | {len(verifiable)} | {rows_v} | check every quote against the page it cites |")
+    a(f"| **{UNASSESSABLE}** | {len(unassessable)} | {rows_x} | nothing yet — the text is stored but not split into pages |")
     a(f"| **{UNVERIFIABLE}** | {len(unverifiable)} | {rows_u} | nothing — the page text was never kept |")
     a("")
     pct = (rows_v * 100 // total_rows) if total_rows else 0
     a(f"**{pct}% of rows rest on evidence that can be checked.**")
     a("")
-    a("Unverifiable rows are not known to be wrong. They are known to be "
-      "*uncheckable*: the capture they would be checked against was never "
-      "written, and re-fetching returns today's page rather than the page the "
-      "claim came from. This is a property of how the batch was collected, not "
-      "a defect to be repaired.")
+    a("None of these tiers says a row is wrong. They say what a reader is able "
+      "to do about it, and the three are not the same thing:")
+    a("")
+    a(f"- **{UNASSESSABLE}** is recoverable. The captured text exists; it simply "
+      "records no page boundaries, so a quote cannot be tied to the page it "
+      "cites. Re-fetching with a fetcher that writes per-page markers moves "
+      "these into the verifiable tier without re-collecting the rows.")
+    a(f"- **{UNVERIFIABLE}** is not. The page text was never written, and "
+      "re-fetching returns today's page rather than the page the claim came "
+      "from. This is a property of how the batch was collected.")
     a("")
 
     a("## By vendor")
@@ -314,8 +346,10 @@ def build(
             "batches": len(batches),
             "rows": total_rows,
             "verifiable_batches": len(verifiable),
+            "unassessable_batches": len(unassessable),
             "unverifiable_batches": len(unverifiable),
             "verifiable_rows": rows_v,
+            "unassessable_rows": rows_x,
             "unverifiable_rows": rows_u,
             "verifiable_row_pct": pct,
         },
@@ -374,9 +408,12 @@ def run(argv: List[str]) -> int:
     print(f"machine-readable:     {sidecar}")
     print(
         f"  vendors={t['vendors']} batches={t['batches']} rows={t['rows']}\n"
-        f"  verifiable={t['verifiable_batches']} batches / {t['verifiable_rows']} rows "
+        f"  verifiable   ={t['verifiable_batches']:>4} batches / {t['verifiable_rows']:>6} rows "
         f"({t['verifiable_row_pct']}%)\n"
-        f"  unverifiable={t['unverifiable_batches']} batches / {t['unverifiable_rows']} rows"
+        f"  unassessable ={t['unassessable_batches']:>4} batches / {t['unassessable_rows']:>6} rows "
+        f"(capture has no page markers — recoverable by re-fetch)\n"
+        f"  unverifiable ={t['unverifiable_batches']:>4} batches / {t['unverifiable_rows']:>6} rows "
+        f"(no capture ever)"
     )
     # Auditing is not gating: an estate that is mostly unverifiable is a fact to
     # record, not a run to fail. Exit non-zero only when nothing could be read.
