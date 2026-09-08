@@ -106,17 +106,102 @@ def test_clean_batch_reports_clear_and_exits_zero(fx, tmp_path):
     assert code == 0
     text = (d / "_qa" / "widgets.report.md").read_text()
     assert "**CLEAR**" in text
-    assert "No findings" in text
+    assert "Nothing to do for the gates that ran" in text
 
 
-def test_missing_capture_is_reported_as_structural(fx, tmp_path):
+def test_missing_capture_is_a_structural_gap(fx, tmp_path):
     d = fx("bad_missing_capture")
     cli.main(["report", "--vendor-dir", str(d), "--batch", "widgets"])
     text = (d / "_qa" / "widgets.report.md").read_text()
     assert "**BLOCKED**" in text
-    assert "Structural — must NOT be fixed by editing rows" in text
     assert "capture_missing" in text
+    assert "**class**: structural · **nature**: gap" in text
     assert "nothing to check them against" in text
+
+
+# --------------------------------------------------------------------------
+# What the maker needs: coverage, provenance, and a followable order
+# --------------------------------------------------------------------------
+
+def test_report_names_gates_that_did_not_run(fx):
+    """Silence about an unrun gate reads as coverage it does not have."""
+    d = fx("good")
+    cli.main(["report", "--vendor-dir", str(d), "--batch", "widgets"])
+    text = (d / "_qa" / "widgets.report.md").read_text()
+    assert "Coverage — what was and was not checked" in text
+    assert "`g4_completeness` did not run" in text
+    assert "has found nothing, which is not the same as having found nothing wrong" in text
+
+
+def test_g4_runs_and_is_not_listed_as_skipped_when_a_denominator_is_given(fx):
+    d = fx("bad_incomplete")
+    cli.main([
+        "report", "--vendor-dir", str(d), "--batch", "widgets",
+        "--denominator", str(d / "_denominator-docs-2026-08-23.md"),
+    ])
+    text = (d / "_qa" / "widgets.report.md").read_text()
+    assert "`g4_completeness` did not run" not in text
+    assert "g4_completeness" in text
+
+
+def test_every_finding_names_the_module_and_hash_that_raised_it(fx):
+    """So a maker who disputes a finding can cite the exact code, not edit it."""
+    from kbqa.manifest import MANIFEST
+    d = fx("bad_quote_not_in_capture")
+    cli.main(["report", "--vendor-dir", str(d), "--batch", "widgets"])
+    text = (d / "_qa" / "widgets.report.md").read_text()
+    assert "**raised by**: `g3_grounding`" in text
+    assert MANIFEST["gates/g3_grounding.py"][:12] in text
+
+
+def test_report_tells_the_maker_not_to_edit_the_checker(fx):
+    d = fx("bad_quote_not_in_capture")
+    cli.main(["report", "--vendor-dir", str(d), "--batch", "widgets"])
+    text = (d / "_qa" / "widgets.report.md").read_text()
+    assert "do not edit the gate to make a batch pass" in text.lower()
+    assert "## For the maker" in text
+
+
+def test_action_plan_is_ordered_structural_before_fixable(fx):
+    """Nothing in the plan may depend on work further down it."""
+    d = fx("bad_missing_capture")
+    cli.main(["report", "--vendor-dir", str(d), "--batch", "widgets"])
+    text = (d / "_qa" / "widgets.report.md").read_text()
+    assert "## Action plan" in text
+    assert "### 1." in text
+
+
+def test_machine_readable_sidecar_is_written(fx):
+    """A maker agent consumes the plan; a person reads it."""
+    import json
+    d = fx("bad_quote_not_in_capture")
+    cli.main(["report", "--vendor-dir", str(d), "--batch", "widgets"])
+    data = json.loads((d / "_qa" / "widgets.report.json").read_text())
+
+    assert data["status"] == "BLOCKED"
+    assert data["batch"] == "widgets"
+    assert data["manifest_sha256"]
+    assert data["counts"]["findings"] >= 1
+    assert {g["gate"] for g in data["gates_run"]} == {
+        "g1_capture", "g2_conformance", "g3_grounding"
+    }
+    assert any(g["gate"] == "g4_completeness" for g in data["gates_not_run"])
+
+    for f in data["findings"]:
+        assert f["kind"] in (STRUCTURAL, PLANNER, FIXABLE)
+        assert f["nature"] in ("gap", "issue")
+        assert f["gate_sha256"] != "unknown"
+        assert f["remedy"]
+
+
+def test_gaps_and_issues_are_counted_separately(fx):
+    import json
+    d = fx("bad_missing_capture")
+    cli.main(["report", "--vendor-dir", str(d), "--batch", "widgets"])
+    data = json.loads((d / "_qa" / "widgets.report.json").read_text())
+    c = data["counts"]
+    assert c["gaps"] + c["issues"] == c["findings"]
+    assert c["gaps"] >= 1, "a missing capture is an absence, not a defect in the rows"
 
 
 def test_ungrounded_quote_is_reported_as_fixable_with_a_warning(fx):

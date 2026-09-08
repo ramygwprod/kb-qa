@@ -20,17 +20,42 @@ gate goes green. That is the failure this whole package exists to prevent, so
 the report never says what failed without saying what may legitimately change.
 """
 
+import json
 from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
 from . import __version__
 from .gates import g1_capture, g2_conformance, g3_grounding, g4_completeness
-from .manifest import MANIFEST_SHA256
+from .manifest import MANIFEST, MANIFEST_SHA256
 from .verdict import Verdict, utc_now_iso, write_verdict
 
 STRUCTURAL = "structural"
 FIXABLE = "fixable"
 PLANNER = "planner"
+
+# Orthogonal to the kind above, and the maker needs both to act.
+#
+#   GAP   — something is absent. It cannot be corrected by changing what is
+#           there; it has to be produced, or its absence recorded as a decision.
+#   ISSUE — something is present and wrong. It can be corrected in place.
+#
+# Conflating them is how "fix the failures" becomes "edit rows until green": a
+# missing capture and a mistyped quote both read as "G3 FAILED" without this.
+GAP = "gap"
+ISSUE = "issue"
+
+GAP_CODES = {
+    "capture_missing", "capture_empty", "capture_hash_absent", "bronze_missing",
+    "staging_missing", "denominator_missing", "empty_denominator",
+    "rows_file_missing", "stops_file_missing", "root_missing",
+    "no_declared_pages", "no_source_quote", "no_source_url",
+    "index_item_without_row", "stop_condition_without_reason",
+    "zero_rows", "nothing_checked", "robots_unreachable",
+}
+
+
+def nature_of(code: str) -> str:
+    return GAP if code in GAP_CODES else ISSUE
 
 
 class Remedy(NamedTuple):
@@ -317,14 +342,22 @@ def _run(mod, argv: List[str]) -> Tuple[Verdict, int]:
     return result[0], result[1]
 
 
+def _gate_sha(gate: str) -> str:
+    """The hash of the module that produced a finding — per-finding provenance."""
+    return MANIFEST.get(f"gates/{gate}.py", "unknown")[:12]
+
+
 def build(
     vendor_dir: Path,
     batch: str,
     vendor: Optional[str] = None,
     denominator: Optional[Path] = None,
     stops: Optional[Path] = None,
-) -> Tuple[str, List[Tuple[Verdict, int]], int]:
-    """Run the batch gates and render a report. Returns (markdown, results, code)."""
+) -> Tuple[str, List[Tuple[Verdict, int]], int, dict]:
+    """Run the batch gates and render a report.
+
+    Returns (markdown, results, exit_code, machine_readable).
+    """
     staging = vendor_dir / f"_collect-{batch}-staging.md"
     capture = vendor_dir / f"_capture-{batch}.raw.txt"
 
@@ -333,89 +366,206 @@ def build(
         _run(g2_conformance, ["--staging", str(staging)]),
         _run(g3_grounding, ["--staging", str(staging), "--capture", str(capture)]),
     ]
+    # A gate that did not run is a hole in the check, not a silent pass. Record
+    # why, so the report never implies coverage it does not have.
+    not_run: List[Tuple[str, str]] = []
     if denominator is not None:
         argv = ["--denominator", str(denominator), "--rows", str(staging)]
         if stops is not None:
             argv += ["--stops", str(stops)]
         results.append(_run(g4_completeness, argv))
+    else:
+        not_run.append((
+            "g4_completeness",
+            "no --denominator given, so coverage against the vendor's own index "
+            "was not measured. This batch may be internally consistent and still "
+            "miss most of the surface.",
+        ))
+    not_run.append((
+        "g5_bundles",
+        "advisory gate, run separately with `kbqa g5 --rows <f>...`",
+    ))
+    not_run.append((
+        "g6_integrity",
+        "estate-wide, run separately with `kbqa g6 --root <project>`",
+    ))
 
     worst = max(code for _, code in results)
+    blocked = any(v.verdict == "FAIL" for v, _ in results)
 
-    grouped: Dict[str, List[Tuple[str, object]]] = {k: [] for k in KIND_ORDER}
+    # Collect findings with their provenance and classification.
+    items: List[dict] = []
     for verdict, _ in results:
         for f in verdict.findings:
             remedy = REMEDIES.get(f.code, DEFAULT_REMEDY)
-            grouped[remedy.kind].append((verdict.gate, f))
+            items.append({
+                "code": f.code,
+                "gate": verdict.gate,
+                "gate_sha256": _gate_sha(verdict.gate),
+                "kind": remedy.kind,
+                "nature": nature_of(f.code),
+                "remedy": remedy.text,
+                "message": f.message,
+                "where": f.where,
+            })
 
-    blocked = any(v.verdict == "FAIL" for v, _ in results)
     lines: List[str] = []
     a = lines.append
 
     a(f"# QA report — {vendor or vendor_dir.name} / {batch}")
     a("")
-    a(f"**{'BLOCKED' if blocked else 'CLEAR'}**")
+    a(f"**{'BLOCKED' if blocked else 'CLEAR'}** · {len(items)} finding(s)")
     a("")
-    a(f"- generated: `{utc_now_iso()}`")
-    a(f"- kbqa: `{__version__}`  ·  manifest: `{MANIFEST_SHA256[:16]}…`")
-    a("")
-    a("Route to the **planner**. A failed gate never returns to the executor as "
-      "\"try again\" — that is the retry loop, and it is where gaming begins. (§5)")
+    a("| | |")
+    a("|---|---|")
+    a(f"| generated | `{utc_now_iso()}` |")
+    a(f"| kbqa version | `{__version__}` |")
+    a(f"| manifest | `{MANIFEST_SHA256}` |")
+    a(f"| vendor / batch | `{vendor or vendor_dir.name}` / `{batch}` |")
+    a(f"| staging | `{staging.name}` |")
+    a(f"| capture | `{capture.name}`{'' if capture.exists() else ' — **absent**'} |")
     a("")
 
-    a("## Gates")
+    a("## For the maker")
     a("")
-    a("| gate | verdict | rows | failed |")
-    a("|---|---|---|---|")
+    a("Everything below is work on **your** side of the boundary: the estate, "
+      "the captures, the rows. None of it is work on the checker.")
+    a("")
+    a(f"The gates that produced these findings are pinned at manifest "
+      f"`{MANIFEST_SHA256[:16]}…`, and each finding names the exact module and "
+      "hash that raised it. If you believe a gate is wrong, say so and cite that "
+      "hash — do not edit the gate to make a batch pass. A verdict from edited "
+      "code is distinguishable from a verdict from approved code, which is the "
+      "point of recording the hash at all.")
+    a("")
+    a("Route through the **planner**, not straight back to the executor. "
+      "\"Try again\" is the retry loop, and the retry loop is where gaming "
+      "begins. (§5)")
+    a("")
+
+    a("## Coverage — what was and was not checked")
+    a("")
+    a("| gate | module | verdict | rows | failed |")
+    a("|---|---|---|---|---|")
     for verdict, _ in results:
         c = verdict.counts
         a(
-            f"| `{verdict.gate}` | **{verdict.verdict}** | "
-            f"{c.get('rows', '–')} | {c.get('failed', '–')} |"
+            f"| `{verdict.gate}` | `{_gate_sha(verdict.gate)}` | "
+            f"**{verdict.verdict}** | {c.get('rows', '–')} | {c.get('failed', '–')} |"
         )
+    for gate, why in not_run:
+        a(f"| `{gate}` | – | _not run_ | – | – |")
+    a("")
+    for gate, why in not_run:
+        a(f"- **`{gate}` did not run** — {why}")
+    a("")
+    a("A gate that did not run has found nothing, which is not the same as "
+      "having found nothing wrong.")
     a("")
 
-    total = sum(len(v) for v in grouped.values())
-    if total == 0:
-        a("No findings. Every gate that ran is green.")
+    gaps = [i for i in items if i["nature"] == GAP]
+    issues = [i for i in items if i["nature"] == ISSUE]
+
+    a("## Summary")
+    a("")
+    a("| | gaps (absent) | issues (present but wrong) |")
+    a("|---|---|---|")
+    for kind in KIND_ORDER:
+        g = len([i for i in gaps if i["kind"] == kind])
+        s = len([i for i in issues if i["kind"] == kind])
+        a(f"| {kind} | {g} | {s} |")
+    a("")
+    a("**Gaps** cannot be corrected by changing what is there — something has to "
+      "be produced, or its absence recorded as a decision. **Issues** are "
+      "present and wrong, and can be corrected in place. Treating a gap as an "
+      "issue is how \"fix the failures\" becomes \"edit rows until green\".")
+    a("")
+
+    if not items:
+        a("## Action plan")
+        a("")
+        a("Nothing to do for the gates that ran.")
         a("")
         if blocked:
-            a("⚠ A gate reported FAIL with no findings — that is a bug in the gate, "
-              "not a clean batch. Do not treat this as a pass.")
+            a("⚠ A gate reported FAIL with no findings. That is a defect in the "
+              "gate, not a clean batch — do not read it as a pass.")
             a("")
     else:
-        a(f"## What to do — {total} finding(s)")
+        a("## Action plan")
         a("")
+        a("Ordered so that nothing depends on work further down the list.")
+        a("")
+        step = 0
         for kind in KIND_ORDER:
-            items = grouped[kind]
-            if not items:
-                continue
-            a(f"### {KIND_HEADING[kind]}")
-            a("")
-            by_code: Dict[str, List[Tuple[str, object]]] = {}
-            for gate, f in items:
-                by_code.setdefault(f.code, []).append((gate, f))
-            for code, entries in sorted(by_code.items()):
-                remedy = REMEDIES.get(code, DEFAULT_REMEDY)
-                a(f"**`{code}`** — {len(entries)} occurrence(s)")
-                a("")
-                a(f"> {remedy.text}")
-                a("")
-                for gate, f in entries[:25]:
-                    where = f" — `{f.where}`" if f.where else ""
-                    a(f"- [{gate}]{where} {f.message}")
-                if len(entries) > 25:
-                    a(f"- … and {len(entries) - 25} more (see the verdict JSON)")
-                a("")
+            for nature in (GAP, ISSUE):
+                bucket = [i for i in items if i["kind"] == kind and i["nature"] == nature]
+                if not bucket:
+                    continue
+                by_code: Dict[str, List[dict]] = {}
+                for i in bucket:
+                    by_code.setdefault(i["code"], []).append(i)
+                for code, entries in sorted(by_code.items()):
+                    step += 1
+                    e0 = entries[0]
+                    a(f"### {step}. `{code}` — {len(entries)} occurrence(s)")
+                    a("")
+                    a(f"- **class**: {kind} · **nature**: {nature}")
+                    a(f"- **raised by**: `{e0['gate']}` (`{e0['gate_sha256']}`)")
+                    a("")
+                    a(f"**Do this.** {e0['remedy']}")
+                    a("")
+                    a("**Occurrences**")
+                    a("")
+                    for i in entries[:25]:
+                        where = f"`{i['where']}` — " if i["where"] else ""
+                        a(f"- {where}{i['message']}")
+                    if len(entries) > 25:
+                        a(f"- … and {len(entries) - 25} more, in `_qa/{batch}.{e0['gate']}.json`")
+                    a("")
+        a("**Verify by re-running the same command.** A finding is resolved when "
+          "it stops appearing — not when it is explained.")
+        a("")
 
     a("## Provenance")
     a("")
-    a("Each gate's full verdict is in `_qa/` and carries the `manifest_sha256` of "
-      "the code that produced it. A verdict from edited gates is distinguishable "
-      "from a verdict from approved gates; that is what makes this report "
-      "tamper-evident rather than merely tidy.")
+    a(f"- kbqa `{__version__}`, manifest `{MANIFEST_SHA256}`")
+    a(f"- full verdicts: `_qa/{batch}.<gate>.json`")
+    a(f"- machine-readable copy of this report: `_qa/{batch}.report.json`")
+    a("")
+    a("Every verdict carries the manifest hash of the code that produced it, so a "
+      "verdict from edited gates is distinguishable from one from approved gates. "
+      "That is what makes this tamper-evident rather than merely tidy — and it is "
+      "why fixing a batch by editing the checker leaves a trace.")
     a("")
 
-    return "\n".join(lines) + "\n", results, worst
+    machine = {
+        "kbqa_version": __version__,
+        "manifest_sha256": MANIFEST_SHA256,
+        "vendor": vendor or vendor_dir.name,
+        "batch": batch,
+        "generated": utc_now_iso(),
+        "status": "BLOCKED" if blocked else "CLEAR",
+        "exit_code": worst,
+        "gates_run": [
+            {
+                "gate": v.gate,
+                "gate_sha256": _gate_sha(v.gate),
+                "verdict": v.verdict,
+                "counts": v.counts,
+            }
+            for v, _ in results
+        ],
+        "gates_not_run": [{"gate": g, "reason": w} for g, w in not_run],
+        "counts": {
+            "findings": len(items),
+            "gaps": len(gaps),
+            "issues": len(issues),
+            **{k: len([i for i in items if i["kind"] == k]) for k in KIND_ORDER},
+        },
+        "findings": items,
+    }
+
+    return "\n".join(lines) + "\n", results, worst, machine
 
 
 def run(argv: List[str]) -> int:
@@ -450,7 +600,7 @@ def run(argv: List[str]) -> int:
         print(f"report: not a directory: {vendor_dir}")
         return 1
 
-    markdown, results, code = build(vendor_dir, batch, vendor, denominator, stops)
+    markdown, results, code, machine = build(vendor_dir, batch, vendor, denominator, stops)
 
     for verdict, _ in results:
         write_verdict(verdict, vendor_dir, batch, log, vendor)
@@ -458,7 +608,18 @@ def run(argv: List[str]) -> int:
     target = out or (vendor_dir / "_qa" / f"{batch}.report.md")
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(markdown, encoding="utf-8")
+
+    # Sidecar for a maker agent that consumes the plan rather than reading it.
+    sidecar = target.with_suffix(".json")
+    sidecar.write_text(json.dumps(machine, indent=2, default=str) + "\n", encoding="utf-8")
+
     print(f"report written: {target}")
+    print(f"machine-readable: {sidecar}")
     for verdict, _ in results:
         print(f"  {verdict.gate:<16} {verdict.verdict}")
+    c = machine["counts"]
+    print(
+        f"  findings={c['findings']}  gaps={c['gaps']}  issues={c['issues']}  "
+        f"structural={c['structural']}  planner={c['planner']}  fixable={c['fixable']}"
+    )
     return code

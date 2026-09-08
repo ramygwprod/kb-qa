@@ -76,9 +76,23 @@ package exists to catch, not a repair of it. So every finding is classified:
 | **planner** | scope or fetch-list work — an uncovered index item, a cited page nobody fetched |
 | **fixable** | the rows disagree with the contract or their own evidence, and correcting them is legitimate |
 
+Cutting across that, each finding is a **gap** (something absent — it has to be
+produced, or its absence recorded as a decision) or an **issue** (something
+present and wrong, correctable in place). Treating a gap as an issue is how
+"fix the failures" becomes "edit rows until green".
+
 Each carries an explicit remedy, including what is *not* a fix. Every finding
 code a gate can emit has one, enforced by `tests/test_report.py` — a report that
 falls back to "see the message" for its most important findings is not a report.
+
+The report also states **what was not checked**. A gate that did not run has
+found nothing, which is not the same as having found nothing wrong, and silence
+about it reads as coverage the batch does not have.
+
+Every finding names the gate module and its SHA-256, so a maker who disputes a
+finding can cite the exact code rather than edit it. Alongside the markdown,
+`_qa/<batch>.report.json` carries the same plan for a maker agent that consumes
+it rather than reads it.
 
 ## Probe — confirm the format without disclosing the data
 
