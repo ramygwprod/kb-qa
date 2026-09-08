@@ -21,12 +21,19 @@ from kbqa.report import FIXABLE, PLANNER, REMEDIES, STRUCTURAL
 GATES_DIR = pathlib.Path(report.__file__).parent / "gates"
 
 
+# Calls whose first positional argument is a finding code. `_bulk` is a helper
+# in g6 that emits many findings of one code; without it here, every code routed
+# through a helper would look unemitted and the coverage test would pass while
+# the report fell back to "see the message" for exactly those findings.
+CODE_EMITTERS = ("Finding", "_bulk")
+
+
 def _emitted_codes():
-    """Every literal code passed to Finding() anywhere in the gates."""
+    """Every literal code passed to a finding-emitting call in the gates."""
     codes = set()
     for p in sorted(GATES_DIR.glob("*.py")):
         for node in ast.walk(ast.parse(p.read_text(encoding="utf-8"))):
-            if not (isinstance(node, ast.Call) and getattr(node.func, "id", "") == "Finding"):
+            if not (isinstance(node, ast.Call) and getattr(node.func, "id", "") in CODE_EMITTERS):
                 continue
             if node.args and isinstance(node.args[0], ast.Constant):
                 codes.add(node.args[0].value)

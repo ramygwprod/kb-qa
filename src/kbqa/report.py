@@ -51,6 +51,7 @@ GAP_CODES = {
     "no_declared_pages", "no_source_quote", "no_source_url",
     "index_item_without_row", "stop_condition_without_reason",
     "zero_rows", "nothing_checked", "robots_unreachable",
+    "batch_unchecked",
 }
 
 
@@ -302,6 +303,28 @@ REMEDIES: Dict[str, Remedy] = {
         "The GOLD file's `proof:` count disagrees with its own content. Correct "
         "the count to match the rows actually present.",
     ),
+    # --- "were the gates actually run?" — the control that stands in for a
+    # required status check when the estate repo cannot enforce one.
+    "batch_unchecked": Remedy(
+        FIXABLE,
+        "No verdict records this staging file, so the gates never ran on it. "
+        "Run `kbqa report --vendor-dir <dir> --batch <name>`. An unchecked batch "
+        "is not a passing batch — its absence from the findings says nothing "
+        "about it.",
+    ),
+    "verdict_stale": Remedy(
+        FIXABLE,
+        "Every verdict for this batch was recorded against different bytes than "
+        "the file now holds: it was checked, then changed. Re-run the gates. The "
+        "recorded PASS refers to a file that no longer exists.",
+    ),
+    "batch_known_failing": Remedy(
+        PLANNER,
+        "This batch has a current FAIL verdict and is still in the estate. Its "
+        "own report says what to do; this finding exists so a estate-wide sweep "
+        "cannot quietly pass while a known-bad batch sits in it.",
+    ),
+
     "term_at_multiple_urls": Remedy(
         PLANNER,
         "Advisory only. The same term appears at several URLs, which is an R2 "

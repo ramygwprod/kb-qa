@@ -6,11 +6,29 @@
 # gates against real vendor data on every push to the estate — from a PINNED
 # kbqa version the collecting agent cannot edit, on a machine it cannot reach.
 #
-# Two things make it real, and it is worth being blunt about them:
-#   1. `@v1.0.0` below is a TAG, not a branch. A branch would let someone change
-#      the gates and the data in one push, which is the whole failure mode.
-#   2. Branch protection must require this check. Without that, a red run is a
-#      notification, not a gate.
+# ⚠ READ THIS BEFORE TRUSTING A GREEN RUN
+#
+# On a FREE GitHub plan a PRIVATE repo cannot enforce rulesets, so this workflow
+# REPORTS BUT DOES NOT BLOCK. A red run here does not stop a merge or a push.
+# That is a plan limitation, not a configuration mistake, and it means the
+# estate sits at level 3½ in the spec's §0 table — tamper-evident, not
+# tamper-proof.
+#
+# §0 permits that, with a condition attached: levels 1–3 "make tampering
+# visible and inconvenient, which is enough WHEN A HUMAN READS THE VERDICTS."
+# The whole design rests on that clause here. Three things support it:
+#
+#   1. `@v1.0.0` below is a TAG, not a branch. The gates cannot be changed in
+#      the same push as the data they judge.
+#   2. G6 reports batches that were never checked, or checked and then edited.
+#      Skipping the gates is therefore visible after the fact — and that check
+#      lives inside the pinned gates, so it cannot be edited away by whoever
+#      skipped it.
+#   3. ci/estate-pre-push refuses a push on a failing sweep. Bypassable with
+#      --no-verify, which is the point: it makes skipping deliberate.
+#
+# To get real enforcement: GitHub Team (~$4/user/mo), or make the estate public
+# (do not), or host it where private repos get protected branches for free.
 
 name: qa
 
@@ -40,7 +58,41 @@ jobs:
           python -m kbqa --manifest
 
       - name: Estate-wide integrity (G6)
-        run: python -m kbqa g6 --root .
+        # Writes a job summary as well as failing, because an unenforced red X
+        # is easy to scroll past. The summary is the first thing on the run page.
+        run: |
+          set +e
+          python -m kbqa g6 --root . > g6.json
+          code=$?
+          set -e
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          d = json.load(open("g6.json"))
+          c = d.get("counts", {})
+          ok = d.get("verdict") == "PASS"
+          print(f"## Estate integrity — {'PASS' if ok else 'FAIL'}")
+          print()
+          print("| | |")
+          print("|---|---|")
+          print(f"| staging files | {c.get('staging_files', '?')} |")
+          print(f"| **never checked** | **{c.get('batches_unchecked', '?')}** |")
+          print(f"| checked then edited | {c.get('batches_stale', '?')} |")
+          print(f"| known failing | {c.get('batches_known_failing', '?')} |")
+          print(f"| feature trees | {c.get('feature_trees', '?')} |")
+          print()
+          if not ok:
+              print("> This run does **not** block the push — a private repo on a free")
+              print("> plan cannot require a status check. It is evidence, and it only")
+              print("> works if it is read.")
+              print()
+              seen = set()
+              for f in d.get("findings", [])[:12]:
+                  if f["code"] in seen:
+                      continue
+                  seen.add(f["code"])
+                  print(f"- `{f['code']}` — {f['message'][:160]}")
+          PY
+          exit $code
 
       - name: Per-batch gates (G1, G2, G3)
         run: |

@@ -27,7 +27,6 @@ GATE = "g6_integrity"
 BRONZE_PATTERNS = ("_robots-*.txt", "_capture-*.raw.txt", "_denominator-*.md")
 PROOF_RE = re.compile(r"^proof:\s*(?P<val>.+?)\s*$", re.MULTILINE)
 INT_RE = re.compile(r"\d+")
-ROW_RE = re.compile(r'^\{"id"', re.MULTILINE)
 
 
 def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
@@ -130,7 +129,10 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
             )
             continue
         claimed = int(digits.group())
-        actual = len(ROW_RE.findall(text))
+        # Count via the parser, not a line pattern: the collector writes a
+        # pretty-printed array in a ```json fence, where `^{"id"` matches
+        # nothing. A regex here would report every real tree as 0 rows.
+        actual = len([r for r in parse_staging(tree).rows if r.obj is not None])
         if claimed != actual:
             findings.append(
                 Finding(
@@ -154,6 +156,60 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
                 )
             )
 
+    # 5 · was every batch actually checked, against the bytes it now holds?
+    #
+    # This is the control that compensates for CI that reports without
+    # blocking. Where a required status check cannot be enforced (a private
+    # repo on a free plan), nothing at the git layer stops an unchecked batch
+    # from landing. This check lives inside the gates instead — and the gates
+    # are pinned and enforced, so it cannot be edited away by whoever skipped
+    # the check.
+    #
+    # "No verdict" and "a verdict for different bytes" are distinguished
+    # deliberately: the first was never checked, the second was checked and
+    # then changed. Only the second implies someone saw a result.
+    unchecked, stale, failing = [], [], []
+    for stg in stagings:
+        current = sha256_file(stg)
+        qa_dir = stg.parent / "_qa"
+        batch = stg.name[len("_collect-"):-len("-staging.md")]
+        verdicts = sorted(qa_dir.glob(f"{batch}.*.json")) if qa_dir.is_dir() else []
+
+        recorded = []
+        for vf in verdicts:
+            try:
+                data = json.loads(vf.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            for ref in (data.get("inputs") or {}).values():
+                if isinstance(ref, dict) and Path(str(ref.get("path", ""))).name == stg.name:
+                    recorded.append((vf, data, ref.get("sha256")))
+
+        if not recorded:
+            unchecked.append(stg)
+            continue
+        if all(sha != current for _, _, sha in recorded):
+            stale.append(stg)
+            continue
+        if any(d.get("verdict") == FAIL for _, d, sha in recorded if sha == current):
+            failing.append(stg)
+
+    def _bulk(code: str, paths: List[Path], summary: str) -> None:
+        for p in paths[:15]:
+            findings.append(Finding(code, f"{p}: {summary}", where=str(p)))
+        if len(paths) > 15:
+            findings.append(
+                Finding(code, f"… and {len(paths) - 15} more batches: {summary}")
+            )
+
+    _bulk("batch_unchecked", unchecked,
+          "no verdict records this staging file — the gates never ran on it")
+    _bulk("verdict_stale", stale,
+          "every verdict for this batch was recorded against different bytes; "
+          "the file changed after it was checked")
+    _bulk("batch_known_failing", failing,
+          "the current verdict for this batch is FAIL and it is still in the estate")
+
     counts = {
         "verdicts": checked_verdicts,
         "gates_with_verdicts": len(newest_by_gate),
@@ -161,6 +217,9 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
         "bronze_checked": bronze_checked,
         "feature_trees": len(trees),
         "staging_files": len(stagings),
+        "batches_unchecked": len(unchecked),
+        "batches_stale": len(stale),
+        "batches_known_failing": len(failing),
         "failed": len(findings),
     }
     verdict = PASS if not findings else FAIL

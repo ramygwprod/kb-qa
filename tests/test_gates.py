@@ -62,11 +62,56 @@ def test_good_passes_g4(fx):
     assert v.counts["without_row"] == 0
 
 
-def test_good_passes_g6(fx):
+def test_good_passes_g6_once_the_gates_have_actually_run(fx):
+    """G6 passes a clean estate — but only one whose batches were checked.
+
+    This mirrors the real cycle rather than shortcutting it: verdicts exist
+    because the gates ran, not because the fixture ships them.
+    """
+    from kbqa import cli
+
     d = fx("good")
+    assert cli.main(["report", "--vendor-dir", str(d), "--batch", "widgets"]) == 0
+
     v, code = g6_integrity.run(["--root", str(d)])
     assert v.verdict == PASS, v.findings
     assert code == EXIT_PASS
+
+
+def test_g6_fails_an_estate_whose_batches_were_never_checked(fx):
+    """The control standing in for a status check that cannot be enforced.
+
+    A private repo on a free plan cannot require a passing check before a push,
+    so nothing at the git layer stops an unchecked batch from landing. G6 is
+    where that is caught instead — and G6 lives in the pinned, enforced gates,
+    so whoever skipped the check cannot edit this away.
+    """
+    d = fx("good")  # no _qa/ directory: the gates never ran here
+    v, code = g6_integrity.run(["--root", str(d)])
+    assert v.verdict == FAIL
+    assert code == EXIT_FAIL
+    assert any(f.code == "batch_unchecked" for f in v.findings)
+    assert v.counts["batches_unchecked"] == 1
+
+
+def test_g6_fails_when_a_batch_changed_after_it_was_checked(fx):
+    """Checked-then-edited is a different fault from never-checked.
+
+    Only this one implies somebody saw a result before changing the file.
+    """
+    from kbqa import cli
+
+    d = fx("good")
+    cli.main(["report", "--vendor-dir", str(d), "--batch", "widgets"])
+
+    staging = d / "_collect-widgets-staging.md"
+    staging.write_text(staging.read_text() + "\n<!-- edited after checking -->\n",
+                       encoding="utf-8")
+
+    v, code = g6_integrity.run(["--root", str(d)])
+    assert v.verdict == FAIL
+    assert any(f.code == "verdict_stale" for f in v.findings), v.findings
+    assert v.counts["batches_stale"] == 1
 
 
 # ── G1 must fail ─────────────────────────────────────────────────────────
