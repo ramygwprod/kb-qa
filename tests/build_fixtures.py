@@ -14,7 +14,11 @@ Run:  python tests/build_fixtures.py
 import hashlib
 import json
 import shutil
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+from kbqa.models import SCHEMA_VERSION  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -42,7 +46,9 @@ def row(**kw):
     # so a row that does not start with {"id" is invisible to it.
     base = {
         "id": "acme.widgets",
-        "schema_version": 1,
+        # Follows the contract rather than pinning a literal: a fixture that
+        # hardcodes a version silently rots into testing a schema nobody ships.
+        "schema_version": SCHEMA_VERSION,
         "vendor_term": "Widgets",
         "what_it_does": "Compose reusable UI blocks scoped to a workspace.",
         "source_url": OVERVIEW,

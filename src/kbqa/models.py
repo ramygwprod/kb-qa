@@ -1,16 +1,28 @@
 """The contract as code. A row either validates or raises.
 
-Changing this file is a version bump, a commit, and a note in
-_DECISIONS-OPEN.md. Never mid-run. (spec §2)
+Changing this file is a version bump, a commit, and a recorded decision.
+Never mid-run. (spec §2)
+
+Schema history
+--------------
+v1  Written from the specification alone, before any real row was seen.
+v2  Reconciled with the estate (2026-09-08). Five fields the collector has
+    always emitted were absent from v1, so every real row failed conformance
+    on fields that were never in dispute. See docs/DECISIONS.md for the
+    evidence and the reasoning per field.
+
+    `extra="forbid"` is unchanged and still load-bearing: naming five known
+    fields does not open the door to a sixth. The guarantee is that the field
+    set is decided here, deliberately, and not grown by a collector at runtime.
 """
 
 from datetime import date
 from enum import Enum
-from typing import List, Literal, Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class Mechanism(str, Enum):
@@ -76,6 +88,24 @@ class Row(BaseModel):
     # version bump, never by a collector.
     usecase_of: Optional[str] = None
 
+    # --- v2: fields the collector emits that v1 did not name -----------------
+    #
+    # Typed `Optional[str]` rather than as enums on purpose. Their value sets
+    # were observed in ONE batch, and an enum inferred from one sample would
+    # reject legitimate values found in the next — inventing a constraint and
+    # calling it a contract. `kbqa sweep --field-values` collects the real
+    # distributions estate-wide; constrain them in v3 from that evidence.
+    #
+    # Three of these held a single value across all 222 rows of the batch they
+    # were observed in, which is what an unexercised default looks like. That
+    # is recorded in docs/DECISIONS.md as open, not settled here: a field that
+    # never varies is a question for the collector, not a validation failure.
+    node_kind: Optional[str] = None
+    deployment: Optional[str] = None
+    plan_gating: Optional[str] = None
+    vendor_category: Optional[str] = None
+    vendor_category_source: Optional[str] = None
+
     @field_validator("source_url")
     @classmethod
     def real_source(cls, v: str) -> str:
@@ -94,19 +124,8 @@ class Row(BaseModel):
         return v
 
 
-class StagingFrontmatter(BaseModel):
-    """Frontmatter of a _collect-<batch>-staging.md file.
-
-    `fetched_by_this_agent` is an attestation. G6 FAILs on true — attestation
-    is not proof of role separation, but a true value is proof of its
-    collapse. (spec §G6)
-    """
-
-    model_config = {"extra": "allow"}
-
-    batch: str = Field(min_length=1)
-    vendor: str = Field(min_length=1)
-    source_capture: str = Field(min_length=1)
-    source_capture_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    pages: List[str] = Field(min_length=1)
-    fetched_by_this_agent: bool = False
+# The staging frontmatter contract lives in docs/STAGING-FORMAT.md, not here.
+# A Pydantic model for it existed in v1, was never referenced by any gate, and
+# disagreed with both the spec and the collector's real output. G1 reads the
+# frontmatter directly and reports each missing key as its own finding, which
+# gives the maker a specific remedy instead of one opaque validation error.

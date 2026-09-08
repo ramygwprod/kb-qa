@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from . import __version__, probe, report
+from . import __version__, probe, report, sweep
 from .gates import g0_permission, g1_capture, g2_conformance
 from .gates import g3_grounding, g4_completeness, g5_bundles, g6_integrity
 from .manifest import MANIFEST, MANIFEST_SHA256
@@ -49,6 +49,8 @@ cycle:
   report --vendor-dir <d> --batch <name> [--denominator <f>] [--stops <f>]
                                                run G1-G3 (+G4), write a
                                                remediation report for the maker
+  sweep  --root <estate> [--field-values]      audit the whole estate: which
+                                               batches can be checked at all
 
 diagnostics:
   probe --staging <f> [--capture <f>]          report file SHAPE, not content
@@ -125,6 +127,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     # Runs several gates and renders their findings as remediation guidance.
     if argv[0] == "report":
         return report.run(argv[1:])
+
+    # Estate-wide audit. Records what can be checked; does not gate.
+    if argv[0] == "sweep":
+        return sweep.run(argv[1:])
 
     gate_name = argv[0]
     if gate_name not in GATES:
