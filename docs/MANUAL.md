@@ -1,6 +1,6 @@
 # kbqa — product manual
 
-**Version 2.0.0** · for operators and for agents
+**Version 2.1.0** · for operators and for agents
 
 ---
 
@@ -22,7 +22,7 @@ A PASS is worth something only when three things hold together:
 
 | condition | how it is met |
 |---|---|
-| the gates catch what they claim | 113 tests; every blocking gate proven to fail on a purpose-built fixture |
+| the gates catch what they claim | 133 tests; every blocking gate proven to fail on a purpose-built fixture |
 | the gates could not have been edited to pass | installed from a pinned tag of a repo whose CI is enforced |
 | the gates ran against the real files | the parser is confirmed against collector output |
 
@@ -48,7 +48,7 @@ python3 -m venv .venv
 For an estate or CI, install from the pinned tag rather than a branch:
 
 ```bash
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v2.0.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v2.1.0"
 ```
 
 **Always a tag, never a branch.** A branch would let the gates and the data they
@@ -140,6 +140,7 @@ kb-qa/
 │   ├── build_fixtures.py           fixtures are GENERATED, never hand-edited
 │   ├── conftest.py
 │   ├── fixtures/                   21 fixtures: 1 good, 20 purpose-built failures
+│   ├── test_parsing.py             all three row serialisations
 │   ├── test_gates.py  test_cli.py  test_probe.py  test_report.py  test_sweep.py
 ├── agents/                         role definitions — INSTALL INTO THE ESTATE
 │   ├── fetcher.md                  tools: WebFetch, Write, Read
@@ -155,9 +156,15 @@ kb-qa/
 
 ### The estate it validates
 
+The container directory's name varies by estate (`Competitors/`, `kk/`, …).
+Every tool discovers batches recursively and derives the vendor from position
+under the root — `--vendor-depth` adjusts that for other layouts. Nothing
+hardcodes a container name, because a discovery pattern that matches no files
+looks exactly like a clean estate.
+
 ```
 <estate>/
-├── Competitors/<Vendor>/
+├── <container>/<Vendor>/
 │   ├── _robots-<host>-<date>.txt          BRONZE  immutable
 │   ├── _capture-<batch>.raw.txt           BRONZE  immutable
 │   ├── _denominator-<surface>-<date>.md   BRONZE  immutable
@@ -187,10 +194,17 @@ python -m kbqa sweep --root "<estate>" --field-values
 Produces `_qa-estate-audit.md` and `.json`, answering one question per batch:
 **can a reader check this against the vendor's own words?**
 
-Read the split first. Rows in the `unverifiable-no-capture` tier are not known
-to be wrong — they are known to be uncheckable, because the page text was never
-stored and re-fetching returns today's page rather than the page the claim came
-from. That is a property of how the batch was collected, not a defect to repair.
+Read the split first. Three tiers, and the difference decides what to do:
+
+| tier | meaning | recoverable? |
+|---|---|---|
+| `verifiable` | capture splits into pages; every quote checkable | — |
+| `unassessable-no-page-markers` | text stored but no page boundaries | **yes** — re-fetch with a marker-writing fetcher, no need to re-collect rows |
+| `unverifiable-no-capture` | page text never stored | no |
+
+None of these says a row is wrong. Unverifiable rows are *uncheckable*:
+re-fetching returns today's page, not the page the claim came from. That is a
+property of how the batch was collected, not a defect to repair.
 
 `--field-values` lists every field the collector emits, flagging those outside
 the contract. That is the evidence for the next schema version.
@@ -323,7 +337,7 @@ the output path.
 
 ## 7 · Findings reference
 
-45 codes. Every one carries a remedy, enforced by `tests/test_report.py` — a
+46 codes. Every one carries a remedy, enforced by `tests/test_report.py` — a
 report that falls back to "see the message" for its most important findings is
 not a report.
 
@@ -337,6 +351,7 @@ not a report.
 | `capture_empty` | structural | gap | Capture holds no text; re-fetch |
 | `capture_hash_absent` | fixable | gap | Add `source_capture_sha256` to frontmatter |
 | `capture_hash_mismatch` | structural | issue | Rows written from different bytes; re-run the row-writer |
+| `capture_has_no_page_blocks` | structural | gap | Text stored, no page boundaries. Rows are **unassessable, not ungrounded** — re-fetch with markers |
 | `capture_missing` | structural | gap | Nothing to check against. Re-collect or record as unverifiable |
 | `capture_not_before_staging` | structural | issue | Rows cannot have been written from this capture |
 | `denominator_missing` | structural | gap | Coverage unmeasurable |
