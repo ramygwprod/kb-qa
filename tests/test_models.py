@@ -89,6 +89,17 @@ def test_numeric_depth_is_accepted(depth):
     assert row(depth_level=depth).depth_level == depth
 
 
+@pytest.mark.parametrize("depth", [2, 3, 4, 5, 6])
+def test_numeric_depth_is_accepted_as_an_integer_too(depth):
+    """Regression: 170 rows rejected on TYPE before the validator ran.
+
+    The collector writes numeric depth as a JSON integer. Declaring the field
+    `str` made numeric depth work only if it happened to be quoted — a
+    distinction the data does not draw.
+    """
+    assert row(depth_level=depth).depth_level == str(depth)
+
+
 def test_depth_level_still_rejects_nonsense():
     """Open to two conventions is not open to anything."""
     with pytest.raises(Exception) as e:
@@ -105,6 +116,32 @@ def test_both_evidence_grade_spellings_are_accepted():
 def test_an_unknown_evidence_grade_is_still_rejected():
     with pytest.raises(Exception):
         row(evidence_grade="blog")
+
+
+@pytest.mark.parametrize("ident", [
+    "sinch.products.net.a2p_monetization",   # underscore — 857 rows failed on this
+    "vonage",                                # single segment — 47 rows failed
+    "a.b.c.d.e.f",                           # six segments, as the estate uses
+    "acme.widgets-pro.v2",                   # hyphens and digits still fine
+])
+def test_real_id_shapes_are_accepted(ident):
+    """Regression: 904 rows rejected by an invented id pattern.
+
+    857 contained `_`, which v1 permitted as `-` but not `_` — an arbitrary
+    distinction. 47 were top-level nodes with a one-word id.
+    """
+    assert row(id=ident).id == ident
+
+
+@pytest.mark.parametrize("ident", ["Acme.Widgets", "acme widgets", "acme..widgets", ""])
+def test_malformed_ids_are_still_rejected(ident):
+    """Widened is not unconstrained.
+
+    Lowercase stays required: a case-sensitive identifier that is sometimes
+    capitalised is a duplicate waiting to happen.
+    """
+    with pytest.raises(Exception):
+        row(id=ident)
 
 
 # --------------------------------------------------------------------------

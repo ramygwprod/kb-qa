@@ -128,7 +128,37 @@ REGISTRY: Dict[str, VendorField] = {
     "node_count": _f(BATCH_LEVEL, None,
                      "How many nodes the batch contains. A claim about the "
                      "batch, repeated on every row of it."),
+    # --- collection-time notes -------------------------------------------
+    # Registered as ANNOTATION deliberately: each records something real that
+    # was observed while collecting, but NINE separate note fields for what is
+    # essentially "something was odd here" is the §2 accumulation pattern in
+    # miniature. They pass validation and stay visible as candidates for
+    # consolidation into one structured field.
+    "duplicate_note": _f(ANNOTATION, None,
+                         "A note that this node appears more than once. 61 rows."),
+    "id_collision_with": _f(ANNOTATION, "id",
+                            "Another node id this one collides with. A real "
+                            "structural fact, worth keeping in some form."),
+    "contradiction": _f(ANNOTATION, None,
+                        "The vendor contradicts itself, or contradicts another page."),
+    "contradiction_note": _f(ANNOTATION, None,
+                             "Free-text detail on a contradiction. Overlaps "
+                             "`contradiction`; the two should probably be one field."),
+    "source_typo": _f(ANNOTATION, "source_quote",
+                      "The vendor's page contains a typo. Recorded rather than "
+                      "corrected — §G3 treats typos as evidence."),
+    "mechanism_correction": _f(ANNOTATION, "mechanism",
+                               "A correction applied to a previously recorded mechanism."),
+    "scope_qualifier": _f(ANNOTATION, None,
+                          "Narrows what the row's claim applies to."),
+    "taxonomy_source": _f(ANNOTATION, "vendor_category",
+                          "Where a taxonomy decision came from. Overlaps "
+                          "`vendor_category_source`."),
+    "nodes": _f(ANNOTATION, None,
+                "Observed twice. Purpose unclear from shape alone — a candidate "
+                "for removal unless the collector can say what it means."),
 }
+
 
 
 def is_registered(name: str) -> bool:

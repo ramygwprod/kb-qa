@@ -34,7 +34,7 @@ v3  Split the contract by owner (2026-09-09), after the estate showed a strict
 
 from datetime import date
 from enum import Enum
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -104,7 +104,15 @@ class Row(BaseModel):
     model_config = {"extra": "allow"}
 
     schema_version: int = SCHEMA_VERSION
-    id: str = Field(pattern=r"^[a-z0-9]+(\.[a-z0-9\-]+)+$")
+    # Lowercase dotted path. Underscores are allowed and a single segment is
+    # valid — both were rejected by v1's pattern, which cost 904 rows across the
+    # estate: 857 for containing `_` (permitted `-` but not `_`, an arbitrary
+    # distinction) and 47 for being top-level nodes with a one-word id.
+    #
+    # Lowercase stays required. Not because the data would otherwise break the
+    # rule — no id in the estate uses uppercase — but because a case-sensitive
+    # identifier that is sometimes capitalised is a duplicate waiting to happen.
+    id: str = Field(pattern=r"^[a-z0-9_]+(\.[a-z0-9_\-]+)*$")
     vendor_term: str = Field(min_length=1)
     what_it_does: str = Field(min_length=1)
     source_url: str
@@ -121,16 +129,23 @@ class Row(BaseModel):
     # node's position in THAT vendor's tree; the names impose ours. Forcing one
     # convention would flatten a real structural difference into a false one —
     # the same error as normalising a vendor's spelling.
-    depth_level: str
+    depth_level: Union[str, int]
 
     canonical: str = "NOVEL"
     broken_source: bool = False
     parent_path: Optional[str] = None
     usecase_of: Optional[str] = None
 
-    @field_validator("depth_level")
+    @field_validator("depth_level", mode="before")
     @classmethod
-    def named_or_numeric_depth(cls, v: str) -> str:
+    def named_or_numeric_depth(cls, v):
+        """Accepts `4` and `"4"` alike.
+
+        The collector writes numeric depth as a JSON integer. Declaring the
+        field `str` rejected 170 rows on type before this validator ever ran —
+        making numeric depth work only if it happened to be quoted, which is a
+        distinction the data does not draw.
+        """
         s = str(v).strip()
         if s in {d.value for d in DepthLevel} or s.isdigit():
             return s
