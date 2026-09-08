@@ -230,6 +230,87 @@ def test_vendor_typo_is_preserved_not_corrected(fx):
     assert v.verdict == PASS, "a row quoting the vendor's typo verbatim must ground"
 
 
+def test_pages_declared_in_a_markdown_table_are_found(fx):
+    """Regression: `no_declared_pages` fired on batches that declare pages fine.
+
+    Some batches use a frontmatter `pages:` list, others a markdown table. G1
+    read only the first, so the second got a finding untrue of it — sending a
+    maker hunting for a list that was never that batch's convention.
+    """
+    d = fx("good")
+    staging = d / STAGING
+    text = staging.read_text()
+
+    # Strip the frontmatter pages list, declare the same pages in a table.
+    lines = [l for l in text.splitlines() if not l.startswith("  - http")]
+    lines = [l for l in lines if l.strip() != "pages:"]
+    table = [
+        "",
+        "## Per-page declaration",
+        "",
+        "| page | items | complete? |",
+        "|---|---|---|",
+        "| https://docs.acme.test/widgets/overview | 1 | yes |",
+        "| https://docs.acme.test/widgets/syntax-reference | 1 | yes |",
+        "",
+    ]
+    idx = next(i for i, l in enumerate(lines) if l.startswith("# Staging"))
+    staging.write_text("\n".join(lines[:idx] + table + lines[idx:]) + "\n", encoding="utf-8")
+
+    v, code = g1_capture.run(["--staging", str(staging), "--capture", str(d / CAPTURE)])
+
+    assert "no_declared_pages" not in codes(v), v.findings
+    assert v.counts["declared_pages"] == 2
+    assert v.counts["pages_source"] == "table"
+
+
+def test_capture_without_markers_is_one_structural_finding_not_one_per_row(fx):
+    """Regression: 181 rows reported as ungrounded when the capture had no pages.
+
+    A capture with no BEGIN/END markers cannot be split, so grounding is
+    impossible rather than failing. Emitting `url_not_in_capture` per row said
+    "this quote is not on its page" 181 times when the truth was "this file
+    records no pages" — loud, specific, and wrong.
+    """
+    d = fx("good")
+    (d / CAPTURE).write_text(
+        "Widgets Overview\n\nAcme Widgets let you compose reusable UI blocks.\n",
+        encoding="utf-8",
+    )
+    v, code = g3_grounding.run(["--staging", str(d / STAGING), "--capture", str(d / CAPTURE)])
+
+    assert v.verdict == FAIL
+    assert code == EXIT_FAIL
+    assert codes(v) == {"capture_has_no_page_blocks"}, "one finding, not one per row"
+    assert len(v.findings) == 1
+    assert v.counts["unassessable"] == 2
+    assert v.counts["grounded"] == 0
+    assert "url_not_in_capture" not in codes(v)
+
+
+def test_unassessable_is_not_reported_as_ungrounded(fx):
+    """The distinction the finding exists to preserve.
+
+    Nothing has been shown wrong with these rows; grounding was not attempted.
+    Conflating the two would accuse the data of a defect it has not been shown
+    to have.
+    """
+    d = fx("good")
+    (d / CAPTURE).write_text("no markers here at all\n", encoding="utf-8")
+    v, _ = g3_grounding.run(["--staging", str(d / STAGING), "--capture", str(d / CAPTURE)])
+
+    assert v.counts["unassessable"] == v.counts["rows"]
+    assert v.counts["checked"] == 0, "no row was assessed, so none may be judged"
+
+
+def test_an_empty_capture_is_still_capture_empty_not_no_page_blocks(fx):
+    """Zero bytes and zero markers are different faults with different remedies."""
+    d = fx("good")
+    (d / CAPTURE).write_text("", encoding="utf-8")
+    v, _ = g3_grounding.run(["--staging", str(d / STAGING), "--capture", str(d / CAPTURE)])
+    assert "capture_has_no_page_blocks" not in codes(v)
+
+
 def test_normalisation_folds_punctuation_but_not_spelling():
     assert normalise_for_match("“smart”  quotes—here") == '"smart" quotes-here'
     assert "definiton" in normalise_for_match("A widget definiton")

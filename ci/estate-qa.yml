@@ -18,7 +18,7 @@
 # visible and inconvenient, which is enough WHEN A HUMAN READS THE VERDICTS."
 # The whole design rests on that clause here. Three things support it:
 #
-#   1. `@v1.0.0` below is a TAG, not a branch. The gates cannot be changed in
+#   1. `@v2.1.0` below is a TAG, not a branch. The gates cannot be changed in
 #      the same push as the data they judge.
 #   2. G6 reports batches that were never checked, or checked and then edited.
 #      Skipping the gates is therefore visible after the fact — and that check
@@ -54,7 +54,7 @@ jobs:
         # validator is published.
         run: |
           pip install --upgrade pip
-          pip install "git+https://github.com/ramygwprod/kb-qa.git@v1.0.0"
+          pip install "git+https://github.com/ramygwprod/kb-qa.git@v2.1.0"
           python -m kbqa --manifest
 
       - name: Estate-wide integrity (G6)
@@ -98,8 +98,12 @@ jobs:
         run: |
           set -euo pipefail
           failed=0
-          shopt -s nullglob
-          for staging in Competitors/*/_collect-*-staging.md; do
+          shopt -s nullglob globstar
+          # Recursive: estates nest vendors under a container directory whose
+          # name varies. Hardcoding `Competitors/` silently checked nothing when
+          # the tree was laid out any other way — and a sweep that matches no
+          # files looks identical to a clean estate.
+          for staging in **/_collect-*-staging.md; do
             vendor_dir="$(dirname "$staging")"
             base="$(basename "$staging")"
             batch="${base#_collect-}"; batch="${batch%-staging.md}"
@@ -129,7 +133,7 @@ jobs:
 
           # An empty sweep is not a pass. If the glob matched nothing, the
           # discovery pattern is wrong and every batch went unchecked.
-          count=$(ls Competitors/*/_collect-*-staging.md 2>/dev/null | wc -l)
+          count=$(ls **/_collect-*-staging.md 2>/dev/null | wc -l)
           if [ "$count" -eq 0 ]; then
             echo "::error::no staging files discovered — the sweep checked nothing"
             exit 1

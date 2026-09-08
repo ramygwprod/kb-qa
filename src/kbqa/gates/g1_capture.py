@@ -59,18 +59,29 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
         )
 
     # 3 · every declared page has a marker pair
-    declared = parsed.frontmatter_raw.get("pages") or []
-    if not isinstance(declared, list):
-        declared = []
+    #
+    # The declaration lives in the frontmatter `pages:` list in some batches and
+    # in a markdown table in others; the parser reports whichever it found and
+    # names the source. Reading only the frontmatter reported `no_declared_pages`
+    # against batches that declare their pages perfectly well in a table — a
+    # finding untrue of them, which would send a maker hunting for a list that
+    # was never that batch's convention.
+    declared = list(parsed.declared_pages)
+
+    fm_pages = parsed.frontmatter_raw.get("pages")
+    if fm_pages is not None and not isinstance(fm_pages, list):
         findings.append(
             Finding("pages_not_a_list", "frontmatter 'pages' is not a list of URLs")
         )
+
     if not declared:
         findings.append(
             Finding(
                 "no_declared_pages",
-                "staging frontmatter declares no pages; nothing can be checked "
-                "against the capture — treated as a defect, not a pass",
+                "the staging file declares no pages — neither a frontmatter "
+                "'pages:' list nor a markdown table of page URLs — so what was "
+                "cited cannot be checked against what was fetched; treated as a "
+                "defect, not a pass",
             )
         )
 
@@ -109,6 +120,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
 
     counts = {
         "declared_pages": len(declared),
+        "pages_source": parsed.pages_source,
         "capture_blocks": len(cap.blocks),
         "checked": len(declared),
         "failed": len(findings),

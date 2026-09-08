@@ -51,7 +51,7 @@ GAP_CODES = {
     "no_declared_pages", "no_source_quote", "no_source_url",
     "index_item_without_row", "stop_condition_without_reason",
     "zero_rows", "nothing_checked", "robots_unreachable",
-    "batch_unchecked",
+    "batch_unchecked", "capture_has_no_page_blocks",
 }
 
 
@@ -202,6 +202,17 @@ REMEDIES: Dict[str, Remedy] = {
         "actually on. Do not leave the citation pointing at a page that does "
         "not contain the quote.",
     ),
+    "capture_has_no_page_blocks": Remedy(
+        STRUCTURAL,
+        "The capture holds text but no `=====BEGIN <url>=====` markers, so it "
+        "cannot be split into pages. These rows are **unassessable, not "
+        "ungrounded** — nothing has been shown wrong with them; grounding simply "
+        "could not be attempted. Re-fetch the batch with a fetcher that writes "
+        "per-page markers. Do not edit the rows, and do not accept a "
+        "whole-capture match as grounding: without page boundaries a quote "
+        "lifted from a different page is indistinguishable from a correct one.",
+    ),
+
     "url_not_in_capture": Remedy(
         PLANNER,
         "The row cites a URL with no block in the capture. Either the page was "

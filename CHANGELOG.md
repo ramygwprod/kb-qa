@@ -16,6 +16,69 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [2.1.0] — 2026-09-08
+
+Found by running 2.0.0 against the real estate for the first time. The audit
+reported **0% of rows verifiable**; that figure was a parser defect, not a fact
+about the data.
+
+### Fixed
+
+- **A third serialisation was unreadable: JSONL inside a ```` ```json ```` fence.**
+  The parser recognised the fence, assumed the body was a JSON array, and
+  `json.loads` failed with "Extra data" at the second object. The batch was then
+  reported as **zero rows** — silently, and specifically on the only nine
+  batches in the estate that have captures and can therefore be grounded at all.
+  A decode failure in one shape is now a signal to try the other, not a verdict
+  about the file. `row_format` reports `fenced-jsonl` when found.
+- **The §G2 naive cross-check now follows the detected format.** `^{"id"` counts
+  nothing in a pretty-printed array and `^\s*"id":` counts nothing in JSONL, so
+  the wrong pattern would fail a batch for a reason that is not true of it.
+- **`sweep` named a subfolder as a vendor.** Vendor was taken from the immediate
+  parent directory, so `<root>/kk/Zendesk/_to_delete/` reported vendor
+  `_to_delete` — and a folder plainly named for deletion was counted in the
+  totals as live data. Vendor now comes from position under the estate root.
+
+- **Frontmatter broke on folded scalars.** Real collector frontmatter uses
+  indented continuation lines for prose (`scope:` spanning three lines). The
+  minimal YAML subset rejected them, making the whole frontmatter unparseable —
+  which cascaded into false `no_declared_pages` and `capture_hash_absent`
+  findings on batches whose frontmatter was fine.
+- **`no_declared_pages` fired on batches that declare their pages correctly.**
+  G1 read only a frontmatter `pages:` list; some batches declare pages in a
+  markdown table instead. Both are now read, and the verdict records which via
+  `pages_source`. Row `source_url`s inside a ```` ```json ```` fence are
+  excluded — a citation is not a declaration, and counting it would make the
+  declaration agree with the rows by construction.
+
+### Added
+
+- **`capture_has_no_page_blocks`** (structural gap). A capture holding text but
+  no `=====BEGIN <url>=====` markers cannot be split into pages, so grounding is
+  *impossible* rather than failing. Previously this emitted one
+  `url_not_in_capture` per row — on a real batch, **181 findings saying "this
+  quote is not on its page" when the truth was "this file records no pages"**.
+  Now one structural finding, and the counts report `unassessable` separately
+  from `grounded`: nothing has been shown wrong with those rows.
+
+  Deliberately **not** degraded to whole-capture matching. §G3 scopes to the
+  row's own page precisely so a quote lifted from another page cannot pass, and
+  `bad_quote_from_wrong_page` exists to keep that honest.
+- `sweep --exclude <glob>` (repeatable). Excluded batches are **counted and
+  named** in their own report section, never silently dropped — a batch that
+  vanishes from a total without explanation is indistinguishable from one that
+  was never collected. Nothing is excluded by default.
+- `sweep --vendor-depth N` — which path component under the root names the
+  vendor. Defaults to 2, for the common `<root>/<container>/<Vendor>/` layout.
+
+### Notes
+
+131 tests. `tests/test_parsing.py` covers all three serialisations and asserts
+the naive count agrees with the parse in each, so this class of defect fails
+loudly rather than reporting zero.
+
+---
+
 ## [2.0.0] — 2026-09-08
 
 First release reconciled with a real estate. v1 was written from the

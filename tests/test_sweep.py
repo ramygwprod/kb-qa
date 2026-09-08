@@ -15,7 +15,7 @@ import os
 import pytest
 
 from kbqa import cli
-from kbqa.sweep import UNVERIFIABLE, VERIFIABLE, audit_batch, batch_name
+from kbqa.sweep import UNASSESSABLE, UNVERIFIABLE, VERIFIABLE, audit_batch, batch_name
 
 CAPTURE_MTIME = 1_000_000_000
 STAGING_MTIME = 1_000_000_100
@@ -85,6 +85,47 @@ def test_grounding_is_reported_where_a_capture_exists(estate):
     assert by_vendor["Acme"]["grounded"] is True
     assert by_vendor["Cirrus"]["grounded"] is False
     assert by_vendor["Cirrus"]["ungrounded_rows"] >= 1
+
+
+def test_capture_without_page_markers_is_its_own_tier(estate):
+    """Three states, not two — and the difference decides what to do next.
+
+    A capture with no markers holds the text but records no page boundaries.
+    Calling that `unverifiable` would say the evidence was never kept, when it
+    was: re-fetching with a marker-writing fetcher recovers these rows without
+    re-collecting them. Calling it `ungrounded` would be worse — asserting the
+    quotes are wrong when they were never checked.
+    """
+    root = estate(Acme="good")
+    cap = next((root / "Competitors" / "Acme").glob("_capture-*.raw.txt"))
+    cap.write_text("Widgets Overview\n\nSome page text with no markers.\n", encoding="utf-8")
+
+    data = _audit(root)
+    b = data["batches"][0]
+
+    assert b["tier"] == UNASSESSABLE
+    assert b["capture_blocks"] == 0
+    assert b["unassessable_rows"] == b["rows"]
+    assert b["ungrounded_rows"] == 0, "rows were never assessed, so none are ungrounded"
+    assert b["grounded"] is None, "no grounding claim may be made either way"
+
+
+def test_three_tiers_partition_the_estate(estate):
+    root = estate(A="good", B="bad_missing_capture")
+    cap = next((root / "Competitors" / "A").glob("_capture-*.raw.txt"))
+    cap.write_text("no markers\n", encoding="utf-8")
+
+    t = _audit(root)["totals"]
+    assert (
+        t["verifiable_batches"] + t["unassessable_batches"] + t["unverifiable_batches"]
+        == t["batches"]
+    )
+    assert (
+        t["verifiable_rows"] + t["unassessable_rows"] + t["unverifiable_rows"]
+        == t["rows"]
+    )
+    assert t["unassessable_batches"] == 1
+    assert t["unverifiable_batches"] == 1
 
 
 def test_conformance_runs_on_unverifiable_batches_too(estate):
@@ -176,6 +217,64 @@ def test_field_values_is_off_by_default(estate):
     root = estate(Acme="good")
     data = _audit(root)
     assert data["fields"] == {}
+
+
+def test_vendor_comes_from_estate_position_not_the_parent_folder(tmp_path):
+    """Regression: a folder named `_to_delete` was reported as a vendor.
+
+    Estates nest. Using the immediate parent labelled a subfolder as a vendor
+    and counted it in the totals as though it were live data.
+    """
+    from kbqa.sweep import vendor_of
+
+    root = tmp_path / "estate"
+    nested = root / "kk" / "Zendesk" / "_to_delete" / "_collect-x-staging.md"
+    flat = root / "kk" / "Zendesk" / "_collect-x-staging.md"
+
+    assert vendor_of(nested, root) == "Zendesk"
+    assert vendor_of(flat, root) == "Zendesk"
+
+
+def test_vendor_depth_is_configurable(tmp_path):
+    """Not every estate puts vendors under a container directory."""
+    from kbqa.sweep import vendor_of
+
+    root = tmp_path / "estate"
+    p = root / "Sinch" / "_collect-x-staging.md"
+    assert vendor_of(p, root, depth=1) == "Sinch"
+
+
+def test_excluded_batches_are_named_not_silently_dropped(estate):
+    """A batch that vanishes from a total without explanation is invisible.
+
+    It becomes indistinguishable from one that was never collected.
+    """
+    root = estate(Zendesk="good")
+    stg = root / "Competitors" / "Zendesk"
+    (stg / "_to_delete").mkdir()
+    for p in list(stg.iterdir()):
+        if p.is_file():
+            (stg / "_to_delete" / p.name).write_bytes(p.read_bytes())
+
+    assert cli.main([
+        "sweep", "--root", str(root), "--exclude", "*/_to_delete/*",
+    ]) == 0
+    data = json.loads((root / "_qa-estate-audit.json").read_text())
+
+    assert data["totals"]["batches"] == 1, "the excluded batch must leave the totals"
+    assert len(data["excluded"]) == 1
+    assert "_to_delete" in data["excluded"][0]
+
+    text = (root / "_qa-estate-audit.md").read_text()
+    assert "Excluded by pattern" in text
+    assert "not** in any figure above" in text
+
+
+def test_nothing_is_excluded_by_default(estate):
+    """Default exclusions would hide data the operator never chose to hide."""
+    root = estate(Acme="good")
+    data = _audit(root)
+    assert data["excluded"] == []
 
 
 def test_batch_name_derivation():
