@@ -101,14 +101,29 @@ def _describe_field(name: str, values: List[Any]) -> str:
     return f"{shape}  present={present}"
 
 
+_JSON_PAIR_RE = re.compile(r'("(?:[^"\\]|\\.)*"\s*:\s*)"(?:[^"\\]|\\.)*"')
+
+
 def _line_shape(line: str) -> str:
-    """Describe a line's structure with its content stripped out."""
+    """Describe a line's structure with its content stripped out.
+
+    Redaction is key-aware, not length-based. An earlier version redacted only
+    quoted strings of 25+ characters, which let short values through — a real
+    leak on the pretty-printed array format, where every value sits on its own
+    line as `"vendor_term": "REST API",`. Length is not a proxy for sensitivity:
+    a product name is usually short.
+
+    So: the KEY of a JSON pair survives (it is schema), the VALUE never does.
+    """
     if not line.strip():
         return "(blank)"
     s = line.rstrip("\n")
+    # Value of any "key": "value" pair — the key is kept, the value is not.
+    s = _JSON_PAIR_RE.sub(r'\1"<redacted>"', s)
     s = re.sub(r"https?://[^\s\"']+", "<url>", s)
-    s = re.sub(r'"[^"]{25,}"', '"<text>"', s)
     s = re.sub(r"[0-9a-f]{64}", "<sha256>", s)
+    # Any remaining quoted run, whatever its length or position.
+    s = re.sub(r'"(?:[^"\\]|\\.){2,}"', '"<text>"', s)
     if len(s) > 90:
         s = s[:90] + f"… (+{len(line) - 90} chars)"
     return s
@@ -165,31 +180,27 @@ def probe_staging(path: Path) -> List[str]:
             out.append(f"  {key}: {n} list item(s)")
         out.append("")
 
-    # --- row lines --------------------------------------------------------
-    out.append("-- row lines --")
-    brace_col0 = [i for i, l in enumerate(lines, 1) if l.startswith("{")]
-    brace_any = [i for i, l in enumerate(lines, 1) if l.strip().startswith("{")]
-    id_col0 = [i for i, l in enumerate(lines, 1) if re.match(r'^\{"id"', l)]
-    out.append(f"lines starting '{{' at column 0 : {len(brace_col0)}")
-    out.append(f"lines starting '{{' anywhere    : {len(brace_any)}")
-    out.append(f'lines matching ^{{"id"          : {len(id_col0)}   <- the spec\'s naive count')
+    # --- serialisation ----------------------------------------------------
+    from .parsing import parse_staging
 
-    parsed: List[dict] = []
-    bad: List[str] = []
-    for i in brace_any:
-        try:
-            obj = json.loads(lines[i - 1].strip())
-            if isinstance(obj, dict):
-                parsed.append(obj)
-            else:
-                bad.append(f"line {i}: JSON but not an object ({type(obj).__name__})")
-        except json.JSONDecodeError as exc:
-            bad.append(f"line {i}: invalid JSON ({exc.msg} at col {exc.colno})")
-    out.append(f"parse as JSON objects          : {len(parsed)}")
+    out.append("-- row serialisation --")
+    fences = [i for i, l in enumerate(lines, 1) if re.match(r"^\s*```+\s*json\s*$", l, re.I)]
+    id_col0 = [i for i, l in enumerate(lines, 1) if re.match(r'^\{"id"', l)]
+    id_any = [i for i, l in enumerate(lines, 1) if re.match(r'^\s*"id"\s*:', l)]
+    out.append(f"```json fences opened          : {len(fences)}")
+    out.append(f'lines matching ^{{"id"          : {len(id_col0)}   <- JSONL naive count')
+    out.append(f'lines matching ^\\s*"id":        : {len(id_any)}   <- array naive count')
+
+    sp = parse_staging(path)
+    out.append(f"detected format               : {sp.row_format}")
+    out.append(f"rows parsed                   : {len(sp.rows)}")
+
+    parsed = [r.obj for r in sp.rows if r.obj is not None]
+    bad = [f"line {r.line_no}: {r.error}" for r in sp.rows if r.obj is None]
     if bad:
-        out.append(f"FAILED to parse                : {len(bad)}")
+        out.append(f"FAILED to parse               : {len(bad)}")
         for b in bad[:5]:
-            out.append(f"  {b}")
+            out.append(f"  {_line_shape(b)}")
         if len(bad) > 5:
             out.append(f"  … and {len(bad) - 5} more")
     out.append("")
@@ -220,12 +231,19 @@ def probe_staging(path: Path) -> List[str]:
         out.append("")
 
     # --- non-row, non-frontmatter content ---------------------------------
+    from .parsing import _find_json_fences
+
+    in_fence = {
+        n
+        for open_at, close_at in _find_json_fences(lines)
+        for n in range(open_at, close_at + 1)
+    }
     body_start = fm_end + 1 if fm_end else 1
     other = [
         i for i in range(body_start, len(lines) + 1)
-        if lines[i - 1].strip() and not lines[i - 1].strip().startswith("{")
+        if lines[i - 1].strip() and i not in in_fence
     ]
-    out.append("-- other body lines (not frontmatter, not rows) --")
+    out.append("-- other body lines (outside frontmatter and outside ```json fences) --")
     out.append(f"count: {len(other)}")
     for i in other[:12]:
         out.append(f"  line {i}: {_line_shape(lines[i - 1])!r}")
@@ -233,23 +251,23 @@ def probe_staging(path: Path) -> List[str]:
         out.append(f"  … and {len(other) - 12} more")
     out.append("")
 
-    # --- does the shipped parser agree? -----------------------------------
-    from .parsing import parse_staging
-    try:
-        sp = parse_staging(path)
-        out.append("-- shipped parser (src/kbqa/parsing.py) --")
-        out.append(f"frontmatter_error : {sp.frontmatter_error}")
-        out.append(f"frontmatter keys  : {sorted(sp.frontmatter_raw)}")
-        out.append(f"rows parsed       : {len(sp.rows)}")
-        out.append(f"naive count       : {sp.naive_count}")
-        agree = len(sp.rows) == len(parsed) and sp.frontmatter_error is None
-        out.append("")
-        out.append(f"VERDICT: parser {'MATCHES' if agree else 'DOES NOT MATCH'} this file")
-        if not agree:
-            out.append("  -> src/kbqa/parsing.py needs correcting. Gate logic is unaffected.")
-    except Exception as exc:  # noqa: BLE001 - diagnostic must never crash
-        out.append(f"-- shipped parser raised: {type(exc).__name__}: {exc}")
-        out.append("VERDICT: parser DOES NOT MATCH this file")
+    # --- verdict ----------------------------------------------------------
+    out.append("-- shipped parser (src/kbqa/parsing.py) --")
+    out.append(f"frontmatter_error : {sp.frontmatter_error}")
+    out.append(f"frontmatter keys  : {sorted(sp.frontmatter_raw)}")
+    out.append(f"row format        : {sp.row_format}")
+    out.append(f"rows parsed       : {len(sp.rows)}")
+    out.append(f"naive count       : {sp.naive_count}")
+    agree = (
+        bool(parsed)
+        and not bad
+        and sp.frontmatter_error is None
+        and sp.naive_count == len(parsed)
+    )
+    out.append("")
+    out.append(f"VERDICT: parser {'MATCHES' if agree else 'DOES NOT MATCH'} this file")
+    if not agree:
+        out.append("  -> src/kbqa/parsing.py needs correcting. Gate logic is unaffected.")
 
     return out
 

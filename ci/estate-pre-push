@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# Estate pre-push hook — install as <estate>/.git/hooks/pre-push, chmod +x
+#
+# WHAT THIS IS, HONESTLY
+#
+# A private repo on a free GitHub plan cannot require a passing status check
+# before a push. So nothing at the git layer stops an unchecked or failing
+# batch from landing in the estate.
+#
+# This hook is the local stand-in. It is LEVEL 2 in the spec's §0 table:
+# out-of-scope-ish and inconvenient to bypass, but not tamper-proof. It lives
+# in .git/hooks, which is not version-controlled, is editable by anyone with
+# write access, and is skipped entirely by `git push --no-verify`.
+#
+# ⛔ Do not describe this as enforcement. It is a reminder with teeth.
+#
+# What IS tamper-proof: the gates themselves. They are installed from a pinned
+# tag of a public repo whose own CI is enforced, so the rules this hook applies
+# cannot be edited by whoever wants the push to succeed — only skipped. And a
+# skip is visible: G6 will report the batch as unchecked on the next sweep,
+# because no verdict will exist for it.
+
+set -uo pipefail
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "pre-push: python3 not found; skipping gates" >&2
+  exit 0
+fi
+
+if ! python3 -c "import kbqa" >/dev/null 2>&1; then
+  cat >&2 <<'EOF'
+pre-push: kbqa is not installed, so the gates did not run.
+
+  pip install "git+https://github.com/ramygwprod/kb-qa.git@v1.0.0"
+
+Refusing the push: a hook that silently passes when it cannot check is worse
+than no hook, because it reads as a green light.
+EOF
+  exit 1
+fi
+
+echo "pre-push: running estate integrity sweep (G6)…"
+if python3 -m kbqa g6 --root . > /tmp/kbqa-g6.$$ 2>&1; then
+  echo "pre-push: G6 PASS"
+  rm -f /tmp/kbqa-g6.$$
+  exit 0
+fi
+
+cat >&2 <<EOF
+
+pre-push: G6 FAILED — the estate is not in a clean state.
+
+$(python3 - "/tmp/kbqa-g6.$$" <<'PY'
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    print("  (verdict unreadable — run: python3 -m kbqa g6 --root .)")
+    raise SystemExit
+c = d.get("counts", {})
+print(f"  unchecked batches : {c.get('batches_unchecked', '?')}")
+print(f"  stale verdicts    : {c.get('batches_stale', '?')}")
+print(f"  known-failing     : {c.get('batches_known_failing', '?')}")
+print()
+seen = set()
+for f in d.get("findings", [])[:10]:
+    if f["code"] in seen:
+        continue
+    seen.add(f["code"])
+    print(f"  {f['code']}: {f['message'][:110]}")
+PY
+)
+
+Run the gates on the batches named above:
+
+  python3 -m kbqa report --vendor-dir <vendor dir> --batch <name> --vendor <name> \\
+      --log _qa-log.jsonl
+
+To push anyway:  git push --no-verify
+
+Doing that leaves a trace rather than hiding one: the batch stays unchecked, and
+the next G6 sweep says so. That is the point — this hook makes skipping visible,
+not impossible.
+EOF
+
+rm -f "/tmp/kbqa-g6.$$"
+exit 1

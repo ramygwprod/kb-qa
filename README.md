@@ -7,6 +7,12 @@ Built to be a validation layer a collecting agent **cannot pass by editing the
 validator**. Implements a private commissioning specification, which is not
 published — nothing here requires it at runtime.
 
+📖 **[docs/MANUAL.md](docs/MANUAL.md)** — full manual: structure, workflows for
+operators and agents, command and findings reference, trust model, release
+process.
+📋 **[CHANGELOG.md](CHANGELOG.md)** · 🧾 **[docs/DECISIONS.md](docs/DECISIONS.md)**
+— contract changes with the evidence behind them.
+
 ## The honest limit, stated first
 
 | Level | Mechanism | Status |
@@ -54,6 +60,45 @@ python -m kbqa g3 --staging <f> --capture <f> \
 
 Exit **2 means DECLINED and nothing else.** A usage error exits 1, never 2 — a
 typo must not be readable as a permission decision.
+
+## Report — the checker's output to the maker
+
+```bash
+python -m kbqa report --vendor-dir Competitors/Acme --batch widgets --vendor Acme \
+  [--denominator <f>] [--stops <f>] [--log _qa-log.jsonl]
+```
+
+Runs G1–G3 (and G4 with a denominator), writes each verdict to `_qa/`, appends
+to the log, and renders `_qa/<batch>.report.md`.
+
+A verdict says a batch failed. It does not say what may legitimately change, and
+that distinction is the point. A maker agent handed *"G3 FAILED, 14 rows"* will
+edit fourteen quotes until the gate goes green — which is the defect this
+package exists to catch, not a repair of it. So every finding is classified:
+
+| class | meaning |
+|---|---|
+| **structural** | not repairable by editing rows. A missing capture is an absent Bronze artifact, not a defect in the staging file |
+| **planner** | scope or fetch-list work — an uncovered index item, a cited page nobody fetched |
+| **fixable** | the rows disagree with the contract or their own evidence, and correcting them is legitimate |
+
+Cutting across that, each finding is a **gap** (something absent — it has to be
+produced, or its absence recorded as a decision) or an **issue** (something
+present and wrong, correctable in place). Treating a gap as an issue is how
+"fix the failures" becomes "edit rows until green".
+
+Each carries an explicit remedy, including what is *not* a fix. Every finding
+code a gate can emit has one, enforced by `tests/test_report.py` — a report that
+falls back to "see the message" for its most important findings is not a report.
+
+The report also states **what was not checked**. A gate that did not run has
+found nothing, which is not the same as having found nothing wrong, and silence
+about it reads as coverage the batch does not have.
+
+Every finding names the gate module and its SHA-256, so a maker who disputes a
+finding can cite the exact code rather than edit it. Alongside the markdown,
+`_qa/<batch>.report.json` carries the same plan for a maker agent that consumes
+it rather than reads it.
 
 ## Probe — confirm the format without disclosing the data
 

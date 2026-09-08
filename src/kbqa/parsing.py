@@ -20,8 +20,20 @@ from typing import Dict, List, NamedTuple, Optional, Tuple
 BEGIN_RE = re.compile(r"^=====BEGIN (?P<url>.+?)=====\s*$")
 END_RE = re.compile(r"^=====END (?P<url>.+?)=====\s*$")
 
-# §G2: the naive cross-check. A row line starts at column 0 with {"id".
+# §G2 requires a naive cross-check that a broken parser cannot also get wrong.
+# Which naive count is meaningful depends on how rows are serialised, so there
+# is one per format and the verdict records which was used.
+#
+# jsonl        — one object per line at column 0, as the spec's `grep -c '^{"id"'`
+#                describes.
+# fenced-array — a pretty-printed JSON array inside a ```json block, which is
+#                what the collector actually writes. `^{"id"` matches nothing
+#                here, so counting `"id":` keys at any indent is the equivalent.
 NAIVE_ROW_RE = re.compile(r'^\{"id"')
+NAIVE_KEY_RE = re.compile(r'^\s*"id"\s*:')
+
+FENCE_OPEN_RE = re.compile(r"^\s*```+\s*json\s*$", re.IGNORECASE)
+FENCE_CLOSE_RE = re.compile(r"^\s*```+\s*$")
 
 FRONTMATTER_DELIM = "---"
 
@@ -38,6 +50,7 @@ class StagingParse(NamedTuple):
     rows: List[RowParse]
     naive_count: int
     frontmatter_error: Optional[str]
+    row_format: str = "unknown"
 
 
 class CaptureParse(NamedTuple):
@@ -91,13 +104,88 @@ def _parse_frontmatter(text: str) -> Tuple[dict, Optional[str]]:
     return out, "frontmatter is not terminated by '---'"
 
 
+def _find_json_fences(lines: List[str]) -> List[Tuple[int, int]]:
+    """Return (open_line, close_line) 1-based pairs for ```json blocks."""
+    spans: List[Tuple[int, int]] = []
+    open_at: Optional[int] = None
+    for i, line in enumerate(lines, start=1):
+        if open_at is None:
+            if FENCE_OPEN_RE.match(line):
+                open_at = i
+            continue
+        if FENCE_CLOSE_RE.match(line):
+            spans.append((open_at, i))
+            open_at = None
+    if open_at is not None:
+        spans.append((open_at, len(lines)))  # unterminated; G2 will see the error
+    return spans
+
+
+def _parse_fenced_arrays(lines: List[str]) -> Tuple[List[RowParse], List[str]]:
+    """Parse every ```json fence as a JSON array of row objects.
+
+    Object line numbers are approximated by locating each object's `"id"` key,
+    so a G2 finding points at somewhere useful in a 4,000-line file rather than
+    at the fence.
+    """
+    rows: List[RowParse] = []
+    errors: List[str] = []
+
+    for open_at, close_at in _find_json_fences(lines):
+        body = "\n".join(lines[open_at:close_at - 1])
+        if not body.strip():
+            continue
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError as exc:
+            errors.append(
+                f"```json fence at line {open_at} is not valid JSON: "
+                f"{exc.msg} (line {open_at + exc.lineno}, col {exc.colno})"
+            )
+            continue
+
+        items = payload if isinstance(payload, list) else [payload]
+        id_lines = [
+            n for n in range(open_at, close_at) if NAIVE_KEY_RE.match(lines[n - 1])
+        ]
+        for idx, obj in enumerate(items):
+            line_no = id_lines[idx] if idx < len(id_lines) else open_at
+            if not isinstance(obj, dict):
+                rows.append(RowParse(line_no, "", None, "row is not a JSON object"))
+                continue
+            rows.append(RowParse(line_no, "", obj, None))
+
+    return rows, errors
+
+
 def parse_staging(path: Path) -> StagingParse:
+    """Parse a staging file in either serialisation the estate contains.
+
+    The spec describes JSONL (`grep -c '^{"id"'`). The collector actually writes
+    a pretty-printed JSON array inside a ```json fence. Both are accepted, and
+    `row_format` records which was found — a silent fallback between formats is
+    how a parser starts disagreeing with the file it claims to have read.
+    """
     text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
     fm, fm_err = _parse_frontmatter(text)
 
-    rows: List[RowParse] = []
+    fences = _find_json_fences(lines)
+    if fences:
+        rows, fence_errors = _parse_fenced_arrays(lines)
+        naive_count = sum(
+            1
+            for open_at, close_at in fences
+            for n in range(open_at, close_at)
+            if NAIVE_KEY_RE.match(lines[n - 1])
+        )
+        if fence_errors and not rows:
+            rows = [RowParse(fences[0][0], "", None, e) for e in fence_errors]
+        return StagingParse(fm, rows, naive_count, fm_err, "fenced-array")
+
+    rows = []
     naive_count = 0
-    for line_no, line in enumerate(text.splitlines(), start=1):
+    for line_no, line in enumerate(lines, start=1):
         if NAIVE_ROW_RE.match(line):
             naive_count += 1
         stripped = line.strip()
@@ -113,7 +201,7 @@ def parse_staging(path: Path) -> StagingParse:
             continue
         rows.append(RowParse(line_no, line, obj, None))
 
-    return StagingParse(fm, rows, naive_count, fm_err)
+    return StagingParse(fm, rows, naive_count, fm_err, "jsonl")
 
 
 def parse_capture(path: Path) -> CaptureParse:
