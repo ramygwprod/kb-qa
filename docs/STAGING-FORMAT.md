@@ -1,19 +1,86 @@
 ---
 code:    Staging-Format
-type:    inferred contract — NEEDS OPERATOR CONFIRMATION
-status:  draft, 2026-08-25
+type:    confirmed against the estate, 2026-09-09
+status:  current
 ---
 
 # On-disk formats the gates read
 
-⚠ **The staging format below is INFERRED from the spec, not observed.** This
-session was built with no access to the data estate, deliberately, so that the
-checker's definition of correct comes from `_QA-ARCHITECTURE-SPEC.md` and not
-from the collector's output.
+The formats below were **inferred from the specification in v1 and corrected
+against the real estate in v2 and v3.** Each correction is recorded here because
+the inferences were wrong in ways worth remembering — every one produced
+findings that were untrue of the data.
 
-If the real collector writes something different, **this document and
-`src/kbqa/parsing.py` change — the gate logic does not.** The gates are written
-against parsed structures, not against bytes.
+## Three row serialisations, not one
+
+The estate contains all three, written by different collector eras. The parser
+reads each and records which it found in `row_format`; a silent fallback between
+formats is how a parser starts disagreeing with the file it claims to have read.
+
+| format | shape | naive cross-check |
+|---|---|---|
+| `jsonl` | one object per line at column 0 | `^{"id"` |
+| `fenced-array` | a pretty-printed JSON array inside a ```` ```json ```` fence | `^\s*"id":` |
+| `fenced-jsonl` | one object per line **inside** a fence | `^{"id"` |
+
+The specification describes only the first. **The second and third are what the
+collector actually writes**, and the third cost 181 real rows: the fence body is
+not valid JSON as a whole, so `json.loads` failed with "Extra data" and the
+batch was reported as zero rows — silently, on batches that had captures and
+could therefore be grounded.
+
+§G2's naive cross-check is **per format**. `^{"id"` counts nothing in a
+pretty-printed array and `^\s*"id":` counts nothing in JSONL, so the wrong
+pattern would fail a batch for a reason untrue of it.
+
+## Frontmatter
+
+A minimal YAML subset — deliberately not a full parser, because a permissive one
+would accept files the contract does not. It reads:
+
+- `key: value`
+- `key:` followed by `  - item` list entries
+- **`key:` with indented continuation lines** — a folded scalar. Real collector
+  frontmatter uses these for prose. Rejecting them made the whole frontmatter
+  unparseable, which cascaded into false `no_declared_pages` and
+  `capture_hash_absent` findings on batches whose frontmatter was fine.
+
+Observed key sets differ between collector eras — `code, nature, stage, entity,
+type, status, last_updated` in one, `code, entity, batch, scope, access_date,
+status, capture_file` in another. Neither carries `source_capture_sha256`, which
+§G1 requires; that gap is real and belongs to the collector.
+
+## The per-page declaration
+
+§G1 checks that what was cited is what was fetched. Two conventions exist, and
+both are read:
+
+- a frontmatter `pages:` list
+- **a markdown table** whose first cell is the page URL
+
+Reading only the first reported `no_declared_pages` against batches that declare
+their pages perfectly well in a table — sending a maker hunting for a list that
+was never that batch's convention. `pages_source` in the verdict records which
+was found.
+
+Row `source_url`s inside a ```` ```json ```` fence are excluded: a citation is
+not a declaration, and counting one would make the declaration agree with the
+rows by construction.
+
+## Captures without page markers
+
+Some captures hold the page text but no `=====BEGIN <url>=====` markers at all —
+8 pages concatenated as markdown across 1,800 lines, with nothing recording
+where one ends and the next begins.
+
+Those rows are **unassessable, not ungrounded**. Grounding is impossible rather
+than failing, and G3 reports one structural finding rather than one
+`url_not_in_capture` per row. It is deliberately *not* degraded to whole-capture
+matching: §G3 scopes to the row's own page precisely so a quote lifted from
+another page cannot pass.
+
+Recoverable — re-fetching with a marker-writing fetcher moves those rows into
+the verifiable tier without re-collecting any of them.
 
 ## Confirming the format without disclosing the data
 
@@ -44,45 +111,51 @@ On a mismatch, the sections above it say where — a missing `---`, a different
 marker syntax, fields outside the contract, rows that do not parse. That is
 enough to correct `parsing.py` without anyone having read a row.
 
-## What the inference rests on
-
-| Inference | Evidence in the spec |
-|---|---|
-| Rows are JSON, one per line | §G2 cross-check `grep -c '^{"id"'` |
-| `id` is the FIRST key in each row | same — `^{"id"` anchors at column 0 |
-| Frontmatter is YAML-ish, `---` delimited | §G1 "staging frontmatter `source_capture_sha256`" |
-| Pages are declared in frontmatter | §G1 "the staging per-page declaration" |
-| Attestation lives in frontmatter | §G6 "staging file whose `fetched_by_this_agent` attestation is true" |
-
 ## `_collect-<batch>-staging.md` (SILVER)
+
+As the collector writes it — fenced JSONL with a markdown-table page
+declaration. The other two serialisations are equally valid; see above.
 
 ```
 ---
-batch: widgets
-vendor: Acme
-source_capture: _capture-widgets.raw.txt
-source_capture_sha256: 9f2c…64 hex chars…
-pages:
-  - https://docs.acme.test/widgets/overview
-  - https://docs.acme.test/widgets/syntax-reference
-fetched_by_this_agent: false
+code: SIN-1a
+entity: Sinch
+batch: functions-guides
+scope: The 8 Sinch Functions "Guides" pages under
+  https://developers.sinch.com/..., fetched as .md.
+  Fixed URL list, no link-following.
+access_date: 2026-08-23
+status: draft
+capture_file: _capture-functions-guides.raw.txt
 ---
 
-# Free prose is allowed here and ignored by the parser.
+# Sinch — Functions Guides
 
-{"id": "acme.widgets", "schema_version": 1, …}
-{"id": "acme.widgets.syntax", "schema_version": 1, …}
+## Per-page declaration
+
+| page | items emitted | complete? |
+|---|---|---|
+| https://developers.sinch.com/functions/guides/a | 14 | yes |
+| https://developers.sinch.com/functions/guides/b | 18 | yes |
+
+```json
+{"id": "sinch.functions.guides.a", "vendor_term": "…", …}
+{"id": "sinch.functions.guides.b", "vendor_term": "…", …}
+```
 ```
 
 Rules the parser enforces:
 
-- **`id` must serialise first.** A row starting with any other key is invisible
-  to the naive count, and G2 FAILs on parser/naive divergence. This is
-  deliberate: it makes the cross-check meaningful.
-- Row lines start at **column 0**. Indented JSON is not a row.
-- The frontmatter parser is a deliberately small YAML subset — `key: value` and
-  `key:` followed by `  - item`. A permissive YAML parser would accept files the
-  contract does not.
+- **`id` serialises first** in the line-per-object formats. A row starting with
+  another key is invisible to §G2's naive count, and G2 FAILs on
+  parser/naive divergence — which is what makes the cross-check meaningful.
+- `id` is a lowercase dotted path. Underscores are allowed and a single segment
+  is valid; v1 permitted `-` but not `_`, which cost 857 rows over an arbitrary
+  distinction, and required two segments, which cost another 47 top-level nodes.
+- `depth_level` accepts the named levels **or** the vendor's own numeric depth,
+  as an integer or a string. Some hierarchies do not fit five names.
+- Fields outside the core contract must be registered in `vendor_fields.py` by
+  name. Their values are never constrained — see docs/DECISIONS.md D-005.
 
 ## `_capture-<batch>.raw.txt` (BRONZE, immutable)
 
@@ -131,9 +204,32 @@ proof: 2 rows
 
 ## Open questions for the operator
 
-1. Is the row serialisation actually JSONL-in-markdown, or a table?
-2. Is `pages:` the real name of the per-page declaration G1 checks?
-3. §G3 requires every row's `source_url` to appear as a BEGIN marker. `models.py`
-   permits `doc:` references, which by definition cannot be in a capture. Today a
-   `doc:` row **FAILs G3**. Is that intended, or should `doc:` rows be exempt?
-4. Does `proof:` carry a bare integer, or a longer string the count is embedded in?
+Questions 1 and 2 from earlier drafts are **answered**: the estate contains
+three row serialisations (all read), and the per-page declaration appears as
+either a frontmatter `pages:` list or a markdown table (both read). What remains:
+
+1. **`doc:` sources.** §G3 requires every `source_url` to appear as a BEGIN
+   marker in the capture. `models.py` permits `doc:` references, which by
+   construction cannot be. So a `doc:` row FAILs G3 today. Three coherent
+   resolutions in docs/DECISIONS.md **D-002**; the tempting one — exempting
+   `doc:` from G3 — would create a class of row exempt from the only gate whose
+   ground truth is the vendor's page, and any row could then pass by relabelling
+   its source.
+
+2. **`proof:` format.** Does it carry a bare integer, or a longer string with
+   the count embedded? G6 currently extracts the first integer it finds.
+
+3. **Two §G1 requirements the collector does not emit.** Neither can be supplied
+   by the checker: computing them here would make G1's check a tautology that
+   always passes.
+   - `source_capture_sha256` in frontmatter — G1 asks whether the rows were
+     written from the capture now on disk. Derive it at check time and the
+     answer is always yes.
+   - a per-page declaration on batches that have neither convention — G1 asks
+     whether what was cited is what was *intended to be fetched*. Derive it from
+     the capture's own markers and the capture merely matches itself.
+
+4. **Nine annotation fields** (`duplicate_note`, `id_collision_with`,
+   `contradiction`, `source_typo`…) each record something real, but nine
+   separate "something was odd here" fields is the §2 accumulation pattern in
+   miniature. Candidates for consolidation into one structured field.

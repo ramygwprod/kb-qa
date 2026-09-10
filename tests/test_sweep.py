@@ -213,6 +213,37 @@ def test_field_values_flag_reports_fields_outside_the_contract(estate):
     assert outside, "a field the collector emits but the contract omits must be visible"
 
 
+def test_a_field_whose_values_are_all_long_is_still_listed(estate):
+    """Regression: the registry was built from a diagnostic that hid fields.
+
+    `field_distribution` only recorded values of 40 characters or fewer, and a
+    field was only listed if it had recorded values — so any field whose values
+    are all long was invisible. Nine such fields were missing from the registry
+    and then failed rows the sweep had reported as fine.
+
+    A diagnostic that omits what it cannot summarise is worse than one that says
+    "present, too long to show".
+    """
+    root = estate(Acme="good")
+    stg = next((root / "Competitors" / "Acme").glob("_collect-*-staging.md"))
+    lines = stg.read_text().splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith('{"id"'):
+            obj = json.loads(line)
+            obj["long_note"] = "x" * 200          # far past the 40-char cap
+            obj["mechanism_raw"] = "y" * 120      # a registered field, long value
+            lines[i] = json.dumps(obj)
+    stg.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    assert cli.main(["sweep", "--root", str(root), "--field-values"]) == 0
+    fields = json.loads((root / "_qa-estate-audit.json").read_text())["fields"]
+
+    assert "long_note" in fields, "a long-valued field must not vanish from the diagnostic"
+    assert fields["long_note"]["values_too_long_to_summarise"] >= 1
+    assert fields["long_note"]["in_contract"] is False
+    assert "mechanism_raw" in fields
+
+
 def test_field_values_is_off_by_default(estate):
     root = estate(Acme="good")
     data = _audit(root)
