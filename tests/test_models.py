@@ -66,7 +66,8 @@ def test_registered_field_values_are_never_constrained():
     An enum drawn from the vendors collected first would reject the next
     vendor's vocabulary as invalid — editing evidence to fit our model.
     """
-    for value in ["PLATFORM", "SOMETHING_NOBODY_HAS_SEEN", "cloud, on AWS infrastructure"]:
+    for value in ["A_SHORT_TOKEN", "SOMETHING_NOBODY_HAS_SEEN",
+                  "a long free-text elaboration the vendor chose to write"]:
         assert row(node_kind=value).node_kind == value
 
 
@@ -119,8 +120,8 @@ def test_an_unknown_evidence_grade_is_still_rejected():
 
 
 @pytest.mark.parametrize("ident", [
-    "sinch.products.net.a2p_monetization",   # underscore — 857 rows failed on this
-    "vonage",                                # single segment — 47 rows failed
+    "acme.products.net.a2p_monetization",   # underscore — 857 rows failed on this
+    "acme",                                  # single segment — 47 rows failed
     "a.b.c.d.e.f",                           # six segments, as the estate uses
     "acme.widgets-pro.v2",                   # hyphens and digits still fine
 ])

@@ -50,25 +50,30 @@ def _f(kind: str, alias_of: Optional[str], note: str) -> VendorField:
     return VendorField(kind, alias_of, note)
 
 
-# Registered from `kbqa sweep --field-values` over 183 batches / 12,728 rows.
+# Registered from `kbqa sweep --field-values` run against a real estate.
+# Field NAMES are the collector's schema and belong here. Observed VALUES
+# do not: they are one collection's vocabulary, and writing them down
+# would make the tool a mirror of what it has already seen.
 # See docs/DECISIONS.md D-004 (observations) and D-005 (the ruling).
 REGISTRY: Dict[str, VendorField] = {
     # --- the vendor's own structure -------------------------------------
     "node_kind": _f(VERBATIM, "depth_level",
-                    "The vendor's own node type: PLATFORM, SUITE, SOLUTION, "
-                    "CERTIFICATION… 11 observed. Not an enum: the next vendor "
-                    "will have vocabulary these eleven do not cover."),
+                    "The vendor's own node type, in their vocabulary. Not an "
+                    "enum, and deliberately not enumerated here: listing the "
+                    "values one collection happened to use would anchor them as "
+                    "canonical, and the next vendor's vocabulary would read as "
+                    "wrong rather than different."),
     "deployment": _f(VERBATIM, None,
-                     "How the vendor says the thing is deployed. 8 observed, "
-                     "including free-text elaborations like 'cloud, on AWS "
-                     "infrastructure' — which is the vendor being specific, "
-                     "not a malformed enum value."),
+                     "How the vendor says the thing is deployed, in their "
+                     "words. Some values are short and enum-like, others are "
+                     "elaborations — a vendor being specific, not a malformed "
+                     "enum value."),
     "plan_gating": _f(VERBATIM, None,
                       "Which plan or tier gates the feature, in the vendor's "
                       "words. 133 distinct."),
     "vendor_category": _f(VERBATIM, "canonical",
-                          "The vendor's own category for this node. 622 "
-                          "distinct — their taxonomy, not ours."),
+                          "The vendor's own category for this node. High "
+                          "cardinality by nature — their taxonomy, not ours."),
     "product_line": _f(VERBATIM, None, "The vendor's product line name."),
     "pillar": _f(VERBATIM, None, "The vendor's top-level grouping."),
     "parent": _f(VERBATIM, "parent_path",
@@ -94,20 +99,22 @@ REGISTRY: Dict[str, VendorField] = {
 
     # --- how we came to record it ---------------------------------------
     "mechanism_raw": _f(PROVENANCE, "mechanism",
-                        "The vendor's exact wording before normalisation. 78 "
-                        "distinct. This is verbatim preservation working: our "
-                        "`mechanism` enum is recoverable back to what was said."),
+                        "The vendor's exact wording before normalisation. This "
+                        "is verbatim preservation working: our `mechanism` enum "
+                        "stays recoverable back to what was actually said."),
     "mechanism_reported": _f(PROVENANCE, "mechanism", "As reported by the vendor."),
     "mechanism_via": _f(PROVENANCE, "mechanism",
-                        "The route by which the mechanism is provided. 148 distinct."),
+                        "The route by which the mechanism is provided."),
     "outcome_raw": _f(PROVENANCE, "outcome",
-                      "The vendor's exact wording before normalisation. 179 distinct."),
+                      "The vendor's exact wording before normalisation."),
     "outcome_reported": _f(PROVENANCE, "outcome", "As reported by the vendor."),
     "prior_tree_mechanism": _f(PROVENANCE, "mechanism",
                                "What a previous collection round recorded."),
     "vendor_category_source": _f(PROVENANCE, "vendor_category",
-                                 "Where the category came from: breadcrumb, nav, "
-                                 "url-path, self-classification…"),
+                                 "Where the category was read from — a "
+                                 "breadcrumb, a nav element, the URL path, the "
+                                 "vendor's own classification. A claim about "
+                                 "our method, not about the vendor."),
     "children_enumerated": _f(PROVENANCE, None,
                               "Whether children were actually enumerated or "
                               "only counted. A claim about our own coverage."),

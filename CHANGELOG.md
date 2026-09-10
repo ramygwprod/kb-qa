@@ -94,7 +94,7 @@ about the data.
   nothing in a pretty-printed array and `^\s*"id":` counts nothing in JSONL, so
   the wrong pattern would fail a batch for a reason that is not true of it.
 - **`sweep` named a subfolder as a vendor.** Vendor was taken from the immediate
-  parent directory, so `<root>/kk/Zendesk/_to_delete/` reported vendor
+  parent directory, so `<root>/<container>/<Vendor>/_to_delete/` reported vendor
   `_to_delete` — and a folder plainly named for deletion was counted in the
   totals as live data. Vendor now comes from position under the estate root.
 
