@@ -16,6 +16,65 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [3.0.0] — 2026-09-09
+
+Vendors differ in product structure, naming, depth and scale — genuinely, not
+accidentally. A strict flat field set cannot record that, and v2 was rejecting
+legitimate rows for having the vendor's own vocabulary in them.
+
+§G3 already settles the principle for text: *never normalise spelling, because
+vendor typos are evidence.* Structure is evidence by the same argument.
+
+### Changed — BREAKING
+
+- **The contract is split by owner.**
+
+  | half | rule |
+  |---|---|
+  | **core** | ours. Strict, enum-validated. Provenance and grounding — the fields that make a claim checkable |
+  | **vendor fields** | theirs. The **name** must be registered in `vendor_fields.py`, deliberately, in a commit. The **value** is never constrained |
+
+  `extra="forbid"` did not go away; it moved. A collector inventing
+  `confidence_note` still fails on the first row, and the refusal says how to
+  resolve it. What no longer happens is rejecting a vendor for using a word the
+  vendors we collected first did not use.
+
+  **Nothing is renamed.** Rows keep the exact keys the collector wrote.
+  `alias_of` records how a field relates to a core one without touching either
+  — `mechanism_raw` → `mechanism`, `vendor_category` → `canonical`. Renaming
+  would itself be the editing this package exists to prevent.
+
+- **`depth_level` accepts the vendor's own numbering as well as the named
+  levels.** Some hierarchies do not fit five names. A numeric depth records
+  position in *that vendor's* tree; the names impose ours. Forcing one
+  convention would flatten a real structural difference into a false one.
+  Nonsense is still rejected — open to two conventions is not open to anything.
+
+- **`evidence_grade` accepts `verify` as well as `[verify]`.** Our field, our
+  enum, and the collector writes the bare form. Rejecting rows over a pair of
+  brackets taught nothing.
+
+### Added
+
+- `src/kbqa/vendor_fields.py` — 36 fields registered from
+  `kbqa sweep --field-values` over 183 batches / 12,728 rows, each classified
+  (`verbatim` / `provenance` / `batch-level`) with a note on what the vendor
+  means by it. Tested: every entry documented, every alias resolves, no entry
+  shadows a core field.
+- `docs/DECISIONS.md` D-004 (the evidence) and D-005 (the ruling, which
+  supersedes D-004's recommendations — they treated vendor variety as a defect
+  to be constrained, and acting on them would have destroyed evidence).
+
+### Migration
+
+Rows need no change. A batch that failed v2 for carrying `node_kind` or a
+numeric `depth_level` now passes unaltered. A batch carrying a field nobody has
+registered fails, and the message names the file to register it in.
+
+157 tests.
+
+---
+
 ## [2.1.0] — 2026-09-08
 
 Found by running 2.0.0 against the real estate for the first time. The audit

@@ -129,3 +129,187 @@ skipping is recorded.*
 between the collector and the repository, §0's clause stops holding, and this
 decision must be revisited. GitHub Team (~$4/user/month) is then the cheap
 answer.
+
+---
+
+## D-004 · Schema v3 evidence — estate-wide field distribution
+
+> ⛔ **SUPERSEDED IN PART, 2026-09-09.** The recommendations below treated
+> variety across vendors as a defect to be constrained. That is wrong, and
+> acting on it would have destroyed evidence. See **D-005**, which replaces
+> recommendations 1, 4 and 5. The observations remain accurate; the conclusions
+> drawn from them did not.
+
+
+**Date** 2026-09-09 · **Status** OPEN — needs rulings · **Evidence** `kbqa sweep --field-values` over 183 batches / 12,728 rows
+
+D-001 typed five fields `Optional[str]` rather than as enums, reasoning that a
+value set observed in ONE batch would reject the next batch's legitimate values.
+The estate-wide sweep settles it — and shows that caution was right twice and
+wrong once.
+
+### Where the one-batch inference was WRONG
+
+| field | seen in 1 batch | seen estate-wide | verdict |
+|---|---|---|---|
+| `vendor_category` | 1 value | **622 distinct** | free text, not an enum |
+| `plan_gating` | 1 value | **133 distinct** | free text, not an enum |
+
+Had these been frozen as single-value enums from the Intercom sample, they would
+now reject ~750 legitimate values. Keep them `Optional[str]`.
+
+### Where they ARE enums, and can be constrained in v3
+
+| field | distinct | values |
+|---|---|---|
+| `node_kind` | 11 | CERTIFICATION, FEATURE, HEADING, MODULE, PLATFORM, PRODUCT, SERVICE, SOLUTION, SUITE, TOOL, UNCLASSIFIED |
+| `deployment` | 8 | air-gapped, cloud, cloud-saas, hybrid, on-prem, unknown, vendor-managed — **plus** `cloud, on AWS infrastructure` |
+| `vendor_category_source` | 8 | assignment-slug, breadcrumb, nav, none, portfolio-taxonomy, self-classification, url-path — **plus** `breadcrumb: 1. Communications APIs` |
+
+Both marked entries are free text leaking into an otherwise clean enum: one row
+elaborating where the others classify. Constraining these would catch that.
+
+### Two defects in fields ALREADY in the contract
+
+**`depth_level` is being written two ways.** Observed:
+`2, 3, 4, 5, 6, feature, module, product-line, sub-feature, sub-module`. Some
+batches record a numeric depth, others the named level. The contract permits
+only the names, so every numeric row fails G2 today. One convention has to win,
+and the other has to be migrated — this is not a contract question but a
+collector question.
+
+**`evidence_grade` records `verify`; the contract expects `[verify]`.** Every
+such row fails. Either the brackets are dropped from the enum or the collector
+stops emitting the bare form. Trivial, but it is currently a silent source of
+violations.
+
+### The accumulation §2 warned about, in progress
+
+**32 fields appear in rows and not in the contract. Seventeen of them hold two
+or fewer distinct values across the entire estate:**
+
+`id_prefix` (vonage) · `vendor` (Vonage) · `round` (1a) · `region` (eu1, us1) ·
+`language_count_observed` (89) · `undisclosed_amount` (True) ·
+`prior_tree_mechanism` · `locale_scope` (*"en-in only — no English original"*) ·
+`limit` (*"values true/false; default value true"*) · `node_count` ·
+`children_enumerated` · `real_href` · `regulator` · `tagline_for` · `version` ·
+`mechanism_third_party` · `batch`
+
+Several are not fields at all but prose stuffed into a key — `limit` and
+`locale_scope` hold sentences. Others are batch-level facts recorded per row:
+`vendor`, `batch` and `id_prefix` belong in frontmatter, not repeated on every
+row of a batch.
+
+A separate cluster shadows two contract fields with raw and reported variants:
+`mechanism_raw` (78), `mechanism_reported` (45), `mechanism_via` (148),
+`outcome_raw` (179), `outcome_reported` (48). That may be deliberate provenance
+— keeping the vendor's own wording alongside the normalised value is defensible
+— but it is five fields carrying it, and nothing records that intent.
+
+### What is NOT decided here
+
+Which of the 32 are schema and which are cruft is a judgement about the data
+model, not about validation. Admitting all 32 would make `extra="forbid"`
+decorative; forbidding all 32 would fail most of the estate.
+
+Recommended shape for v3, pending rulings:
+
+1. Constrain `node_kind`, `deployment`, `vendor_category_source` as enums
+2. Keep `vendor_category`, `plan_gating` as `Optional[str]` — proven free text
+3. Fix `evidence_grade` to accept what the collector writes, or change the collector
+4. Rule on `depth_level`: numeric or named, then migrate the other
+5. Admit the `*_raw` / `*_reported` cluster **only if** its purpose is recorded here
+6. Move `vendor`, `batch`, `id_prefix` to frontmatter; drop the single-value
+   annotations, or name them deliberately
+
+### Reversal condition
+
+Re-run `kbqa sweep --field-values` after any collector change. A field that
+gains a second value was real; one still at distinct=1 after another collection
+round is an unexercised default and should go.
+
+---
+
+## D-005 · Vendor structure is evidence, not variance to be normalised
+
+**Date** 2026-09-09 · **Status** decided in principle, implementation open
+**Supersedes** D-004 recommendations 1, 4 and 5
+
+### The correction
+
+D-004 read 622 distinct `vendor_category` values, 133 `plan_gating`, and two
+`depth_level` conventions as a data-quality problem, and proposed constraining
+them. That reasoning was backwards.
+
+Vendors differ in product structure, naming, depth and scale — genuinely, not
+accidentally. A vendor with a six-level hierarchy and one with three are not two
+encodings of the same tree. `vendor_category`'s 622 values are 622 real
+categories that vendors actually use. Forcing them into an enum drawn from
+whichever vendors we collected first would **edit the evidence to fit our
+model**, and the next vendor's legitimate vocabulary would be rejected as
+invalid.
+
+§G3 already settles this for text: *never normalise spelling, because vendor
+typos are evidence.* Structure is evidence by the same argument, and for the
+same reason — the estate exists to record what vendors say about themselves, not
+what our taxonomy can accommodate.
+
+Read that way, several things D-004 called defects are the design working:
+
+- **`vendor_category` (622), `plan_gating` (133)** — the vendor's own
+  vocabulary, preserved. Correct as `Optional[str]`; constraining them would be
+  the error.
+- **`depth_level` numeric AND named** — not two conventions where one must win.
+  A numeric depth records a node's position in *that vendor's own* tree; the
+  named levels impose ours. The numeric form may be the more honest record for
+  vendors the five-name taxonomy does not fit.
+- **`mechanism_raw` / `mechanism_reported` / `mechanism_via` / `outcome_raw` /
+  `outcome_reported`** — D-004 called this "shadowing" and hinted at
+  accumulation. It is the opposite: the vendor's own wording kept beside our
+  normalisation, each recoverable. That is verbatim preservation done properly,
+  and it should be named in the contract rather than tolerated outside it.
+
+### The real problem this exposes
+
+`extra="forbid"` and verbatim vendor structure are in direct tension. A single
+flat field set cannot be both strict enough to catch invention and open enough
+to record what vendors actually publish. Today the contract loses that argument
+by failing legitimate rows.
+
+The resolution is not to relax the contract but to split it, because the two
+kinds of field answer to different owners:
+
+**Core — ours, strict, `extra="forbid"`.** Provenance and grounding: `id`,
+`vendor_term`, `what_it_does`, `source_url`, `source_quote`, `access_date`,
+`evidence_grade`, `confidence`, `broken_source`. These exist so a claim can be
+checked. Nobody may invent a new one, and inventing one is exactly what §2
+exists to catch.
+
+**Vendor-verbatim — theirs, open, recorded not judged.** The vendor's own
+taxonomy, depth, node kinds, raw mechanism and outcome wording. Namespaced
+explicitly so it is visibly a different kind of field, e.g. a `vendor_fields`
+mapping or a reserved prefix. Validated for *presence and type*, never for
+membership of an enum we authored.
+
+This keeps both guarantees intact. Invention is still caught — the quote must
+still ground, the core is still closed. And vendor structure survives contact
+with the checker, which is the point of collecting it.
+
+### Still a genuine defect, unaffected by any of this
+
+`evidence_grade` is **our** field with **our** enum, and rows record `verify`
+where the contract says `[verify]`. That is a straightforward mismatch to fix in
+one place or the other. It is not vendor structure and gets no protection from
+this decision.
+
+### Open
+
+- Which namespace shape: nested `vendor_fields` mapping, or a reserved prefix?
+- Do the ~17 single-value fields belong in the vendor namespace, or are some of
+  them genuinely one-off notes that should not be fields at all? A sentence
+  stored under `limit` is not obviously either.
+- `vendor`, `batch`, `id_prefix` repeat a batch-level fact on every row. Harmless
+  redundancy, or move to frontmatter?
+
+None of these is a validation question. They are all questions about what the
+estate is for, and they are the operator's to answer.

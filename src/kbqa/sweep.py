@@ -159,6 +159,9 @@ def field_distribution(stagings: List[Path], cap: int = 40) -> Dict[str, dict]:
     question for the collector rather than a validation failure.
     """
     values: Dict[str, Counter] = defaultdict(Counter)
+    seen: Counter = Counter()
+    long_valued: Counter = Counter()
+
     for stg in stagings:
         try:
             parsed = parse_staging(stg)
@@ -168,13 +171,36 @@ def field_distribution(stagings: List[Path], cap: int = 40) -> Dict[str, dict]:
             if r.obj is None:
                 continue
             for k, v in r.obj.items():
-                if isinstance(v, (str, int, bool)) and len(str(v)) <= 40:
-                    values[k][str(v)] += 1
+                # EVERY field is counted, whatever its values look like.
+                #
+                # An earlier version only recorded values of 40 characters or
+                # fewer — and since a field was only listed if it had recorded
+                # values, any field whose values are all long was invisible.
+                # The registry built from that output was missing nine fields,
+                # which then failed rows the sweep had reported as fine. A
+                # diagnostic that omits what it cannot summarise is worse than
+                # one that says "present, too long to show".
+                seen[k] += 1
+                if isinstance(v, (str, int, bool)):
+                    s = str(v)
+                    if len(s) <= 40:
+                        values[k][s] += 1
+                    else:
+                        long_valued[k] += 1
+                else:
+                    long_valued[k] += 1
 
     out: Dict[str, dict] = {}
-    for field, counter in sorted(values.items()):
-        entry = {"distinct": len(counter), "in_contract": field in Row.model_fields}
-        if len(counter) <= cap:
+    for field in sorted(seen):
+        counter = values.get(field, Counter())
+        entry = {
+            "rows": seen[field],
+            "distinct": len(counter),
+            "in_contract": field in Row.model_fields,
+        }
+        if long_valued[field]:
+            entry["values_too_long_to_summarise"] = long_valued[field]
+        if counter and len(counter) <= cap:
             entry["values"] = dict(counter.most_common())
         out[field] = entry
     return out
@@ -317,7 +343,9 @@ def build(
         a("|---|---|---|")
         for name, info in fields.items():
             mark = "yes" if info["in_contract"] else "**NO**"
-            a(f"| `{name}` | {mark} | {info['distinct']} |")
+            long = info.get("values_too_long_to_summarise", 0)
+            note = f" ({long} value(s) too long to summarise)" if long else ""
+            a(f"| `{name}` | {mark} | {info['distinct']}{note} |")
         a("")
         a("A field marked NO is emitted by the collector but absent from the "
           "contract: it fails G2 on every row until it is named in `models.py` "

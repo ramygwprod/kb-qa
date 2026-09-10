@@ -1,6 +1,6 @@
 # kbqa — product manual
 
-**Version 2.1.0** · for operators and for agents
+**Version 3.0.0** · for operators and for agents
 
 ---
 
@@ -22,7 +22,7 @@ A PASS is worth something only when three things hold together:
 
 | condition | how it is met |
 |---|---|
-| the gates catch what they claim | 133 tests; every blocking gate proven to fail on a purpose-built fixture |
+| the gates catch what they claim | 171 tests; every blocking gate proven to fail on a purpose-built fixture |
 | the gates could not have been edited to pass | installed from a pinned tag of a repo whose CI is enforced |
 | the gates ran against the real files | the parser is confirmed against collector output |
 
@@ -48,7 +48,7 @@ python3 -m venv .venv
 For an estate or CI, install from the pinned tag rather than a branch:
 
 ```bash
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v2.1.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v3.0.0"
 ```
 
 **Always a tag, never a branch.** A branch would let the gates and the data they
@@ -93,6 +93,34 @@ specification. Everything else tests conformance to what we decided.
 **Exit 2 means DECLINED and nothing else.** A usage error exits 1, never 2 — a
 typo must never be readable as a permission decision.
 
+### The contract has two halves
+
+Vendors differ in product structure, naming, depth and scale — genuinely. A
+vendor with six hierarchy levels and one with three are not two encodings of the
+same tree. So the row contract is split by **owner**:
+
+| half | rule | why |
+|---|---|---|
+| **core** | strict, enum-validated | ours. `id`, `source_url`, `source_quote`, `access_date`, `evidence_grade`… the fields that make a claim checkable |
+| **vendor fields** | the NAME must be registered in `vendor_fields.py`; the VALUE is never constrained | theirs. Their taxonomy, depth, node kinds, raw wording |
+
+`extra="forbid"` did not go away — it **moved**. A collector inventing
+`confidence_note` still fails on the first row, and the message names the file
+to register it in. What no longer happens is rejecting a vendor for using a word
+the vendors collected first did not use.
+
+**Nothing is renamed.** Rows keep the exact keys the collector wrote.
+`alias_of` in the registry records how a field relates to a core one —
+`mechanism_raw` → `mechanism` — without touching either. Renaming would itself
+be the editing this package exists to prevent.
+
+§G3 already settles the principle for text: *never normalise spelling, because
+vendor typos are evidence.* Structure is evidence by the same argument.
+
+Registry entries are classified `verbatim` (the vendor's own structure),
+`provenance` (how we came to record it), `batch-level` (a batch fact repeated
+per row) or `annotation` (a one-off note — a candidate for consolidation).
+
 ### Findings: kind and nature
 
 Every finding carries two orthogonal classifications, and the maker needs both.
@@ -126,7 +154,8 @@ kb-qa/
 ├── src/kbqa/
 │   ├── __init__.py                 __version__
 │   ├── __main__.py                 python -m kbqa
-│   ├── models.py                   THE CONTRACT — schema v2, extra="forbid"
+│   ├── models.py                   THE CONTRACT — schema v3 core, strict
+│   ├── vendor_fields.py            the vendor-field registry — names only
 │   ├── parsing.py                  readers for staging / capture / denominator
 │   ├── manifest.py                 SHA-256 of every module, computed at import
 │   ├── verdict.py                  Verdict + Finding + JSON writer + log writer
@@ -140,8 +169,8 @@ kb-qa/
 │   ├── build_fixtures.py           fixtures are GENERATED, never hand-edited
 │   ├── conftest.py
 │   ├── fixtures/                   21 fixtures: 1 good, 20 purpose-built failures
-│   ├── test_parsing.py             all three row serialisations
-│   ├── test_gates.py  test_cli.py  test_probe.py  test_report.py  test_sweep.py
+│   ├── test_gates.py  test_cli.py  test_probe.py  test_report.py
+│   ├── test_sweep.py  test_parsing.py  test_models.py
 ├── agents/                         role definitions — INSTALL INTO THE ESTATE
 │   ├── fetcher.md                  tools: WebFetch, Write, Read
 │   └── row-writer.md               tools: Read, Write, Bash — NO WebFetch
