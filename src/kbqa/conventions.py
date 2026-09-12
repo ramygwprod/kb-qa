@@ -51,7 +51,11 @@ class Conventions:
     # programme addressing nodes by UUID, or one whose subjects legitimately
     # use uppercase, is not malformed — it is different, and would otherwise be
     # rejected by a rule inferred from whoever was collected first.
-    id_pattern: str = r"^[a-z0-9_]+(\.[a-z0-9_\-]+)*$"
+    #
+    # The first segment once allowed `_` but not `-`, so `x_y` passed and `x-y`
+    # failed. That cost 47 rows over a distinction with no reason behind it —
+    # the third time this pattern rejected real ids for an arbitrary rule.
+    id_pattern: str = r"^[a-z0-9_\-]+(\.[a-z0-9_\-]+)*$"
 
     # --- row serialisation ------------------------------------------------
     fence_open_pattern: str = r"^\s*```+\s*json\s*$"

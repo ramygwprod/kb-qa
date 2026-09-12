@@ -152,6 +152,15 @@ REMEDIES: Dict[str, Remedy] = {
         "as `  - <url>`. Without it G1 cannot check that what was cited is what "
         "was fetched.",
     ),
+    "non_row_object": Remedy(
+        FIXABLE,
+        "An object in the rows block carries none of `id`, `source_url` or "
+        "`source_quote`, so it is not a row — typically batch metadata sitting "
+        "inside the same fence. Move it to the frontmatter, where batch facts "
+        "belong, or leave it and accept that this batch reports one finding "
+        "per run. It is NOT a malformed row, and the rows around it are "
+        "unaffected.",
+    ),
     "row_unparseable": Remedy(
         FIXABLE,
         "The row is not valid JSON, so it was never checked by the other gates. "

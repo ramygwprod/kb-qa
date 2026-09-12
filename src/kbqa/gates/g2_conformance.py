@@ -21,6 +21,10 @@ from . import EXIT_FAIL, EXIT_PASS
 
 GATE = "g2_conformance"
 
+# A row must carry at least one of these to be a row at all. Used to tell a
+# malformed row apart from an object that was never meant to be one.
+IDENTIFYING = {"id", "source_url", "source_quote"}
+
 
 def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
     ap = argparse.ArgumentParser(prog="kbqa g2")
@@ -66,6 +70,25 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
         if rp.obj is None:
             findings.append(Finding("row_unparseable", rp.error or "unparseable row", where))
             continue
+
+        # An object carrying none of the identifying fields is not a broken row
+        # — it is a different kind of object, typically batch metadata sitting
+        # inside the same fence. Reporting it as six missing core fields says
+        # the rows are malformed, which is untrue of them and sends a maker
+        # looking for a defect that is not there.
+        if not (IDENTIFYING & set(rp.obj)):
+            findings.append(
+                Finding(
+                    "non_row_object",
+                    "object has none of "
+                    + ", ".join(sorted(IDENTIFYING))
+                    + f" — keys are {sorted(rp.obj)}; this looks like batch "
+                    "metadata rather than a row",
+                    where,
+                )
+            )
+            continue
+
         try:
             row = row_model().model_validate(rp.obj)
         except ValidationError as exc:

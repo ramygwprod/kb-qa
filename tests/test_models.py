@@ -139,6 +139,17 @@ def test_real_id_shapes_are_accepted(ident):
     assert row(id=ident).id == ident
 
 
+@pytest.mark.parametrize("ident", ["sap-btp", "a-b.c-d", "x_y-z"])
+def test_hyphen_is_allowed_in_the_first_id_segment(ident):
+    """Regression: `_` was allowed in segment one and `-` was not.
+
+    `x_y` passed while `x-y` failed — 47 rows rejected over a distinction with
+    no reason behind it. The third time this pattern refused real ids for an
+    arbitrary rule.
+    """
+    assert row(id=ident).id == ident
+
+
 @pytest.mark.parametrize("ident", ["Acme.Widgets", "acme widgets", "acme..widgets", ""])
 def test_malformed_ids_are_still_rejected(ident):
     """Widened is not unconstrained.
