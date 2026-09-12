@@ -339,7 +339,37 @@ Read the **Coverage** section before the findings. It names the gates that did
 *not* run and why, so a short findings list is never mistaken for broad
 coverage.
 
-### 5.3 · Operator — resuming collection
+### 5.3 · Operator — adopting a hash for a batch collected before the contract
+
+A corpus collected before `source_capture_sha256` and `pages:` were required
+fails G1 on `capture_hash_absent` and `no_declared_pages` however good its rows
+are. Both are marked `fixable`, and for `pages:` that is straightforwardly
+true: the list is the capture's own BEGIN markers, identical whoever writes it.
+
+**The hash is not the same.** Computing it today, from a capture fetched weeks
+ago, does not reconstruct what the field exists to record. Recorded at fetch
+time by the agent that pulled the bytes, it says *these rows came from what was
+served*. Adopted afterwards, it says only *these rows match this file as it
+stands now* — real tamper-evidence from today forward, and silent about
+everything before. Nothing in the file distinguishes the two, and no gate can.
+
+So adopting one is legitimate, and hiding that you did is not:
+
+- Edit the **staging file** only. It is Silver. The capture is Bronze and is not
+  touched — if you find yourself editing the capture, stop.
+- Record it. A line in the estate's own decisions log naming the batches, the
+  date, and why re-fetching was not worth it. "We adopted the hash" is a
+  decision; an undocumented hash that looks fetch-time is a false claim.
+- Re-fetch instead whenever the capture's integrity actually matters — a
+  contested figure, a compliance claim, anything a reader might have to defend.
+
+When the choice is between adopting a hash for a batch whose every quote has
+already passed G3, and re-fetching pages that are the least of the corpus's
+problems, adopt and record. When it is a batch nobody has checked, re-fetch.
+
+---
+
+### 5.4 · Operator — resuming collection
 
 1. `kbqa sweep` — know which trees rest on checkable evidence
 2. Collect a batch with the fetcher/row-writer split (§5.5)
@@ -348,7 +378,7 @@ coverage.
 5. Re-run the report — a finding is resolved when it stops appearing
 6. Merge to Gold, then `kbqa g6 --root <estate>`
 
-### 5.4 · Maker agent — consuming a report
+### 5.5 · Maker agent — consuming a report
 
 You are being handed work. The report is at `_qa/<batch>.report.md`, and
 `_qa/<batch>.report.json` carries the same plan in machine-readable form.
@@ -383,7 +413,7 @@ claim, the claim is not supported.
 **Verify by re-running the same command.** A finding is resolved when it stops
 appearing — not when it is explained.
 
-### 5.5 · Role separation — enforced by capability
+### 5.6 · Role separation — enforced by capability
 
 Attestation is not proof. **Deny the tool instead.** Copy both definitions into
 the estate:
@@ -401,7 +431,7 @@ ungroundable rows being produced in the first place.
 G6 still checks the `fetched_by_this_agent` attestation, but that check is a
 backstop for a collapse the tool list should have made impossible.
 
-### 5.6 · Confirming a format without disclosing data
+### 5.7 · Confirming a format without disclosing data
 
 When the checker must not read the estate — a separate session, a reviewer, a
 support conversation:
@@ -419,7 +449,7 @@ The output is designed to be pasted to someone who must not see the data.
 
 ---
 
-### 5.7 · Pipeline runbook
+### 5.8 · Pipeline runbook
 
 `$C` = corpus root · `$D` = `$C/<container>/<Subject>` · `$B` = batch name.
 
