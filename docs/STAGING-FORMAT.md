@@ -208,13 +208,11 @@ Questions 1 and 2 from earlier drafts are **answered**: the estate contains
 three row serialisations (all read), and the per-page declaration appears as
 either a frontmatter `pages:` list or a markdown table (both read). What remains:
 
-1. **`doc:` sources.** §G3 requires every `source_url` to appear as a BEGIN
-   marker in the capture. `models.py` permits `doc:` references, which by
-   construction cannot be. So a `doc:` row FAILs G3 today. Three coherent
-   resolutions in docs/DECISIONS.md **D-002**; the tempting one — exempting
-   `doc:` from G3 — would create a class of row exempt from the only gate whose
-   ground truth is the vendor's page, and any row could then pass by relabelling
-   its source.
+1. ~~**`doc:` sources.**~~ **Closed 2026-09-13 by D-008** — `source_url` must
+   be an `http(s)` URL. An internal document is captured like any other page
+   and cited by the URL it was served from. Exempting a class of row from G3
+   would have created claims nobody can check, which is the one thing the
+   contract exists to prevent.
 
 2. **`proof:` format.** Does it carry a bare integer, or a longer string with
    the count embedded? G6 currently extracts the first integer it finds.

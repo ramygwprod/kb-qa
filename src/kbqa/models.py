@@ -86,8 +86,24 @@ class CoreRow(BaseModel):
     @field_validator("source_url")
     @classmethod
     def real_source(cls, v: str) -> str:
-        if not (v.startswith(("http://", "https://")) or v.startswith("doc:")):
-            raise ValueError("source_url must be a fetched URL or a doc: reference")
+        """A source must be re-fetchable by someone who does not trust us.
+
+        `doc:` references were permitted here and, by construction, could never
+        appear as a BEGIN marker in a capture — so every `doc:` row failed G3
+        while looking like a legitimate citation. Worse than the failure was
+        what the alternative would have been: exempting them from G3 creates a
+        class of claim nobody can check, which is the one thing the contract
+        exists to prevent. (docs/DECISIONS.md D-008)
+
+        An internal document is not exempt from evidence. It is captured like
+        any other page and cited by whatever stable URL serves it.
+        """
+        if not v.startswith(("http://", "https://")):
+            raise ValueError(
+                "source_url must be a fetched URL (http:// or https://). A "
+                "citation nobody else can retrieve cannot be checked by anyone: "
+                "capture the document and cite the URL it was served from."
+            )
         return v
 
     @field_validator("schema_version")

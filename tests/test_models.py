@@ -207,3 +207,34 @@ def test_schema_version_is_enforced():
     with pytest.raises(Exception) as e:
         row(schema_version=2)
     assert "a version bump is a commit" in str(e.value)
+
+
+# --------------------------------------------------------------------------
+# D-008 — a source must be re-fetchable by someone who does not trust us
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("ref", [
+    "doc:internal-brief",
+    "doc:2026-08/notes.md",
+    "file:///Users/someone/notes.md",
+    "internal://wiki/page",
+    "notes.md",
+])
+def test_unfetchable_sources_are_rejected(ref):
+    """`doc:` was permitted and could never appear as a BEGIN marker.
+
+    So every `doc:` row failed G3 while looking like a legitimate citation —
+    and the alternative, exempting them from G3, would have created a class of
+    claim nobody can check. An internal document is captured like any other
+    page and cited by the URL it was served from.
+    """
+    with pytest.raises(Exception):
+        row(source_url=ref)
+
+
+@pytest.mark.parametrize("url", [
+    "https://docs.example.test/page",
+    "http://docs.example.test/page",
+])
+def test_fetchable_sources_are_accepted(url):
+    assert row(source_url=url).source_url == url
