@@ -27,6 +27,23 @@ from ..models import CoreRow
 from ..profile import Profile, register
 
 
+class EvidenceGrade(str, Enum):
+    """How authoritative the source is, in THIS programme's vocabulary.
+
+    Every domain grades its sources; the grades differ. A programme reading
+    regulatory filings or peer-reviewed work would replace all of these, and a
+    core that fixed them would make its own first corpus the standard.
+    """
+    official_doc = "official-doc"
+    help = "help"
+    marketing = "marketing"
+    verified = "verified"
+    # Both spellings accepted. The specification writes `[verify]`; collectors
+    # write `verify`. Rejecting rows over a pair of brackets taught nothing.
+    verify = "verify"
+    verify_bracketed = "[verify]"
+
+
 class Mechanism(str, Enum):
     """How a capability is provided. This framework's axis, not a universal."""
     native = "Native"
@@ -58,6 +75,8 @@ class DepthLevel(str, Enum):
 class Row(CoreRow):
     """A universal grounded claim, plus this framework's analytical fields."""
 
+    evidence_grade: EvidenceGrade
+    confidence: Literal["high", "medium", "low"]
     vendor_term: str = Field(min_length=1)
     what_it_does: str = Field(min_length=1)
     mechanism: Mechanism

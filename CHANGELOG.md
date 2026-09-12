@@ -16,6 +16,55 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [5.0.0] — 2026-09-12
+
+An audit for the one failure v4 could not have caught: **is anything from the
+corpus already collected acting as a limit on what can be collected next?**
+
+Three candidates were examined. Two were already safe — extension registries are
+per-profile, so a new domain starts clean; and `manifest_mismatch` fires at most
+once per gate on a version bump, not per verdict. The third was real.
+
+### Changed — BREAKING
+
+- **`evidence_grade` and `confidence` moved out of the universal core.**
+  Every domain grades its sources, but `official-doc / help / marketing /
+  verified` is one programme's vocabulary, and `high / medium / low` is one
+  programme's scale. A core that fixed them made its own first corpus the
+  standard for every corpus after it. Both now live in the profile.
+
+- **The `id` pattern became a convention.** It was inferred from one corpus's
+  identifiers. A programme addressing nodes by UUID, or whose subjects use
+  uppercase, is not malformed — it is different, and was being rejected by a
+  rule derived from whoever happened to be collected first.
+
+The universal core is now six fields, each answerable without knowing what is
+being studied: `schema_version`, `id`, `source_url`, `source_quote`,
+`access_date`, `broken_source`.
+
+### Added
+
+Four anti-drift guards in `tests/test_domain_agnostic.py`:
+
+- the core contains **only** those six fields — pinned, because adding one costs
+  nothing today and breaks the next domain, which nobody is testing when they
+  add it
+- no profile vocabulary is importable from `models.py`
+- the id pattern is overridable
+- registries do not leak between profiles — a field registered for one domain is
+  refused in another, so the first corpus cannot quietly set what later ones may
+  say
+
+### Migration
+
+None for rows. `schema_version` moves to 5; rows that omit it take the default.
+Existing rows validate unchanged — `evidence_grade` and `confidence` are still
+required by the vendor-catalogue profile, under the same names.
+
+185 tests.
+
+---
+
 ## [4.0.0] — 2026-09-12
 
 The tool must collect market intelligence in **any** domain, with nothing about

@@ -9,9 +9,9 @@ tests pin both edges.
 import pytest
 
 from kbqa.extensions import ANNOTATION, BATCH_LEVEL, PROVENANCE, VERBATIM
-from kbqa.models import CoreRow, EvidenceGrade, SCHEMA_VERSION
+from kbqa.models import CoreRow, SCHEMA_VERSION
 from kbqa.profile import active, row_model
-from kbqa.profiles.vendor_catalogue import DepthLevel
+from kbqa.profiles.vendor_catalogue import DepthLevel, EvidenceGrade
 
 Row = row_model()
 REGISTRY = active().extensions

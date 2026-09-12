@@ -46,6 +46,13 @@ class Conventions:
     begin_pattern: str = r"^=====BEGIN (?P<url>.+?)=====\s*$"
     end_pattern: str = r"^=====END (?P<url>.+?)=====\s*$"
 
+    # --- identifiers ------------------------------------------------------
+    # Derived from one corpus's ids, so it is a convention, not a law. A
+    # programme addressing nodes by UUID, or one whose subjects legitimately
+    # use uppercase, is not malformed — it is different, and would otherwise be
+    # rejected by a rule inferred from whoever was collected first.
+    id_pattern: str = r"^[a-z0-9_]+(\.[a-z0-9_\-]+)*$"
+
     # --- row serialisation ------------------------------------------------
     fence_open_pattern: str = r"^\s*```+\s*json\s*$"
     fence_close_pattern: str = r"^\s*```+\s*$"

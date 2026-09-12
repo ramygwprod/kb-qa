@@ -47,7 +47,17 @@ class Obligation(str, Enum):
     exempt = "exempt"
 
 
+class SourceAuthority(str, Enum):
+    """This domain grades sources on a different axis entirely."""
+    statute = "statute"
+    regulation = "regulation"
+    guidance = "guidance"
+    enforcement_action = "enforcement-action"
+
+
 class ComplianceRow(CoreRow):
+    source_authority: SourceAuthority
+    certainty: int = Field(ge=1, le=5)
     obligation: Obligation
     jurisdiction: str = Field(min_length=1)
     instrument: str = Field(min_length=1)
@@ -103,8 +113,8 @@ def _row(**kw):
         source_url=URL,
         source_quote=QUOTE,
         access_date="2026-09-12",
-        evidence_grade="official-doc",
-        confidence="high",
+        source_authority="statute",
+        certainty=5,
         obligation="mandatory",
         jurisdiction="EX",
         instrument="Example AML Act s.12",
@@ -157,7 +167,7 @@ def test_no_field_from_the_other_profile_is_required(compliance_profile):
     """
     fields = set(ComplianceRow.model_fields)
     for leaked in ("mechanism", "outcome", "depth_level", "vendor_term",
-                   "what_it_does", "canonical"):
+                   "what_it_does", "canonical", "evidence_grade", "confidence"):
         assert leaked not in fields, f"{leaked} leaked into the universal core"
 
 
@@ -250,3 +260,70 @@ def test_switching_profiles_switches_the_contract(compliance_profile):
 
     profile_mod.activate("compliance-posture")
     assert "mechanism" not in profile_mod.row_model().model_fields
+
+
+# --------------------------------------------------------------------------
+# Anti-drift: the core must stay universal
+# --------------------------------------------------------------------------
+
+UNIVERSAL = {
+    "schema_version",   # which contract this row was written against
+    "id",               # addresses one claim
+    "source_url",       # where it came from
+    "source_quote",     # the verbatim evidence
+    "access_date",      # when it was seen
+    "broken_source",    # whether the source still resolves
+}
+
+
+def test_the_core_contains_only_universal_fields():
+    """Pinned so methodology cannot drift back into the core.
+
+    This is the failure that does not announce itself. Adding a field here
+    costs nothing today and breaks the NEXT domain — which nobody is testing
+    when they add it. Every field below must be answerable without knowing what
+    is being studied.
+
+    If this fails, the question is not "update the test". It is: does a labour
+    market, a regulator and a software vendor all have this? If not, it belongs
+    in a profile.
+    """
+    actual = set(CoreRow.model_fields)
+    extra = actual - UNIVERSAL
+    missing = UNIVERSAL - actual
+    assert not extra, (
+        f"non-universal field(s) in the core: {sorted(extra)}. "
+        "Ask whether every domain has this; if not, move it to a profile."
+    )
+    assert not missing, f"universal field(s) removed from the core: {sorted(missing)}"
+
+
+def test_no_profile_enum_is_importable_from_the_core():
+    """Vocabulary lives in profiles, not in the shared module."""
+    import kbqa.models as m
+    for leaked in ("EvidenceGrade", "Mechanism", "Outcome", "DepthLevel"):
+        assert not hasattr(m, leaked), (
+            f"{leaked} is in models.py — that makes one programme's vocabulary "
+            "the standard for every domain"
+        )
+
+
+def test_the_id_pattern_is_a_convention_not_a_law():
+    """A programme addressing nodes differently is different, not malformed."""
+    from kbqa.conventions import Conventions
+    assert Conventions().id_pattern, "the default must still exist"
+    uuidish = Conventions(id_pattern=r"^[0-9a-f\-]{36}$")
+    assert uuidish.id_pattern != Conventions().id_pattern
+
+
+def test_registries_do_not_leak_between_profiles(compliance_profile):
+    """A field registered for one domain must not be accepted in another.
+
+    Otherwise the first corpus collected quietly sets what later ones may say.
+    """
+    assert "node_kind" not in profile_mod.active().extensions
+    assert "regulator_term" in profile_mod.active().extensions
+
+    profile_mod.activate("vendor-catalogue")
+    assert "regulator_term" not in profile_mod.active().extensions
+    assert "node_kind" in profile_mod.active().extensions

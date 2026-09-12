@@ -31,34 +31,20 @@ vendor, a labour market or a regulator.
     source_url      where it came from
     source_quote    the verbatim evidence
     access_date     when it was seen
-    evidence_grade  how strong the source is
-    confidence      how sure we are
     broken_source   whether the source still resolves
 
-Anything that depends on WHAT is being studied belongs in a profile.
+Anything that depends on WHAT is being studied belongs in a profile — including
+`evidence_grade` and `confidence`. Every domain grades its sources, but
+`official-doc / help / marketing` is one programme's vocabulary; a programme
+reading regulatory filings or peer-reviewed work grades differently, and a core
+that fixed those values would make its own first corpus the standard.
 """
 
 from datetime import date
-from enum import Enum
-from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-SCHEMA_VERSION = 4
-
-
-class EvidenceGrade(str, Enum):
-    """How authoritative the source is. Universal: every domain has sources
-    that are official, incidental, promotional, or pending confirmation."""
-
-    official_doc = "official-doc"
-    help = "help"
-    marketing = "marketing"
-    verified = "verified"
-    # Both spellings accepted. The specification writes `[verify]`; collectors
-    # write `verify`. Rejecting rows over a pair of brackets taught nothing.
-    verify = "verify"
-    verify_bracketed = "[verify]"
+SCHEMA_VERSION = 5
 
 
 class CoreRow(BaseModel):
@@ -81,14 +67,21 @@ class CoreRow(BaseModel):
     # Lowercase stays required. Not because the data would otherwise break the
     # rule, but because a case-sensitive identifier that is sometimes
     # capitalised is a duplicate waiting to happen.
-    id: str = Field(pattern=r"^[a-z0-9_]+(\.[a-z0-9_\-]+)*$")
-
+    id: str
     source_url: str
     source_quote: str = Field(min_length=1)
     access_date: date
-    evidence_grade: EvidenceGrade
-    confidence: Literal["high", "medium", "low"]
     broken_source: bool = False
+
+    @field_validator("id")
+    @classmethod
+    def id_matches_convention(cls, v: str) -> str:
+        import re
+        from . import profile
+        pattern = profile.conventions().id_pattern
+        if not re.match(pattern, v):
+            raise ValueError(f"id {v!r} does not match this profile's id pattern {pattern}")
+        return v
 
     @field_validator("source_url")
     @classmethod
