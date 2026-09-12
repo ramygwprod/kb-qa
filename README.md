@@ -178,27 +178,36 @@ Fixtures are **generated, not hand-edited**:
 CI regenerates them and fails if the committed copies differ. Editing a fixture
 to make a gate pass is the exact failure mode this package exists to catch.
 
-## Skill — how an agent is meant to run this
+## Skills — the pipeline as capability, not instruction
 
 ```
-skills/kbqa-check/SKILL.md
-skills/kbqa-check/settings-snippet.json
+skills/kbqa-collect/SKILL.md   the collecting role
+skills/kbqa-check/SKILL.md     the checking role
 ```
 
-The canonical checking skill, for the sessions that *run* the validator against
-an estate. It carries the procedure — verify the manifest, run the report cycle,
-read the Coverage section, route findings by class — and the boundary.
+A markdown file saying "delegate to the fetcher" is a request, and a request is
+skipped under pressure with nothing noticing. So each role is defined by what
+its session **cannot** do.
 
-The boundary is a capability, not a request. The skill declares
-`allowed-tools: Bash, Read` — **no `Edit`, no `Write`** — so an agent working
-under it cannot modify a gate, a capture, or a row. The settings snippet closes
-the rest: writes into an installed `kbqa`, `pip` in any form, `.git/hooks`,
-`.github/workflows`, `--no-verify`, and the boundary file itself.
+| | `kbqa-collect` | `kbqa-check` |
+|---|---|---|
+| tools | `Task`, `Agent`, `Read` | `Bash`, `Read` |
+| can fetch | **no** — must delegate | no |
+| can write | **no** — must delegate | no |
+| can read verdicts | **no** — denied | yes |
 
-It pins the version and the manifest SHA, and `tests/test_skill_pin.py` fails
-the build if either goes stale — including negative tests proving each check can
-fail. See [skills/README.md](skills/README.md) for what this does and does not
-close.
+The collector holds no `WebFetch`, no `Write` and no `Bash`, so it cannot
+collect — only delegate to the `fetcher` and `row-writer` subagents, which hold
+complementary halves of the job. A session holding both the network and a
+writing tool will use both, and rows written that way are grounded in a
+context's memory of a page rather than in a capture.
+
+Each ships a `settings-snippet.json` closing the routes around the boundary.
+**They are mutually exclusive** — permission denies are session-wide, and the
+checker must read the `_qa/` the collector must not. `tests/test_skill_pin.py`
+fails the build if a skill gains a writing tool, a deny rule is dropped, or the
+pinned manifest goes stale. See [skills/README.md](skills/README.md) for what
+this does and does not close.
 
 ## How this was built
 

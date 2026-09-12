@@ -16,6 +16,43 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.2.0] — 2026-09-13
+
+### Added
+
+- **`skills/kbqa-collect` — the collecting role, separated by capability.**
+  `agents/fetcher.md` and `agents/row-writer.md` describe two roles, but nothing
+  made a session use them: a cowork session holds `WebFetch` *and* `Write`, so
+  it will usually do both itself and write rows from its own memory of a page
+  rather than from a capture. "Delegate to the fetcher" in a markdown file is a
+  request, and a request is skipped under pressure with nothing noticing,
+  because the output looks identical either way.
+
+  The skill declares `allowed-tools: Task, Agent, Read` — **no `WebFetch`, no
+  `Write`, no `Bash`.** It cannot collect. It can only delegate to the two
+  subagents, which hold complementary halves: the fetcher has the network and
+  no reason to interpret, the row-writer has the capture and no network.
+
+- **The collecting snippet denies `Read(**/_qa/**)`** and the log and audit
+  files. A collecting context that can see the verdict on its own work will
+  iterate against it, which is the edit-until-green loop the separation exists
+  to break.
+
+- Tests: the collecting skill may not hold any of `WebFetch`, `Write`, `Edit`,
+  `Bash`, `WebSearch` or the notebook editors; it must retain a delegation tool,
+  since a restriction that leaves it unable to work is breakage rather than
+  safety; and the two snippets must stay mutually exclusive.
+
+### Changed
+
+- `skills/README.md` documents the two roles, that the snippets **cannot both be
+  active in one settings file** — permission denies are session-wide, and the
+  checker must read what the collector must not — and the three limits
+  capability cannot reach: a subagent's tools are its own and the interaction
+  with session denies is runtime-specific and must be verified once; a capture
+  is what the fetch tool returned rather than what the server sent; and no gate
+  checks that a quote supports its claim.
+
 ## [6.1.0] — 2026-09-13
 
 ### Changed
