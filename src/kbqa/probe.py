@@ -101,6 +101,15 @@ def _describe_field(name: str, values: List[Any]) -> str:
     return f"{shape}  present={present}"
 
 
+# A collection batch declares its provenance. A document that declares none of
+# these is not a batch, however it is named — file NAMES are a convention, and
+# a convention is not evidence. Saying "the parser is broken" about a prose
+# document sends the reader to parsing.py to fix something that is not wrong.
+BATCH_FM_KEYS = frozenset(
+    {"batch", "source_capture", "source_capture_sha256", "pages", "fetched_by_this_agent"}
+)
+
+
 _JSON_PAIR_RE = re.compile(r'("(?:[^"\\]|\\.)*"\s*:\s*)"(?:[^"\\]|\\.)*"')
 
 
@@ -129,6 +138,40 @@ def _line_shape(line: str) -> str:
     return s
 
 
+def _prose_shape(line: str) -> str:
+    """Describe a NON-row line without reproducing any of it.
+
+    `_line_shape` was written for JSON-ish lines: it keeps the key and drops the
+    value, and everything it drops is quoted. Markdown prose is not quoted, so
+    nothing matched and whole sentences printed verbatim — vendor names, ids,
+    headings. The probe's own banner promises none of that appears.
+
+    A line outside the frontmatter and outside a fence is by definition not a
+    row, so none of its text is schema. Report what KIND of line it is and how
+    long it is. Never a character of it.
+    """
+    s = line.strip()
+    n = len(s)
+    if not s:
+        return "(blank)"
+    if s in ("---", "***", "___"):
+        return f"rule/delimiter ({n} chars)"
+    if s.startswith("#"):
+        level = len(s) - len(s.lstrip("#"))
+        return f"heading h{min(level, 6)} ({n} chars)"
+    if s.startswith("```"):
+        return f"fence ({n} chars)"
+    if s.startswith(("- ", "* ", "+ ")) or re.match(r"^\d+[.)]\s", s):
+        return f"list item ({n} chars)"
+    if s.startswith(">"):
+        return f"blockquote ({n} chars)"
+    if s.startswith("|") and s.endswith("|"):
+        return f"table row ({s.count('|') - 1} cells, {n} chars)"
+    if s.startswith(("http://", "https://")):
+        return f"bare url ({n} chars)"
+    return f"text ({n} chars)"
+
+
 def probe_staging(path: Path) -> List[str]:
     out: List[str] = []
     text = path.read_text(encoding="utf-8", errors="replace")
@@ -141,7 +184,7 @@ def probe_staging(path: Path) -> List[str]:
     # --- opening / frontmatter -------------------------------------------
     out.append("-- opening --")
     if lines:
-        out.append(f"line 1: {_line_shape(lines[0])!r}")
+        out.append(f"line 1: {_prose_shape(lines[0])}")
     opens_with_delim = bool(lines) and lines[0].strip() == "---"
     out.append(f"opens with '---': {opens_with_delim}")
 
@@ -166,7 +209,7 @@ def probe_staging(path: Path) -> List[str]:
             kv = re.match(r"^(?P<key>[^:\s][^:]*):\s*(?P<val>.*)$", line)
             if not kv:
                 if line.strip():
-                    out.append(f"  (non key:value line) {_line_shape(line)!r}")
+                    out.append(f"  (non key:value line) {_prose_shape(line)}")
                 continue
             last_key = kv.group("key").strip()
             key, val = kv.group("key").strip(), kv.group("val").strip()
@@ -247,7 +290,7 @@ def probe_staging(path: Path) -> List[str]:
     out.append("-- other body lines (outside frontmatter and outside ```json fences) --")
     out.append(f"count: {len(other)}")
     for i in other[:12]:
-        out.append(f"  line {i}: {_line_shape(lines[i - 1])!r}")
+        out.append(f"  line {i}: {_prose_shape(lines[i - 1])}")
     if len(other) > 12:
         out.append(f"  … and {len(other) - 12} more")
     out.append("")
@@ -259,6 +302,9 @@ def probe_staging(path: Path) -> List[str]:
     out.append(f"row format        : {sp.row_format}")
     out.append(f"rows parsed       : {len(sp.rows)}")
     out.append(f"naive count       : {sp.naive_count}")
+    declared = BATCH_FM_KEYS & set(sp.frontmatter_raw)
+    out.append(f"batch frontmatter : {sorted(declared) if declared else 'NONE'}")
+
     agree = (
         bool(parsed)
         and not bad
@@ -266,6 +312,29 @@ def probe_staging(path: Path) -> List[str]:
         and sp.naive_count == len(parsed)
     )
     out.append("")
+
+    # A file is only "not a batch" when it declares no provenance AND holds no
+    # rows. Rows without provenance are a batch with a G1 problem — a different
+    # finding, owned by a different gate, and not the probe's to pre-empt.
+    if not declared and not parsed and not sp.rows and sp.naive_count == 0:
+        # Not a batch. Reporting a parser mismatch here would be a false
+        # finding of exactly the kind this package exists to prevent: it is
+        # true that no rows parsed, and untrue that anything needs fixing.
+        out.append("VERDICT: this file is NOT a collection batch")
+        out.append(
+            "  -> its frontmatter declares none of "
+            f"{sorted(BATCH_FM_KEYS)}."
+        )
+        out.append(
+            "  -> the parser is not implicated. Whatever matched this filename "
+            "is a document, not a batch."
+        )
+        out.append(
+            "  -> if a sweep or CI counted it as a batch, discovery is matching "
+            "on the NAME alone and needs to match on the frontmatter."
+        )
+        return out
+
     out.append(f"VERDICT: parser {'MATCHES' if agree else 'DOES NOT MATCH'} this file")
     if not agree:
         out.append("  -> src/kbqa/parsing.py needs correcting. Gate logic is unaffected.")

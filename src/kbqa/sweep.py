@@ -38,6 +38,13 @@ STAGING_GLOB = "**/_collect-*-staging.md"
 VERIFIABLE = "verifiable"
 UNASSESSABLE = "unassessable-no-page-markers"
 UNVERIFIABLE = "unverifiable-no-capture"
+NOT_A_BATCH = "not-a-batch"
+
+# The frontmatter keys that make a file a collection batch. Names are a
+# convention; provenance is evidence.
+BATCH_FM_KEYS = frozenset(
+    {"batch", "source_capture", "source_capture_sha256", "pages", "fetched_by_this_agent"}
+)
 
 TIER_MEANING = {
     VERIFIABLE: "capture exists and splits into pages — every quote can be checked",
@@ -106,6 +113,17 @@ def audit_batch(staging: Path, root: Optional[Path] = None, depth: int = 2) -> d
         parsed = parse_staging(staging)
     except Exception as exc:  # noqa: BLE001 — an unreadable batch is a finding
         rec["error"] = f"{type(exc).__name__}: {exc}"
+        return rec
+
+    # A document is not a batch merely because its name matched. Provenance or
+    # rows make it one; neither makes it a document that happened to be called
+    # a staging file. Counting those as batches inflates every estate total and
+    # produces gate failures about files nobody ever collected into.
+    declares = BATCH_FM_KEYS & set(parsed.frontmatter_raw or {})
+    has_rows = bool(parsed.rows) or parsed.naive_count > 0
+    if not declares and not has_rows:
+        rec["tier"] = NOT_A_BATCH
+        rec["row_format"] = parsed.row_format
         return rec
 
     rec["row_format"] = parsed.row_format
@@ -228,7 +246,11 @@ def build(
         else:
             stagings.append(s)
 
-    batches = [audit_batch(s, root, depth) for s in stagings]
+    scanned = [audit_batch(s, root, depth) for s in stagings]
+
+    # Named and counted, never silently dropped — the same rule as --exclude.
+    not_batches = [b for b in scanned if b["tier"] == NOT_A_BATCH]
+    batches = [b for b in scanned if b["tier"] != NOT_A_BATCH]
 
     by_vendor: Dict[str, List[dict]] = defaultdict(list)
     for b in batches:
@@ -290,6 +312,23 @@ def build(
         a(f"| {vendor} | {len(bs)} | {v} | {sum(b['rows'] for b in bs)} | "
           f"{conf}/{len(bs)} | {viol} |")
     a("")
+
+    if not_batches:
+        a("## Matched the name, but are not batches")
+        a("")
+        a(f"{len(not_batches)} file(s) match the staging filename pattern while "
+          "declaring no batch frontmatter and holding no rows. They are **not** in "
+          "any figure above.")
+        a("")
+        a("A filename is a convention; provenance is evidence. Counting these as "
+          "batches inflates every total and produces gate failures about files "
+          "nobody collected into.")
+        a("")
+        for b in not_batches[:20]:
+            a(f"- `{b['path']}`")
+        if len(not_batches) > 20:
+            a(f"- … and {len(not_batches) - 20} more")
+        a("")
 
     if excluded:
         a("## Excluded by pattern")
@@ -383,6 +422,7 @@ def build(
         },
         "batches": batches,
         "excluded": excluded,
+        "not_batches": [b["path"] for b in not_batches],
         "fields": fields,
     }
     return "\n".join(lines) + "\n", machine
@@ -443,6 +483,16 @@ def run(argv: List[str]) -> int:
         f"  unverifiable ={t['unverifiable_batches']:>4} batches / {t['unverifiable_rows']:>6} rows "
         f"(no capture ever)"
     )
+    # Printed, not only written. A file matched by the discovery glob that is
+    # not a batch is a discovery defect, and an operator who reads the terminal
+    # and not the report would otherwise never learn the totals excluded it.
+    if machine.get("not_batches"):
+        n = len(machine["not_batches"])
+        print(
+            f"  not batches  ={n:>4} file(s) matched the name, declared no batch "
+            "frontmatter, held no rows — excluded from every figure above; "
+            "named in the report"
+        )
     # Auditing is not gating: an estate that is mostly unverifiable is a fact to
     # record, not a run to fail. Exit non-zero only when nothing could be read.
     return 0 if machine["totals"]["batches"] else 1

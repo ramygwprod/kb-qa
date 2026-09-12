@@ -422,7 +422,7 @@ def test_modified_bronze_fails_g6(fx, tmp_path):
 
     d = fx("good")
     v, _ = g1_capture.run(["--staging", str(d / STAGING), "--capture", str(d / CAPTURE)])
-    write_verdict(v, d, "widgets", None, "Acme")
+    write_verdict(v, d, "widgets", None)
 
     # Now tamper with Bronze — "just fixing a typo".
     cap = d / CAPTURE
@@ -441,7 +441,7 @@ def test_stale_manifest_in_verdict_fails_g6(fx):
 
     d = fx("good")
     v, _ = g2_conformance.run(["--staging", str(d / STAGING)])
-    path = write_verdict(v, d, "widgets", None, "Acme")
+    path = write_verdict(v, d, "widgets", None)
 
     data = json.loads(path.read_text())
     data["manifest_sha256"] = "deadbeef" * 8

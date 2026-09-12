@@ -107,7 +107,7 @@ def test_grounding_remedy_forbids_quote_shopping():
 def test_clean_batch_reports_clear_and_exits_zero(fx, tmp_path):
     d = fx("good")
     code = cli.main([
-        "report", "--vendor-dir", str(d), "--batch", "widgets", "--vendor", "Acme",
+        "report", "--vendor-dir", str(d), "--batch", "widgets",
         "--log", str(tmp_path / "_qa-log.jsonl"),
     ])
     assert code == 0
@@ -231,8 +231,7 @@ def test_report_routes_to_the_planner(fx):
 def test_report_writes_verdicts_and_log(fx, tmp_path):
     d = fx("good")
     log = tmp_path / "_qa-log.jsonl"
-    cli.main(["report", "--vendor-dir", str(d), "--batch", "widgets",
-              "--vendor", "Acme", "--log", str(log)])
+    cli.main(["report", "--vendor-dir", str(d), "--batch", "widgets", "--log", str(log)])
     qa = d / "_qa"
     assert (qa / "widgets.g1_capture.json").is_file()
     assert (qa / "widgets.g2_conformance.json").is_file()
@@ -258,3 +257,42 @@ def test_report_never_exits_2(fx):
     """Exit 2 means DECLINED. A batch report must never be readable as one."""
     d = fx("bad_missing_capture")
     assert cli.main(["report", "--vendor-dir", str(d), "--batch", "widgets"]) != 2
+
+
+# --------------------------------------------------------------------------
+# The checker stores structure, never identity
+# --------------------------------------------------------------------------
+
+def test_no_verdict_or_log_line_stores_a_subject_name(fx, tmp_path):
+    """A structural check has no use for who the subject is.
+
+    No gate reads it — `--vendor` existed only to label a log line, which made
+    the QA layer a second place identity accumulates. Paths already locate the
+    file; a name stored beside them is a copy, not information.
+    """
+    import json
+
+    d = fx("good")
+    log = tmp_path / "_qa-log.jsonl"
+    cli.main(["report", "--vendor-dir", str(d), "--batch", "widgets", "--log", str(log)])
+
+    for verdict in (d / "_qa").glob("*.json"):
+        assert "vendor" not in json.loads(verdict.read_text()), (
+            f"{verdict.name} stores a subject name"
+        )
+
+    for line in log.read_text().splitlines():
+        assert "vendor" not in json.loads(line), "the log line stores a subject name"
+
+
+def test_the_vendor_flag_is_rejected_rather_than_ignored(fx, tmp_path, capsys):
+    """Accepting a flag whose value is discarded would be worse than removing it.
+
+    A caller who keeps passing `--vendor` is entitled to learn it no longer
+    means anything, rather than believing the name was recorded.
+    """
+    d = fx("good")
+    code = cli.main([
+        "report", "--vendor-dir", str(d), "--batch", "widgets", "--vendor", "Acme",
+    ])
+    assert code != 0

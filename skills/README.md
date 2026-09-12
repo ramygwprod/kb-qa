@@ -60,7 +60,7 @@ the evidence is produced, and it works because a human reads it. See
 
 ## Keeping the pin current
 
-The skill pins `5.0.0` and its manifest SHA. Both must be updated together on
+The skill pins `6.0.0` and its manifest SHA. Both must be updated together on
 every kbqa release, in the same commit that tags it — a stale pin makes the
 §0 check fire on a legitimate upgrade, and an agent that learns to ignore that
 check has lost the one signal that a validator was swapped.

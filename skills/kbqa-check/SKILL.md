@@ -20,8 +20,8 @@ python3 -m kbqa --version && python3 -m kbqa --manifest | head -1
 Expected for the pinned release:
 
 ```
-5.0.0
-manifest_sha256 935850fc4c5d12cdac489ebffeca3e38ae73ea6c1aa9a084fa731a1dc0f80b2f
+6.0.0
+manifest_sha256 1c05467e5b9608f3eaf999d94b08283489475730308fa76c768f6c7d09826cfc
 ```
 
 **If the version or the manifest differs, stop and report it.** A verdict from
@@ -45,7 +45,7 @@ finding — that is a legitimate dispute. Editing it is not.
 ## 2 · Check one batch
 
 ```bash
-python3 -m kbqa report --vendor-dir <subject-dir> --batch <name> --vendor <name> \
+python3 -m kbqa report --vendor-dir <subject-dir> --batch <name> \
   --denominator <subject-dir>/_denominator-*.md \
   --stops <subject-dir>/_stop-conditions.md \
   --log _qa-log.jsonl

@@ -393,7 +393,6 @@ def _gate_sha(gate: str) -> str:
 def build(
     vendor_dir: Path,
     batch: str,
-    vendor: Optional[str] = None,
     denominator: Optional[Path] = None,
     stops: Optional[Path] = None,
 ) -> Tuple[str, List[Tuple[Verdict, int]], int, dict]:
@@ -455,7 +454,7 @@ def build(
     lines: List[str] = []
     a = lines.append
 
-    a(f"# QA report — {vendor or vendor_dir.name} / {batch}")
+    a(f"# QA report — {vendor_dir.name} / {batch}")
     a("")
     a(f"**{'BLOCKED' if blocked else 'CLEAR'}** · {len(items)} finding(s)")
     a("")
@@ -464,7 +463,7 @@ def build(
     a(f"| generated | `{utc_now_iso()}` |")
     a(f"| kbqa version | `{__version__}` |")
     a(f"| manifest | `{MANIFEST_SHA256}` |")
-    a(f"| vendor / batch | `{vendor or vendor_dir.name}` / `{batch}` |")
+    a(f"| directory / batch | `{vendor_dir.name}` / `{batch}` |")
     a(f"| staging | `{staging.name}` |")
     a(f"| capture | `{capture.name}`{'' if capture.exists() else ' — **absent**'} |")
     a("")
@@ -584,7 +583,6 @@ def build(
     machine = {
         "kbqa_version": __version__,
         "manifest_sha256": MANIFEST_SHA256,
-        "vendor": vendor or vendor_dir.name,
         "batch": batch,
         "generated": utc_now_iso(),
         "status": "BLOCKED" if blocked else "CLEAR",
@@ -612,7 +610,7 @@ def build(
 
 
 def run(argv: List[str]) -> int:
-    vendor_dir = batch = vendor = out = None
+    vendor_dir = batch = out = None
     denominator = stops = None
     log = None
     i = 0
@@ -623,8 +621,6 @@ def run(argv: List[str]) -> int:
             vendor_dir = Path(nxt); i += 2; continue
         if arg == "--batch" and nxt:
             batch = nxt; i += 2; continue
-        if arg == "--vendor" and nxt:
-            vendor = nxt; i += 2; continue
         if arg == "--denominator" and nxt:
             denominator = Path(nxt); i += 2; continue
         if arg == "--stops" and nxt:
@@ -643,10 +639,10 @@ def run(argv: List[str]) -> int:
         print(f"report: not a directory: {vendor_dir}")
         return 1
 
-    markdown, results, code, machine = build(vendor_dir, batch, vendor, denominator, stops)
+    markdown, results, code, machine = build(vendor_dir, batch, denominator, stops)
 
     for verdict, _ in results:
-        write_verdict(verdict, vendor_dir, batch, log, vendor)
+        write_verdict(verdict, vendor_dir, batch, log)
 
     target = out or (vendor_dir / "_qa" / f"{batch}.report.md")
     target.parent.mkdir(parents=True, exist_ok=True)

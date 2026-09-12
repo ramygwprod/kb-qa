@@ -1,6 +1,6 @@
 # kbqa — user manual
 
-**Version 5.0.0** · for operators and for maker agents
+**Version 6.0.0** · for operators and for maker agents
 
 Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -10,8 +10,8 @@ Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v5.0.0"
-python -m kbqa --version          # must print 5.0.0
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.0.0"
+python -m kbqa --version          # must print 6.0.0
 ```
 
 **Audit a corpus** — needs no captures, changes nothing, answers "what here can
@@ -25,7 +25,7 @@ python -m kbqa sweep --root <corpus> --field-values
 
 ```bash
 python -m kbqa report --vendor-dir <corpus>/<Subject> --batch <name> \
-  --vendor <Subject> --log <corpus>/_qa-log.jsonl
+  --log <corpus>/_qa-log.jsonl
 ```
 
 Exit 0 means every gate that ran is green. Exit 1 means something failed — read
@@ -94,7 +94,7 @@ python3 -m venv .venv
 For an estate or CI, install from the pinned tag rather than a branch:
 
 ```bash
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v5.0.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.0.0"
 ```
 
 **Always a tag, never a branch.** A branch would let the gates and the data they
@@ -279,6 +279,12 @@ are verifiable:
 | `unassessable-no-page-markers` | text stored, no page boundaries | only as a **known backlog** — recoverable by re-fetch |
 | `unverifiable-no-capture` | page text never stored | only if **recorded as such**; not recoverable |
 
+A fourth classification sits outside the tiers. `not-a-batch` is a file that
+matched the staging filename pattern while declaring no batch frontmatter and
+holding no rows — a note, a ruling, a session log. It is excluded from every
+figure and named in the report, because a file that vanishes from a total
+without explanation is indistinguishable from one that was never there.
+
 The failure state is not "some rows are unverifiable". It is **not knowing which
 ones are**, or presenting an unverifiable tree as though it carried the same
 weight as a verified one.
@@ -319,7 +325,6 @@ the contract. That is the evidence for the next schema version.
 python -m kbqa report \
   --vendor-dir "<estate>/Competitors/Acme" \
   --batch widgets \
-  --vendor Acme \
   --denominator "<estate>/Competitors/Acme/_denominator-docs-2026-08-23.md" \
   --stops "<estate>/Competitors/Acme/_stop-conditions.md" \
   --log "<estate>/_qa-log.jsonl"
@@ -433,7 +438,7 @@ subagent · `H` human decision.
 | 3 | **P** list URLs **from the denominator only** | a fixed list per batch | — | No link-following, no URL construction |
 | 4 | **F** → **C** | receipt has path, bytes, sha256, URL list | partial/failed fetch | Re-run **C** |
 | 5 | **R** → **D** | `$D/_collect-$B-staging.md` exists | R asks to fetch | R has no `WebFetch`. Add the URL to step 3's list, re-run **C**, then **D** |
-| 6 | **P** `python3 -m kbqa report --vendor-dir $D --batch $B --vendor <S> --log $C/_qa-log.jsonl` | prints `CLEAR`, exit 0 | anything below | Open `$D/_qa/$B.report.md` |
+| 6 | **P** `python3 -m kbqa report --vendor-dir $D --batch $B --log $C/_qa-log.jsonl` | prints `CLEAR`, exit 0 | anything below | Open `$D/_qa/$B.report.md` |
 | 7 | ↳ G1 | `capture_blocks` > 0 | `capture_missing` · `capture_empty` · `marker_unbalanced` · `duplicate_page_block` | Re-run **C**, then step 6 |
 | | | | `capture_hash_absent` · `no_declared_pages` | → **E** |
 | | | | `capture_hash_mismatch` · `capture_not_before_staging` | Re-run **D** (rows came from different bytes), then step 6 |
@@ -665,7 +670,6 @@ goes to stdout and nothing is written.
 |---|---|
 | `--vendor-dir <d>` | write `_qa/<batch>.<gate>.json` under this directory |
 | `--batch <name>` | batch name used in the verdict filename |
-| `--vendor <name>` | subject name recorded in the log line |
 | `--log <path>` | append one line to this `_qa-log.jsonl` |
 
 ### Exit-code contract
@@ -791,7 +795,7 @@ and the data they judge change in the same push.
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v5.0.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.0.0"
 ```
 
 > `pip < 21.3` cannot read this project's metadata and installs an empty package
@@ -945,6 +949,13 @@ That is a defect in the gate, not a clean batch. Do not read it as a pass.
 Read the **Coverage** section first — it names the gates that did not run. A
 gate that did not run has found nothing, which is not the same as having found
 nothing wrong.
+
+**`sweep` says a file is `not-a-batch`, or the batch count dropped after
+upgrading to 6.0.0.**
+That file matched the staging filename pattern but declares no batch
+frontmatter and holds no rows. Before 6.0.0 it was counted as a batch, so
+totals were inflated and CI reported gate failures about it. If it really is a
+batch, give it frontmatter; if it is a document, rename it out of the pattern.
 
 **`sweep` attributes batches to the wrong subject.**
 Subject is derived from path depth. Set `--vendor-depth`, and `--exclude`

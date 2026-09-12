@@ -45,7 +45,7 @@ def test_recording_writes_verdict_and_log(fx, tmp_path, capsys):
     log = tmp_path / "_qa-log.jsonl"
     code = main([
         "g2", "--staging", str(d / "_collect-widgets-staging.md"),
-        "--vendor-dir", str(d), "--batch", "widgets", "--vendor", "Acme",
+        "--vendor-dir", str(d), "--batch", "widgets",
         "--log", str(log),
     ])
     capsys.readouterr()
@@ -63,10 +63,10 @@ def test_recording_flags_never_leak_into_gate_parsers():
 
     rec, gate_argv = split_recording_args([
         "--staging", "S", "--capture", "C",
-        "--vendor-dir", "V", "--batch", "b", "--vendor", "Acme", "--log", "L",
+        "--vendor-dir", "V", "--batch", "b", "--log", "L",
     ])
     assert gate_argv == ["--staging", "S", "--capture", "C"]
-    assert (rec.vendor_dir, rec.batch, rec.vendor, rec.log) == ("V", "b", "Acme", "L")
+    assert (rec.vendor_dir, rec.batch, rec.log) == ("V", "b", "L")
 
 
 def test_recording_flags_accept_equals_form():
@@ -97,7 +97,7 @@ def test_log_is_append_only(fx, tmp_path, capsys):
     log = tmp_path / "_qa-log.jsonl"
     args = [
         "g2", "--staging", str(d / "_collect-widgets-staging.md"),
-        "--batch", "widgets", "--vendor", "Acme", "--log", str(log),
+        "--batch", "widgets", "--log", str(log),
     ]
     main(args)
     main(args)

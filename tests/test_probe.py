@@ -225,3 +225,91 @@ def test_probe_writes_no_files(fx, capsys):
     after = {p.name: p.read_bytes() for p in d.iterdir()}
     assert before == after
     assert sorted(before) == sorted(after), "probe created or removed a file"
+
+
+# --------------------------------------------------------------------------
+# Prose leak — found by running the probe against a real estate
+# --------------------------------------------------------------------------
+
+DOCUMENT = """---
+code: D-014
+nature: ruling
+stage: phase-a
+status: closed
+owner: someone
+last_updated: 2026-08-01
+---
+
+# Northwind Phase A — sitemap skeleton COMPLETE (9/9 surfaces)
+
+The nine ids are present and untouched: `northwind.arabic-model` ·
+`northwind.platform` · `northwind.dataplane`.
+
+| surface | state |
+|---|---|
+| catalogue | closed |
+
+> Corrected 2026-08-01: this previously read COMPLETE, which was an overclaim.
+
+- Contoso's twenty workflow families were skipped entirely.
+"""
+
+SECRETS = [
+    "Northwind", "northwind", "Contoso", "dataplane",
+    "arabic-model", "workflow families", "sitemap skeleton", "overclaim",
+    "D-014", "catalogue",
+]
+
+
+def test_prose_body_lines_do_not_reach_the_report(tmp_path, capsys):
+    """`_line_shape` redacts quoted values. Markdown prose has no quotes.
+
+    Found by probing a real estate: the "other body lines" section printed
+    headings, list items and sentences verbatim — vendor names and ids included
+    — under a banner promising none of that appears. The line's KIND is
+    structural; its text never is.
+    """
+    f = tmp_path / "_collect-phaseA-staging.md"
+    f.write_text(DOCUMENT, encoding="utf-8")
+    out = _probe(capsys, "--staging", str(f))
+
+    leaked = [s for s in SECRETS if s in out]
+    assert not leaked, f"prose reached the report: {leaked}"
+
+
+def test_prose_lines_are_still_described(tmp_path, capsys):
+    """Redaction that reports nothing is not safety, it is uselessness."""
+    f = tmp_path / "_collect-phaseA-staging.md"
+    f.write_text(DOCUMENT, encoding="utf-8")
+    out = _probe(capsys, "--staging", str(f))
+
+    assert "heading h1" in out
+    assert "list item" in out
+    assert "table row" in out
+    assert "blockquote" in out
+
+
+def test_a_document_is_not_reported_as_a_parser_failure(tmp_path, capsys):
+    """No provenance and no rows means it is not a batch — not a broken parser.
+
+    Saying "parser DOES NOT MATCH" here sends the reader to parsing.py to fix
+    something that is not wrong, and hides the real finding: whatever matched
+    this filename is a document.
+    """
+    f = tmp_path / "_collect-phaseA-staging.md"
+    f.write_text(DOCUMENT, encoding="utf-8")
+    out = _probe(capsys, "--staging", str(f))
+
+    assert "VERDICT: this file is NOT a collection batch" in out
+    assert "DOES NOT MATCH" not in out
+    assert "parsing.py needs correcting" not in out
+    assert "batch frontmatter : NONE" in out
+
+
+def test_rows_without_provenance_are_still_a_batch(tmp_path, capsys):
+    """Rows with no frontmatter are a G1 problem, not a reason to disown them."""
+    f = tmp_path / "_collect-x-staging.md"
+    f.write_text('{"id": "a.b", "vendor_term": "x"}\n', encoding="utf-8")
+    out = _probe(capsys, "--staging", str(f))
+
+    assert "NOT a collection batch" not in out

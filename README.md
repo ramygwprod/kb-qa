@@ -56,7 +56,7 @@ nothing is written. Add recording flags to persist:
 
 ```bash
 python -m kbqa g3 --staging <f> --capture <f> \
-  --vendor-dir Competitors/Acme --batch widgets --vendor Acme --log _qa-log.jsonl
+  --vendor-dir Competitors/Acme --batch widgets --log _qa-log.jsonl
 ```
 
 | gate | command | exit codes |
@@ -91,7 +91,7 @@ compliance-posture profile with different fields, file names and markers.
 ## Report — the checker's output to the maker
 
 ```bash
-python -m kbqa report --vendor-dir Competitors/Acme --batch widgets --vendor Acme \
+python -m kbqa report --vendor-dir Competitors/Acme --batch widgets \
   [--denominator <f>] [--stops <f>] [--log _qa-log.jsonl]
 ```
 

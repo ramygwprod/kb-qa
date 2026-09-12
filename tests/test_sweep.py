@@ -320,3 +320,67 @@ def test_audit_batch_never_raises_on_a_corrupt_file(tmp_path):
     rec = audit_batch(stg)
     assert rec["batch"] == "x"
     assert rec["tier"] == UNVERIFIABLE
+
+
+# --------------------------------------------------------------------------
+# Files that match the name but are not batches
+# --------------------------------------------------------------------------
+
+DOCUMENT = """---
+code: D-014
+nature: ruling
+status: closed
+last_updated: 2026-08-01
+---
+
+# Phase A — surface ledger
+
+- nine surfaces closed
+"""
+
+
+def test_a_document_matching_the_glob_is_not_counted_as_a_batch(estate):
+    """Found against a real estate: discovery matched on the filename alone.
+
+    A session log or a ruling that happens to be named `_collect-*-staging.md`
+    was audited as a batch — inflating every total and producing gate failures
+    about files nobody ever collected into. A name is a convention; provenance
+    is evidence.
+    """
+    from kbqa.sweep import NOT_A_BATCH, audit_batch
+
+    root = estate(Acme="good")
+    doc = root / "Competitors" / "Acme" / "_collect-phaseA-staging.md"
+    doc.write_text(DOCUMENT, encoding="utf-8")
+
+    rec = audit_batch(doc, root)
+    assert rec["tier"] == NOT_A_BATCH
+    assert rec["rows"] == 0
+
+
+def test_documents_are_named_not_silently_dropped(estate, capsys):
+    """Same rule as --exclude: a file that vanishes from a total is a defect."""
+    root = estate(Acme="good")
+    doc = root / "Competitors" / "Acme" / "_collect-phaseA-staging.md"
+    doc.write_text(DOCUMENT, encoding="utf-8")
+
+    code = cli.main(["sweep", "--root", str(root)])
+    assert code == 0
+    out = capsys.readouterr().out
+
+    assert "not batches" in out, "stdout never mentions the excluded file"
+
+    report = (root / "_qa-estate-audit.md").read_text()
+    assert "_collect-phaseA-staging.md" in report
+    assert "not batches" in report.lower()
+
+
+def test_a_batch_without_provenance_but_with_rows_still_counts(estate):
+    """Rows with no frontmatter are a G1 finding, not a reason to disown them."""
+    from kbqa.sweep import NOT_A_BATCH, audit_batch
+
+    root = estate(Acme="good")
+    f = root / "Competitors" / "Acme" / "_collect-orphan-staging.md"
+    f.write_text('{"id": "a.b", "source_url": "https://x.test/a"}\n', encoding="utf-8")
+
+    assert audit_batch(f, root)["tier"] != NOT_A_BATCH
