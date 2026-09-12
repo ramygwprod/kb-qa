@@ -31,7 +31,13 @@ if ! python3 -c "import kbqa" >/dev/null 2>&1; then
   cat >&2 <<'EOF'
 pre-push: kbqa is not installed, so the gates did not run.
 
-  pip install "git+https://github.com/ramygwprod/kb-qa.git@v5.0.0"
+  python3 -m pip install --upgrade pip
+  python3 -m pip install "git+https://github.com/ramygwprod/kb-qa.git@v5.0.0"
+
+If a previous install reported "Successfully installed UNKNOWN-0.0.0", it
+installed an empty package: pip older than 21.3 cannot read this project's
+metadata and fails in a way that looks like success. Run
+`pip uninstall UNKNOWN` first.
 
 Refusing the push: a hook that silently passes when it cannot check is worse
 than no hook, because it reads as a green light.
