@@ -7,9 +7,10 @@ Built to be a validation layer a collecting agent **cannot pass by editing the
 validator**. Implements a private commissioning specification, which is not
 published — nothing here requires it at runtime.
 
-📖 **[docs/MANUAL.md](docs/MANUAL.md)** — full manual: structure, workflows for
-operators and agents, command and findings reference, trust model, release
-process.
+📖 **[docs/MANUAL.md](docs/MANUAL.md)** — user manual: quickstart, workflows for
+operators and maker agents, command and findings reference, trust model.
+🔧 **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** — developer guide:
+architecture, adding a domain, invariants, known traps, release process.
 📋 **[CHANGELOG.md](CHANGELOG.md)** · 🧾 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 — contract changes with the evidence behind them.
 
