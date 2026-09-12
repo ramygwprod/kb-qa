@@ -19,9 +19,18 @@ import pytest
 from kbqa import __version__
 from kbqa.manifest import MANIFEST_SHA256
 
-SKILL_DIR = Path(__file__).resolve().parent.parent / "skills" / "kbqa-check"
+SKILLS = Path(__file__).resolve().parent.parent / "skills"
+SKILL_DIR = SKILLS / "kbqa-check"
 SKILL = SKILL_DIR / "SKILL.md"
 SNIPPET = SKILL_DIR / "settings-snippet.json"
+
+COLLECT = SKILLS / "kbqa-collect" / "SKILL.md"
+COLLECT_SNIPPET = SKILLS / "kbqa-collect" / "settings-snippet.json"
+
+# The collecting role is defined by what it cannot do. Granting any of these
+# back would let one session fetch AND write, which is rows grounded in a
+# context's memory of a page rather than in a capture.
+COLLECT_FORBIDDEN = {"WebFetch", "Write", "Edit", "Bash", "NotebookEdit", "MultiEdit", "WebSearch"}
 
 WRITING_TOOLS = {"Edit", "Write", "NotebookEdit", "MultiEdit"}
 
@@ -132,3 +141,66 @@ def test_a_dropped_deny_rule_is_caught(deny_text):
     for _, needle in BYPASSES:
         mutated = " ".join(p for p in deny_text.split() if needle not in p)
         assert uncovered_bypasses(mutated), f"dropping {needle!r} went unnoticed"
+
+
+# ── the collecting role ──────────────────────────────────────────────────────
+
+@pytest.fixture(scope="module")
+def collect_text() -> str:
+    assert COLLECT.exists(), f"the collecting skill is missing: {COLLECT}"
+    return COLLECT.read_text(encoding="utf-8")
+
+
+def test_the_collector_cannot_fetch_or_write(collect_text):
+    """Delegation must be a fact about the tool list, not a request in prose.
+
+    A session holding both WebFetch and Write will use both — under time
+    pressure, in a long context, or simply because it is fewer steps. The rows
+    are then grounded in that context's memory of a page rather than in a
+    capture, and nothing downstream can tell the difference.
+    """
+    granted = granted_tools(collect_text)
+    assert granted is not None, "kbqa-collect declares no allowed-tools"
+    overreach = granted & COLLECT_FORBIDDEN
+    assert not overreach, (
+        f"kbqa-collect grants {sorted(overreach)}. It must be able to delegate "
+        "and read, and nothing else."
+    )
+
+
+def test_the_collector_can_still_delegate(collect_text):
+    """Restriction that leaves it unable to work is not safety, it is breakage."""
+    granted = granted_tools(collect_text)
+    assert granted & {"Task", "Agent"}, (
+        "kbqa-collect cannot spawn a subagent, so it cannot collect at all"
+    )
+
+
+def test_the_collector_cannot_read_its_own_verdict():
+    """A collecting context that sees its verdict will iterate against it."""
+    import json
+
+    deny = " ".join(json.loads(COLLECT_SNIPPET.read_text())["permissions"]["deny"])
+    assert "Read(**/_qa/**)" in deny, "the maker can read the verdict on its own work"
+
+
+def test_the_two_snippets_stay_mutually_exclusive():
+    """The checking role MUST read _qa/. Denying it there would be silent breakage.
+
+    Both snippets in one settings file is the mistake this guards: permission
+    denies are session-wide, so a shared file cannot express both roles.
+    """
+    import json
+
+    check = " ".join(json.loads(SNIPPET.read_text())["permissions"]["deny"])
+    assert "_qa" not in check, (
+        "the checking snippet denies reading _qa/, which is the checker's job"
+    )
+
+
+@pytest.mark.parametrize("tool", sorted(COLLECT_FORBIDDEN))
+def test_a_collector_granted_a_forbidden_tool_is_caught(collect_text, tool):
+    mutated = re.sub(
+        r"^(allowed-tools:.*)$", r"\1, " + tool, collect_text, count=1, flags=re.MULTILINE
+    )
+    assert granted_tools(mutated) & COLLECT_FORBIDDEN

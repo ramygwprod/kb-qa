@@ -1,69 +1,105 @@
-# Skills — how an agent is meant to use the validator
+# Skills — the pipeline as capability, not instruction
 
-The canonical, version-controlled copy of the checking skill. Like `agents/`,
-it is **not active in this repository** — `kb-qa/` is the validator itself, and
-this skill is for the sessions that *run* it against a data estate.
+Canonical, version-controlled copies of the two skills that run the pipeline.
+Like `agents/`, they are **not active in this repository** — `kb-qa/` is the
+validator, and these are for the sessions that collect into an estate and check
+it.
+
+## The principle
+
+A markdown file that says "delegate to the fetcher" is a request. Under time
+pressure, in a long context, or when delegating is inconvenient, it is skipped —
+and nothing notices, because the output looks the same either way.
+
+So the roles are separated by **what each session can do**, not by what it is
+asked to do. Every rule below that matters is enforced by an absent tool or a
+denied permission. Where something cannot be enforced, it is named as a limit
+rather than rewritten as a stronger instruction.
+
+## The two roles
+
+| | `kbqa-collect` | `kbqa-check` |
+|---|---|---|
+| tools | `Task`, `Agent`, `Read` | `Bash`, `Read` |
+| can fetch | **no** — must delegate to `fetcher` | no |
+| can write | **no** — must delegate to `row-writer` | no |
+| can run commands | **no** | yes, to run the gates |
+| can read verdicts | **no** — denied | yes |
+
+`kbqa-collect` holds no `WebFetch`, no `Write` and no `Bash`. It physically
+cannot collect; it can only delegate to the `fetcher` and `row-writer`
+subagents, which hold complementary halves of the job — the fetcher has the
+network and no reason to interpret, the row-writer has the capture and no
+network. Role separation stops being a rule the orchestrator must remember and
+becomes a fact about its tool list.
+
+`kbqa-check` holds no `Edit` and no `Write`. It cannot modify a gate, a capture
+or a row.
 
 ## Install
 
 ```
+<estate>/.claude/skills/kbqa-collect/SKILL.md
 <estate>/.claude/skills/kbqa-check/SKILL.md
-<estate>/.claude/skills/kbqa-check/settings-snippet.json
+<estate>/.claude/agents/fetcher.md
+<estate>/.claude/agents/row-writer.md
 ```
 
-Then merge `settings-snippet.json` into `<estate>/.claude/settings.json`. If
-that file already has a `permissions.deny` list, append the entries rather than
-replacing it.
+## Settings — the two snippets are mutually exclusive
 
-## What the skill does
+Each skill ships a `settings-snippet.json`, and **they cannot both be active in
+one settings file**: the collecting role is denied reading `_qa/`, and the
+checking role must read it.
 
-It gives an agent the correct procedure — verify the validator, run the report
-cycle, read the Coverage section, route findings by class — and the boundary it
-must not cross. It also carries the three things the gates cannot see, so a
-clean run is never reported as more than it is.
+Permission denies are session-wide, so pick per session:
 
-## Why the tool-list and the deny rules exist
+- a machine or checkout used for collecting merges
+  `kbqa-collect/settings-snippet.json`
+- one used for checking merges `kbqa-check/settings-snippet.json`
 
-The skill declares `allowed-tools: Bash, Read`. It has **no `Edit` and no
-`Write`.** An agent working under it cannot modify the validator, a capture, or
-a row, because the tools to do so are absent — not because the file asks it not
-to.
+Both deny the same bypass classes — writes into an installed `kbqa`, `pip` in
+any form, `.git/hooks`, `.github/workflows`, and `--no-verify` — plus the
+settings file itself, so the boundary cannot rewrite itself. The collecting
+snippet adds the `_qa/` read denies.
 
-That covers the skill's own execution. `settings-snippet.json` covers the rest
-of the session, and it denies four classes of thing:
+If you keep one settings file and a human carries findings between sessions,
+use the **checking** snippet and rely on the human. Say that is what you are
+doing; do not describe the read-deny as being in force when it is not.
 
-| denied | why |
-|---|---|
-| writes into `site-packages/kbqa`, `dist-packages/kbqa`, any `kb-qa/` checkout | editing the gate that is failing is the failure this package exists to catch |
-| `pip` in any form | reinstalling or `pip install -e` swaps the pinned validator for an editable one, which is the same act by another route |
-| `.git/hooks/**`, `.github/workflows/**` | the pre-push hook and the CI workflow are the enforcement. An agent that can edit them can switch the checking off |
-| `--no-verify` on push and commit | bypassing the hook is meant to be a deliberate human act, not an agent's convenience |
+## What capability cannot reach
 
-`.claude/skills/**` and `.claude/settings.json` are denied too, so the boundary
-cannot rewrite itself.
+Three limits, named so the enforcement is not mistaken for completeness.
 
-## The limit, stated plainly
+**A subagent's tools are its own.** The `fetcher` holds `WebFetch` because its
+definition grants it. Whether a session-level restriction also suppresses a
+subagent's declared tools depends on the runtime, not on this package. **Verify
+once** on your setup: ask a collecting session to fetch a URL directly and
+confirm it cannot, then confirm the `fetcher` subagent still can.
 
-This is **level 3** in the spec's §0 table — capability-denied, therefore
-tamper-*evident* and inconvenient to bypass. It is not tamper-proof:
+**The capture is what the fetcher's tool returned, not necessarily what the
+server sent.** A fetch tool that converts or summarises produces a capture whose
+text differs from the page. Quotes then match the capture, G3 passes, and the
+text is not what a reader sees. Verify once per fetch mechanism by comparing one
+captured sentence against the live page. No gate can detect this.
 
-- `settings.json` is a file in the estate a human can edit, and an agent running
-  outside this skill may have tools this skill does not.
-- The pinned manifest check in §0 of the skill detects a swapped validator
-  **after** the fact, not before.
+**Nothing checks that a quote supports its claim.** G3 verifies the quote is
+real and on the page it cites. That is all it verifies.
 
-Only level 4 closes it — CI re-running the gates from a pinned tag, on
-infrastructure the collecting agent cannot reach. On a free GitHub plan a
-private repo cannot require that status check, so the estate sits at level 3½:
-the evidence is produced, and it works because a human reads it. See
-`ci/estate-qa.yml` for what that costs and how to fix it.
+## Trust level
 
-## Keeping the pin current
+This is **level 3** — capability-denied: tamper-evident and inconvenient to
+bypass, not tamper-proof. `settings.json` is a file a human can edit, and the
+pinned manifest check in the checking skill detects a swapped validator after
+the fact rather than before. Only CI re-running the gates from a pinned tag, on
+infrastructure the collecting session cannot reach, closes that — and on a free
+plan a private repo cannot require that check, which is why the estate sits at
+level 3½ and why a human reading the verdicts is load-bearing.
 
-The skill pins `6.1.0` and its manifest SHA. Both must be updated together on
-every kbqa release, in the same commit that tags it — a stale pin makes the
-§0 check fire on a legitimate upgrade, and an agent that learns to ignore that
-check has lost the one signal that a validator was swapped.
+## Keeping the pins current
+
+`kbqa-check/SKILL.md` pins the version and the manifest SHA.
+`tests/test_skill_pin.py` fails the release if either goes stale, if either
+skill gains a writing tool, or if a deny rule is dropped.
 
 ```bash
 python3 -m kbqa --version
