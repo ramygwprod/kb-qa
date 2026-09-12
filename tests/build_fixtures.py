@@ -45,7 +45,7 @@ def row(**kw):
     # `id` MUST serialise first: the §G2 naive cross-check is `grep -c '^{"id"'`,
     # so a row that does not start with {"id" is invisible to it.
     base = {
-        "id": "acme.widgets",
+        "id": "widgets",
         # Follows the contract rather than pinning a literal: a fixture that
         # hardcodes a version silently rots into testing a schema nobody ships.
         "schema_version": SCHEMA_VERSION,
@@ -66,7 +66,7 @@ def row(**kw):
 
 ROW_OVERVIEW = row()
 ROW_SYNTAX = row(
-    id="acme.widgets.syntax",
+    id="widgets.syntax",
     vendor_term="Widget Syntax",
     what_it_does="Every widget declares a type field.",
     source_url=SYNTAX,
@@ -226,7 +226,7 @@ def build():
     write("bad_id_pattern", {
         "_capture-widgets.raw.txt": CAPTURE,
         "_collect-widgets-staging.md": staging([
-            row(id="Acme_Widgets"),
+            row(id="Widgets Overview"),
             ROW_SYNTAX,
         ]),
     })

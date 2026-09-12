@@ -18,7 +18,7 @@
 # visible and inconvenient, which is enough WHEN A HUMAN READS THE VERDICTS."
 # The whole design rests on that clause here. Three things support it:
 #
-#   1. `@v2.1.0` below is a TAG, not a branch. The gates cannot be changed in
+#   1. `@v5.0.0` below is a TAG, not a branch. The gates cannot be changed in
 #      the same push as the data they judge.
 #   2. G6 reports batches that were never checked, or checked and then edited.
 #      Skipping the gates is therefore visible after the fact — and that check
@@ -54,7 +54,7 @@ jobs:
         # validator is published.
         run: |
           pip install --upgrade pip
-          pip install "git+https://github.com/ramygwprod/kb-qa.git@v2.1.0"
+          pip install "git+https://github.com/ramygwprod/kb-qa.git@v5.0.0"
           python -m kbqa --manifest
 
       - name: Estate-wide integrity (G6)

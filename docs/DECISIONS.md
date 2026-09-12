@@ -155,19 +155,22 @@ wrong once.
 | `vendor_category` | 1 value | **622 distinct** | free text, not an enum |
 | `plan_gating` | 1 value | **133 distinct** | free text, not an enum |
 
-Had these been frozen as single-value enums from the Intercom sample, they would
+Had these been frozen as single-value enums from the first batch observed, they would
 now reject ~750 legitimate values. Keep them `Optional[str]`.
 
 ### Where they ARE enums, and can be constrained in v3
 
 | field | distinct | values |
 |---|---|---|
-| `node_kind` | 11 | CERTIFICATION, FEATURE, HEADING, MODULE, PLATFORM, PRODUCT, SERVICE, SOLUTION, SUITE, TOOL, UNCLASSIFIED |
-| `deployment` | 8 | air-gapped, cloud, cloud-saas, hybrid, on-prem, unknown, vendor-managed — **plus** `cloud, on AWS infrastructure` |
-| `vendor_category_source` | 8 | assignment-slug, breadcrumb, nav, none, portfolio-taxonomy, self-classification, url-path — **plus** `breadcrumb: 1. Communications APIs` |
+| `node_kind` | 11 | short, enum-like tokens |
+| `deployment` | 8 | mostly short tokens, **plus** one free-text elaboration |
+| `vendor_category_source` | 8 | method names, **plus** one free-text elaboration |
 
-Both marked entries are free text leaking into an otherwise clean enum: one row
-elaborating where the others classify. Constraining these would catch that.
+Both marked entries are free text where the others are tokens — one row
+elaborating where the others classify.
+
+⚠ Values are described, not listed. Writing down one collection's vocabulary
+would anchor it as canonical, which is the error D-005 rules against.
 
 ### Two defects in fields ALREADY in the contract
 
@@ -188,7 +191,7 @@ violations.
 **32 fields appear in rows and not in the contract. Seventeen of them hold two
 or fewer distinct values across the entire estate:**
 
-`id_prefix` (vonage) · `vendor` (Vonage) · `round` (1a) · `region` (eu1, us1) ·
+`id_prefix` · `vendor` · `round` (1a) · `region` (eu1, us1) ·
 `language_count_observed` (89) · `undisclosed_amount` (True) ·
 `prior_tree_mechanism` · `locale_scope` (*"en-in only — no English original"*) ·
 `limit` (*"values true/false; default value true"*) · `node_count` ·

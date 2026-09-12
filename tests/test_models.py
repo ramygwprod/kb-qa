@@ -1,4 +1,4 @@
-"""The v3 contract: strict about our fields, verbatim about the vendor's.
+"""The contract: universal core, profile framework, verbatim subject fields.
 
 The load-bearing property is that BOTH halves still hold. It is easy to open a
 schema up and lose the guarantee that made it worth having; it is equally easy
@@ -8,11 +8,16 @@ tests pin both edges.
 
 import pytest
 
-from kbqa.models import DepthLevel, EvidenceGrade, Row, SCHEMA_VERSION
-from kbqa.vendor_fields import ANNOTATION, BATCH_LEVEL, PROVENANCE, REGISTRY, VERBATIM
+from kbqa.extensions import ANNOTATION, BATCH_LEVEL, PROVENANCE, VERBATIM
+from kbqa.models import CoreRow, SCHEMA_VERSION
+from kbqa.profile import active, row_model
+from kbqa.profiles.vendor_catalogue import DepthLevel, EvidenceGrade
+
+Row = row_model()
+REGISTRY = active().extensions
 
 CORE = dict(
-    id="acme.widgets",
+    id="widgets.overview",
     vendor_term="Widgets",
     what_it_does="Compose reusable UI blocks.",
     source_url="https://docs.acme.test/widgets",
@@ -50,7 +55,7 @@ def test_the_rejection_says_how_to_resolve_it():
     with pytest.raises(Exception) as e:
         row(some_new_idea="x")
     msg = str(e.value)
-    assert "vendor_fields.py" in msg
+    assert "profile" in msg, "the refusal must name where to register the field"
     assert "stop emitting it" in msg
 
 
@@ -66,7 +71,8 @@ def test_registered_field_values_are_never_constrained():
     An enum drawn from the vendors collected first would reject the next
     vendor's vocabulary as invalid — editing evidence to fit our model.
     """
-    for value in ["PLATFORM", "SOMETHING_NOBODY_HAS_SEEN", "cloud, on AWS infrastructure"]:
+    for value in ["A_SHORT_TOKEN", "SOMETHING_NOBODY_HAS_SEEN",
+                  "a long free-text elaboration the vendor chose to write"]:
         assert row(node_kind=value).node_kind == value
 
 
@@ -119,10 +125,10 @@ def test_an_unknown_evidence_grade_is_still_rejected():
 
 
 @pytest.mark.parametrize("ident", [
-    "sinch.products.net.a2p_monetization",   # underscore — 857 rows failed on this
-    "vonage",                                # single segment — 47 rows failed
+    "products.net.a2p_monetization",  # underscore — 857 rows failed on this
+    "overview",                      # single segment — 47 rows failed
     "a.b.c.d.e.f",                           # six segments, as the estate uses
-    "acme.widgets-pro.v2",                   # hyphens and digits still fine
+    "widgets-pro.v2",                # hyphens and digits still fine
 ])
 def test_real_id_shapes_are_accepted(ident):
     """Regression: 904 rows rejected by an invented id pattern.
@@ -133,7 +139,18 @@ def test_real_id_shapes_are_accepted(ident):
     assert row(id=ident).id == ident
 
 
-@pytest.mark.parametrize("ident", ["Acme.Widgets", "acme widgets", "acme..widgets", ""])
+@pytest.mark.parametrize("ident", ["btp-cockpit", "a-b.c-d", "x_y-z"])
+def test_hyphen_is_allowed_in_the_first_id_segment(ident):
+    """Regression: `_` was allowed in segment one and `-` was not.
+
+    `x_y` passed while `x-y` failed — 47 rows rejected over a distinction with
+    no reason behind it. The third time this pattern refused real ids for an
+    arbitrary rule.
+    """
+    assert row(id=ident).id == ident
+
+
+@pytest.mark.parametrize("ident", ["Widgets", "widgets overview", "widgets..pro", ""])
 def test_malformed_ids_are_still_rejected(ident):
     """Widened is not unconstrained.
 
@@ -171,16 +188,16 @@ def test_aliases_point_at_a_field_that_exists():
 
 
 def test_no_registered_field_shadows_a_core_field():
-    """A vendor field with a core field's name would silently take precedence."""
+    """An extension named like a core field would silently take precedence."""
     core = set(Row.model_fields)
     clashes = sorted(set(REGISTRY) & core)
     assert not clashes, f"registered vendor fields collide with core fields: {clashes}"
 
 
 def test_aliases_are_discoverable_from_the_core_field():
-    from kbqa.vendor_fields import aliases_of
+    from kbqa.extensions import aliases_of
 
-    mech = aliases_of("mechanism")
+    mech = aliases_of("mechanism", REGISTRY)
     assert "mechanism_raw" in mech
     assert "outcome_raw" not in mech
 

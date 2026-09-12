@@ -1,7 +1,7 @@
 """Format detection across the three serialisations the estate contains.
 
 These exist because of a real failure. The parser recognised a ```json fence
-and assumed the body was a JSON array. Sinch writes one object per line inside
+and assumed the body was a JSON array. One collector era writes one object per line inside
 that fence, which is not valid JSON as a whole, so `json.loads` failed with
 "Extra data" and the batch was reported as **zero rows** — silently, on the only
 nine batches in the estate that had captures and could therefore be grounded at

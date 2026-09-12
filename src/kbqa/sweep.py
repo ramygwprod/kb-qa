@@ -29,7 +29,7 @@ from typing import Dict, List, Optional, Tuple
 from . import __version__
 from .gates import g2_conformance, g3_grounding
 from .manifest import MANIFEST_SHA256
-from .models import Row
+from .profile import row_model
 from .parsing import parse_staging
 from .verdict import PASS, utc_now_iso
 
@@ -118,7 +118,7 @@ def audit_batch(staging: Path, root: Optional[Path] = None, depth: int = 2) -> d
         if r.obj is None:
             continue
         try:
-            Row(**r.obj)
+            row_model()(**r.obj)
         except Exception:  # noqa: BLE001 — pydantic raises many shapes
             bad += 1
     rec["schema_violations"] = bad
@@ -196,7 +196,7 @@ def field_distribution(stagings: List[Path], cap: int = 40) -> Dict[str, dict]:
         entry = {
             "rows": seen[field],
             "distinct": len(counter),
-            "in_contract": field in Row.model_fields,
+            "in_contract": field in row_model().model_fields,
         }
         if long_valued[field]:
             entry["values_too_long_to_summarise"] = long_valued[field]

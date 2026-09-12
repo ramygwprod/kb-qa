@@ -259,11 +259,11 @@ def test_vendor_comes_from_estate_position_not_the_parent_folder(tmp_path):
     from kbqa.sweep import vendor_of
 
     root = tmp_path / "estate"
-    nested = root / "kk" / "Zendesk" / "_to_delete" / "_collect-x-staging.md"
-    flat = root / "kk" / "Zendesk" / "_collect-x-staging.md"
+    nested = root / "container" / "Acme" / "_to_delete" / "_collect-x-staging.md"
+    flat = root / "container" / "Acme" / "_collect-x-staging.md"
 
-    assert vendor_of(nested, root) == "Zendesk"
-    assert vendor_of(flat, root) == "Zendesk"
+    assert vendor_of(nested, root) == "Acme"
+    assert vendor_of(flat, root) == "Acme"
 
 
 def test_vendor_depth_is_configurable(tmp_path):
@@ -271,8 +271,8 @@ def test_vendor_depth_is_configurable(tmp_path):
     from kbqa.sweep import vendor_of
 
     root = tmp_path / "estate"
-    p = root / "Sinch" / "_collect-x-staging.md"
-    assert vendor_of(p, root, depth=1) == "Sinch"
+    p = root / "Borax" / "_collect-x-staging.md"
+    assert vendor_of(p, root, depth=1) == "Borax"
 
 
 def test_excluded_batches_are_named_not_silently_dropped(estate):
@@ -280,8 +280,8 @@ def test_excluded_batches_are_named_not_silently_dropped(estate):
 
     It becomes indistinguishable from one that was never collected.
     """
-    root = estate(Zendesk="good")
-    stg = root / "Competitors" / "Zendesk"
+    root = estate(Acme="good")
+    stg = root / "Competitors" / "Acme"
     (stg / "_to_delete").mkdir()
     for p in list(stg.iterdir()):
         if p.is_file():

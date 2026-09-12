@@ -549,3 +549,25 @@ def test_every_blocking_gate_has_a_proven_failure():
         assert marker_fail in source, f"no failing assertion for {gate}"
     # G5 must never be asserted to fail.
     assert "g5_bundles.run" in source
+
+
+def test_batch_metadata_in_the_rows_block_is_not_a_malformed_row(fx):
+    """Regression: an object with no identifying fields reported 6 defects.
+
+    Batch metadata sitting inside the rows fence carries `batch`, `vendor`,
+    `node_count`… and none of `id`, `source_url`, `source_quote`. Reporting it
+    as six missing core fields says the ROWS are malformed, which is untrue of
+    them, and sends a maker hunting a defect that is not there.
+    """
+    import json
+
+    d = fx("good")
+    staging = d / STAGING
+    meta = {"batch": "widgets", "vendor": "Acme", "node_count": 2, "round": "1a"}
+    staging.write_text(
+        staging.read_text() + "\n" + json.dumps(meta) + "\n", encoding="utf-8")
+
+    v, _ = g2_conformance.run(["--staging", str(staging)])
+    assert "non_row_object" in codes(v)
+    assert "schema_violation" not in codes(v), "the real rows are unaffected"
+    assert len([f for f in v.findings if f.code == "non_row_object"]) == 1

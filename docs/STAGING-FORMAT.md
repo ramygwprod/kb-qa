@@ -118,29 +118,29 @@ declaration. The other two serialisations are equally valid; see above.
 
 ```
 ---
-code: SIN-1a
-entity: Sinch
-batch: functions-guides
-scope: The 8 Sinch Functions "Guides" pages under
-  https://developers.sinch.com/..., fetched as .md.
+code: EX-1a
+entity: <vendor>
+batch: guides
+scope: The 8 guide pages under
+  https://docs.example.test/guides/, fetched as .md.
   Fixed URL list, no link-following.
 access_date: 2026-08-23
 status: draft
-capture_file: _capture-functions-guides.raw.txt
+capture_file: _capture-guides.raw.txt
 ---
 
-# Sinch — Functions Guides
+# <vendor> — guides batch
 
 ## Per-page declaration
 
 | page | items emitted | complete? |
 |---|---|---|
-| https://developers.sinch.com/functions/guides/a | 14 | yes |
-| https://developers.sinch.com/functions/guides/b | 18 | yes |
+| https://docs.example.test/guides/a | 14 | yes |
+| https://docs.example.test/guides/b | 18 | yes |
 
 ```json
-{"id": "sinch.functions.guides.a", "vendor_term": "…", …}
-{"id": "sinch.functions.guides.b", "vendor_term": "…", …}
+{"id": "vendor.guides.a", "vendor_term": "…", …}
+{"id": "vendor.guides.b", "vendor_term": "…", …}
 ```
 ```
 

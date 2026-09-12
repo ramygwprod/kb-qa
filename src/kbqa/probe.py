@@ -32,7 +32,7 @@ import statistics
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from .models import Row
+from .profile import row_model
 
 # Fields whose values are contract enums. Showing these is safe: they describe
 # the schema, not the vendor. Everything else is reported by shape alone.
@@ -212,7 +212,7 @@ def probe_staging(path: Path) -> List[str]:
             for k, v in obj.items():
                 by_field.setdefault(k, []).append(v)
 
-        contract = set(Row.model_fields.keys())
+        contract = set(row_model().model_fields.keys())
         found = set(by_field)
 
         out.append(f"-- fields across {len(parsed)} rows --")
@@ -220,7 +220,8 @@ def probe_staging(path: Path) -> List[str]:
             mark = " " if name in contract else "*"
             out.append(f" {mark} {name:<24} {_describe_field(name, by_field[name])}")
         out.append("")
-        out.append("  * = not in the Row contract (would FAIL G2 under extra='forbid')")
+        out.append("  * = neither a core field nor a registered extension "
+                   "in the active profile — would FAIL G2")
         out.append("")
 
         missing = sorted(f for f in contract if f not in found)

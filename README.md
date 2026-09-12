@@ -61,6 +61,22 @@ python -m kbqa g3 --staging <f> --capture <f> \
 Exit **2 means DECLINED and nothing else.** A usage error exits 1, never 2 — a
 typo must not be readable as a permission decision.
 
+## Profiles — one tool, any domain
+
+```bash
+python -m kbqa --profiles
+python -m kbqa --profile <name> <command>
+```
+
+The contract is three layers: a **universal core** that makes any claim
+checkable, a **profile** holding one programme's analytical framework, and an
+**extension registry** for the subject's own vocabulary. File naming, capture
+marker syntax and the id pattern are profile conventions, not constants.
+
+Adding a domain is a new module under `src/kbqa/profiles/`. No gate changes —
+`tests/test_domain_agnostic.py` proves it by running the real gates against a
+compliance-posture profile with different fields, file names and markers.
+
 ## Report — the checker's output to the maker
 
 ```bash
@@ -106,11 +122,11 @@ it rather than reads it.
 python -m kbqa probe --staging <f> [--capture <f>]
 ```
 
-The staging format the gates read is **inferred from a specification, not
-observed** — this package was built with no access to the estate it validates.
-The probe closes that gap without reopening it: it reports field names, value
-types, string lengths, and marker syntax, then says whether the shipped parser
-agrees with the file.
+The gates were built with no access to the corpus they validate, so the formats
+were first inferred from a specification and then corrected against reality. The
+probe is how that correction happens without reopening the gap: it reports field
+names, value types, string lengths and marker syntax, then says whether the
+shipped parser agrees with the file.
 
 It never reports quotes, URLs, vendor terms, or free text. That is a tested
 guarantee, not an intention — `tests/test_probe.py` fails if row content reaches
@@ -139,7 +155,7 @@ G5 (advisory) ──> merge to GOLD ──> G6
 .venv/bin/python -m pytest tests/ -q
 ```
 
-51 tests. Every blocking gate is proven to **fail** on a fixture built to break
+189 tests. Every blocking gate is proven to **fail** on a fixture built to break
 it — a gate that has never failed has not been tested.
 
 Fixtures are **generated, not hand-edited**:
