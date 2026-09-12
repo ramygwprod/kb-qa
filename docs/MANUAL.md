@@ -357,6 +357,208 @@ The output is designed to be pasted to someone who must not see the data.
 
 ---
 
+### 5.7 · Pipeline runbook
+
+`$C` = corpus root · `$D` = `$C/<container>/<Subject>` · `$B` = batch name.
+
+```bash
+C=/path/to/corpus; D=$C/Competitors/Example; B=widgets
+```
+
+**Who acts** — `P` planner session · `F` fetcher subagent · `R` row-writer
+subagent · `H` human decision.
+
+| # | Action | Accept when | Error | Fix |
+|---|---|---|---|---|
+| 1 | **P** `python3 -m kbqa g0 --host <host> --out $D` | exit 0 | `site_wide_disallow` (exit 2) | → **A** |
+| | | | `robots_unreachable` (exit 1) | Wait, re-run step 1. If it persists, → **A** |
+| 2 | **F** → **B**, targeting the subject's index page | `_denominator-*.md` exists, non-empty | no file | Re-run **B** |
+| 3 | **P** list URLs **from the denominator only** | a fixed list per batch | — | No link-following, no URL construction |
+| 4 | **F** → **C** | receipt has path, bytes, sha256, URL list | partial/failed fetch | Re-run **C** |
+| 5 | **R** → **D** | `$D/_collect-$B-staging.md` exists | R asks to fetch | R has no `WebFetch`. Add the URL to step 3's list, re-run **C**, then **D** |
+| 6 | **P** `python3 -m kbqa report --vendor-dir $D --batch $B --vendor <S> --log $C/_qa-log.jsonl` | prints `CLEAR`, exit 0 | anything below | Open `$D/_qa/$B.report.md` |
+| 7 | ↳ G1 | `capture_blocks` > 0 | `capture_missing` · `capture_empty` · `marker_unbalanced` · `duplicate_page_block` | Re-run **C**, then step 6 |
+| | | | `capture_hash_absent` · `no_declared_pages` | → **E** |
+| | | | `capture_hash_mismatch` · `capture_not_before_staging` | Re-run **D** (rows came from different bytes), then step 6 |
+| | | | `page_not_in_capture` | Add that URL to step 3's list → **C** → **D**; *or* delete the rows citing it |
+| 8 | ↳ G2 | `rows` == `naive_rows`, `failed` 0 | `schema_violation` | → **F** |
+| | | | `non_row_object` | Move that object's keys into the frontmatter block; delete the line |
+| | | | `duplicate_id` | → **G** |
+| | | | `row_unparseable` | Fix the JSON on the line the report names |
+| | | | `zero_rows` · `parser_disagrees_with_naive_count` | → **H** (tooling, not data) |
+| 9 | ↳ G3 | `grounded` == `rows` | `quote_not_in_capture` · `quote_from_wrong_page` | → **I** |
+| | | | `capture_has_no_page_blocks` | Re-run **C** with a marker-writing fetcher, then step 6 |
+| | | | `url_not_in_capture` | Same as `page_not_in_capture`, row 7 |
+| | | | `no_source_quote` · `no_source_url` | → **D** for those rows; if the page does not support the claim, delete the row |
+| 10 | **P** `python3 -m kbqa g4 --denominator $D/_denominator-*.md --rows $D/_collect-*-staging.md --stops $D/_stop-conditions.md` | exit 0, `without_row` 0 | `index_item_without_row` | Add to step 3's list and collect it, *or* → **A** for that URL |
+| | | | `stop_condition_without_reason` | → **A** |
+| 11 | **P** `python3 -m kbqa g5 --rows $D/_collect-*-staging.md` | always exit 0 | `term_at_multiple_urls` | Advisory. Record as an open question; do **not** infer a relationship |
+| 12 | **P** merge rows into `$D/feature-tree.md` | `proof:` count == rows in file | `proof_count_mismatch` | Set `proof:` to the actual count |
+| 13 | **P** `python3 -m kbqa g6 --root $C` | exit 0 | `batch_unchecked` · `verdict_stale` | Run step 6 for each batch named |
+| | | | `role_collapse` | → **J** |
+| | | | `bronze_modified` · `bronze_touched_after_verdict` | Re-run **C** into a new dated file; re-run step 6 |
+| | | | `manifest_mismatch` | → **K** |
+
+---
+
+#### Procedures
+
+**A · Record a stop**
+
+```bash
+cat >> "$D/_stop-conditions.md" <<EOF
+- <url or label>: <why, specifically — 404 on 2026-09-12, login wall, superseded by X>
+EOF
+```
+
+"We stopped" fails G4. State what was observed.
+
+**B · Fetcher — denominator**
+
+Spawn the `fetcher` subagent:
+
+> Fetch `<index URL>`. Write it verbatim to `$D/_denominator-<surface>-<today>.md`
+> as markdown links, one index item per line. Return a receipt only: path,
+> bytes, item count.
+
+**C · Fetcher — batch capture**
+
+> Fetch exactly these URLs: `<list>`. Write verbatim page text to
+> `$D/_capture-$B.raw.txt`, each page wrapped in
+> `=====BEGIN <url>=====` … `=====END <url>=====`. Never fix typos, normalise
+> whitespace, unwrap lines, or omit sections. Return a receipt only: capture
+> path, bytes, `shasum -a 256` of the capture, the URLs actually fetched, and
+> any failures.
+
+**D · Row-writer — staging**
+
+> Your only source is `$D/_capture-$B.raw.txt`. You cannot fetch. Write
+> `$D/_collect-$B-staging.md`: frontmatter with `batch`, `vendor`,
+> `source_capture`, `source_capture_sha256: <sha from the receipt>`,
+> `pages:` listing `<URLs from the receipt>`, `fetched_by_this_agent: false`.
+> Then one JSON object per line, `id` first. Quote character-for-character from
+> the capture including typos. Where the capture does not say, write `unknown`.
+> Return a receipt only: path, row count.
+
+**E · Add the capture hash and page list**
+
+```bash
+shasum -a 256 "$D/_capture-$B.raw.txt" | cut -d' ' -f1
+grep -oE '^=====BEGIN (.+)=====$' "$D/_capture-$B.raw.txt" | sed 's/=====BEGIN //; s/=====$//'
+```
+
+Put the first into frontmatter as `source_capture_sha256:` and the second as a
+`pages:` list (or a markdown table of page URLs — both are read).
+
+⚠ Do this from the **fetcher's receipt** when collecting. Deriving them from the
+capture afterwards makes G1 ask whether the capture matches itself.
+
+**F · A schema violation**
+
+Find the field and error type:
+
+```bash
+python3 -c "
+import json,sys
+sys.path.insert(0,'src')
+from pathlib import Path
+from kbqa.parsing import parse_staging
+from kbqa.profile import row_model
+from pydantic import ValidationError
+M=row_model()
+for r in parse_staging(Path('$D/_collect-$B-staging.md')).rows:
+    if not r.obj: continue
+    try: M(**r.obj)
+    except ValidationError as e:
+        for x in e.errors(): print(r.line_no, x['type'], '.'.join(map(str,x['loc'])))
+" | sort -k2 | uniq -c -f1
+```
+
+Then **one** of:
+
+- **the row is wrong** → correct it at the line number given
+- **the field is the subject's own** → register it in the profile:
+
+  ```python
+  # src/kbqa/profiles/<profile>.py, in EXTENSIONS
+  "their_field": ext(VERBATIM, None,
+                     "What the subject means by it, in one sentence."),
+  ```
+
+  Then bump `SCHEMA_VERSION`, add a `DECISIONS.md` entry, and release.
+- **the contract is wrong** → same, but change `models.py` or the profile's Row
+
+**G · A duplicate id**
+
+```bash
+grep -n '"id": *"<the id>"' "$D/_collect-$B-staging.md"
+```
+
+Compare the two rows' `source_url`. Different pages describing the same node →
+delete one. Different nodes → give the second a distinct id reflecting its
+position, not a numeric suffix.
+
+**H · Parser disagrees with the file**
+
+```bash
+python3 -m kbqa probe --staging "$D/_collect-$B-staging.md"
+```
+
+Read the final `VERDICT:` line. `DOES NOT MATCH` means `parsing.py` needs
+correcting — not the rows. Output is shape-only and safe to share.
+
+**I · An ungrounded quote**
+
+The report names the row id and line. Then:
+
+```bash
+U='<the row\'s source_url>'
+awk -v u="$U" 'index($0,"=====BEGIN "u"=====")==1,/^=====END /' "$D/_capture-$B.raw.txt"
+```
+
+(Literal string match, not a regex — a URL contains `/` and `.`, which an awk
+pattern would interpret rather than match.)
+
+Read that block and do **one** of:
+
+- replace `source_quote` with text that appears in it verbatim
+- `quote_from_wrong_page` → correct `source_url` to the page the text is on
+- the page does not support the claim → **delete the row**
+
+⛔ Do not search the whole capture for something the quote matches. Scoping to
+the cited page is the entire point of the gate.
+
+**J · Role collapse**
+
+`fetched_by_this_agent: true` means one agent both fetched and wrote rows.
+Clearing the flag hides it. Instead:
+
+```bash
+rm "$D/_collect-$B-staging.md"
+```
+
+Re-run **C** then **D** with the two separate subagents, then step 6.
+
+**K · Manifest mismatch**
+
+```bash
+python3 -m kbqa --version && python3 -m kbqa --manifest | head -1
+grep -h manifest_sha256 "$D"/_qa/*.json | sort -u
+```
+
+Verdicts were produced by different gate code than is installed. Decide which
+version is approved, install it, re-run step 6 for every affected batch. Never
+edit a recorded manifest.
+
+---
+
+**Routing.** A failed gate goes back to the **planner**, never to the executor
+as "try again". The row-writer has `Bash` to write files, not to grade its own
+output.
+
+**Read Coverage first.** The report names gates that did *not* run. A gate that
+did not run has found nothing — not the same as having found nothing wrong.
+
 ## 6 · Command reference
 
 | command | purpose | exit |
