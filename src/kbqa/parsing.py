@@ -17,8 +17,16 @@ import unicodedata
 from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
-BEGIN_RE = re.compile(r"^=====BEGIN (?P<url>.+?)=====\s*$")
-END_RE = re.compile(r"^=====END (?P<url>.+?)=====\s*$")
+def _conv():
+    """Delimiters come from the active profile, not from this module.
+
+    Compiling one programme's marker syntax in here meant a corpus that
+    delimited pages differently parsed to ZERO page blocks — and zero blocks
+    reads as "nothing to check against", not as "wrong syntax". The failure was
+    invisible from inside the programme whose syntax was hardcoded.
+    """
+    from .profile import conventions
+    return conventions()
 
 # §G2 requires a naive cross-check that a broken parser cannot also get wrong.
 # Which naive count is meaningful depends on how rows are serialised, so there
@@ -32,8 +40,7 @@ END_RE = re.compile(r"^=====END (?P<url>.+?)=====\s*$")
 NAIVE_ROW_RE = re.compile(r'^\{"id"')
 NAIVE_KEY_RE = re.compile(r'^\s*"id"\s*:')
 
-FENCE_OPEN_RE = re.compile(r"^\s*```+\s*json\s*$", re.IGNORECASE)
-FENCE_CLOSE_RE = re.compile(r"^\s*```+\s*$")
+
 
 FRONTMATTER_DELIM = "---"
 
@@ -179,14 +186,16 @@ def _declared_pages(fm: dict, lines: List[str], fences) -> Tuple[Tuple[str, ...]
 
 def _find_json_fences(lines: List[str]) -> List[Tuple[int, int]]:
     """Return (open_line, close_line) 1-based pairs for ```json blocks."""
+    conv = _conv()
+    fence_open, fence_close = conv.fence_open_re, conv.fence_close_re
     spans: List[Tuple[int, int]] = []
     open_at: Optional[int] = None
     for i, line in enumerate(lines, start=1):
         if open_at is None:
-            if FENCE_OPEN_RE.match(line):
+            if fence_open.match(line):
                 open_at = i
             continue
-        if FENCE_CLOSE_RE.match(line):
+        if fence_close.match(line):
             spans.append((open_at, i))
             open_at = None
     if open_at is not None:
@@ -346,13 +355,15 @@ def parse_capture(path: Path) -> CaptureParse:
     errors: List[str] = []
     duplicates: List[str] = []
 
+    conv = _conv()
+    begin_re, end_re = conv.begin_re, conv.end_re
     open_url: Optional[str] = None
     open_line = 0
     buf: List[str] = []
 
     for line_no, line in enumerate(text.splitlines(), start=1):
-        begin = BEGIN_RE.match(line)
-        end = END_RE.match(line)
+        begin = begin_re.match(line)
+        end = end_re.match(line)
         if begin:
             url = begin.group("url").strip()
             if open_url is not None:

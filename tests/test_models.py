@@ -1,4 +1,4 @@
-"""The v3 contract: strict about our fields, verbatim about the vendor's.
+"""The contract: universal core, profile framework, verbatim subject fields.
 
 The load-bearing property is that BOTH halves still hold. It is easy to open a
 schema up and lose the guarantee that made it worth having; it is equally easy
@@ -8,8 +8,13 @@ tests pin both edges.
 
 import pytest
 
-from kbqa.models import DepthLevel, EvidenceGrade, Row, SCHEMA_VERSION
-from kbqa.vendor_fields import ANNOTATION, BATCH_LEVEL, PROVENANCE, REGISTRY, VERBATIM
+from kbqa.extensions import ANNOTATION, BATCH_LEVEL, PROVENANCE, VERBATIM
+from kbqa.models import CoreRow, EvidenceGrade, SCHEMA_VERSION
+from kbqa.profile import active, row_model
+from kbqa.profiles.vendor_catalogue import DepthLevel
+
+Row = row_model()
+REGISTRY = active().extensions
 
 CORE = dict(
     id="acme.widgets",
@@ -50,7 +55,7 @@ def test_the_rejection_says_how_to_resolve_it():
     with pytest.raises(Exception) as e:
         row(some_new_idea="x")
     msg = str(e.value)
-    assert "vendor_fields.py" in msg
+    assert "profile" in msg, "the refusal must name where to register the field"
     assert "stop emitting it" in msg
 
 
@@ -172,16 +177,16 @@ def test_aliases_point_at_a_field_that_exists():
 
 
 def test_no_registered_field_shadows_a_core_field():
-    """A vendor field with a core field's name would silently take precedence."""
+    """An extension named like a core field would silently take precedence."""
     core = set(Row.model_fields)
     clashes = sorted(set(REGISTRY) & core)
     assert not clashes, f"registered vendor fields collide with core fields: {clashes}"
 
 
 def test_aliases_are_discoverable_from_the_core_field():
-    from kbqa.vendor_fields import aliases_of
+    from kbqa.extensions import aliases_of
 
-    mech = aliases_of("mechanism")
+    mech = aliases_of("mechanism", REGISTRY)
     assert "mechanism_raw" in mech
     assert "outcome_raw" not in mech
 

@@ -14,7 +14,7 @@ from typing import List, Optional, Tuple
 
 from pydantic import ValidationError
 
-from ..models import Row
+from ..profile import row_model
 from ..parsing import parse_staging
 from ..verdict import FAIL, PASS, Finding, Verdict, input_ref
 from . import EXIT_FAIL, EXIT_PASS
@@ -67,7 +67,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
             findings.append(Finding("row_unparseable", rp.error or "unparseable row", where))
             continue
         try:
-            row = Row.model_validate(rp.obj)
+            row = row_model().model_validate(rp.obj)
         except ValidationError as exc:
             for err in exc.errors():
                 loc = ".".join(str(p) for p in err["loc"]) or "<row>"

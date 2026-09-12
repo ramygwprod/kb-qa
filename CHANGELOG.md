@@ -16,6 +16,60 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [4.0.0] — 2026-09-12
+
+The tool must collect market intelligence in **any** domain, with nothing about
+the subjects already collected constraining what can be collected next. v3 was
+vendor-agnostic but methodology-bound: `mechanism`, `outcome` and `depth_level`
+were in the core, which asserted one analytical framework as how the world is.
+
+### Changed — BREAKING
+
+- **The contract is split by domain.** Three layers now, not two:
+
+  | layer | scope |
+  |---|---|
+  | `models.CoreRow` | universal — `id`, `source_url`, `source_quote`, `access_date`, `evidence_grade`, `confidence`, `broken_source`. What makes ANY claim checkable |
+  | profile | one programme's framework — `mechanism`, `outcome`, `depth_level`, `vendor_term`… swappable |
+  | extensions | the subject's own vocabulary (unchanged from v3) |
+
+  A gate verifying that a quote appears on the page it cites does not care
+  whether the subject is a software vendor, a labour market or a regulator. The
+  gates see a row model and parsed structures; **no gate logic changed.**
+
+- **File naming and capture delimiters are conventions, not constants.**
+  `conventions.py` carries the staging glob, capture template, verdict
+  directory, `=====BEGIN=====` syntax and fence patterns. Compiling these in had
+  a specific consequence: a corpus that delimited pages differently parsed to
+  zero blocks, and **zero blocks reads as "nothing to check against", not as
+  "wrong syntax"** — a green sweep over nothing.
+
+- `vendor_fields.py` → `extensions.py`. The *type* is universal; the *entries*
+  are one programme's schema and moved into its profile.
+
+### Added
+
+- `--profile <name>` and `--profiles` on every command.
+- `kbqa.profiles.vendor_catalogue` — the existing framework, unchanged in
+  behaviour. Existing rows validate exactly as before.
+- **`tests/test_domain_agnostic.py`** — the proof, not the claim. Defines a
+  compliance-posture profile (obligations, jurisdictions, instruments — no
+  feature or mechanism anywhere), with different file names and `<<< PAGE … >>>`
+  markers, and runs the real G1/G2/G3 against it. Asserts grounding still
+  catches invention there, and that no field from the other profile leaked into
+  the core.
+
+  This class of failure is invisible from inside the original domain: every
+  test passes and the tool only breaks when someone tries a second sector.
+
+### Migration
+
+None for rows. `schema_version` moves to 4; rows that omit it take the default.
+
+181 tests.
+
+---
+
 ## [3.0.0] — 2026-09-09
 
 Vendors differ in product structure, naming, depth and scale — genuinely, not

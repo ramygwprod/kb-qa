@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from . import __version__, probe, report, sweep
+from . import __version__, probe, profile, report, sweep
 from .gates import g0_permission, g1_capture, g2_conformance
 from .gates import g3_grounding, g4_completeness, g5_bundles, g6_integrity
 from .manifest import MANIFEST, MANIFEST_SHA256
@@ -26,7 +26,7 @@ GATES = {
     "g6": g6_integrity,
 }
 
-USAGE = """kbqa {version} — validation gates for the vendor-catalogue estate
+USAGE = """kbqa {version} — validation gates for evidence-grounded collection
 
 usage: python -m kbqa <gate> [gate args] [recording args]
 
@@ -42,7 +42,7 @@ gates:
 recording args (optional, apply to every gate):
   --vendor-dir <dir>   write _qa/<batch>.<gate>.json under this directory
   --batch <name>       batch name used in the verdict filename
-  --vendor <name>      vendor name recorded in the log line
+  --vendor <name>      subject name recorded in the log line
   --log <path>         append one line to this _qa-log.jsonl
 
 cycle:
@@ -54,6 +54,10 @@ cycle:
 
 diagnostics:
   probe --staging <f> [--capture <f>]          report file SHAPE, not content
+
+profile (applies to every command):
+  --profile <name>     the analytical framework to validate against
+  --profiles           list available profiles and exit
 
 other:
   --manifest           print the gate manifest and exit
@@ -107,6 +111,28 @@ def split_recording_args(argv: List[str]):
 
 def main(argv: Optional[List[str]] = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+
+    # --profile selects the analytical framework every gate validates against.
+    # Taken before dispatch because it changes what a row IS, not how one gate
+    # behaves — a verdict whose contract is ambiguous is worse than no verdict.
+    if "--profile" in argv:
+        i = argv.index("--profile")
+        if i + 1 >= len(argv):
+            print("--profile needs a name", file=sys.stderr)
+            return 1
+        name = argv[i + 1]
+        try:
+            profile.activate(name)
+        except KeyError as exc:
+            print(str(exc).strip("'\""), file=sys.stderr)
+            return 1
+        del argv[i:i + 2]
+
+    if argv and argv[0] == "--profiles":
+        for n, p in sorted(profile.available().items()):
+            mark = "*" if n == profile.active().name else " "
+            print(f"{mark} {n}\n    {p.description}")
+        return 0
 
     if not argv or argv[0] in ("-h", "--help", "help"):
         print(USAGE)
