@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(**/site-packages/kbqa/**)",
+      "Write(**/site-packages/kbqa/**)",
+      "Edit(**/dist-packages/kbqa/**)",
+      "Write(**/dist-packages/kbqa/**)",
+      "Edit(**/kb-qa/**)",
+      "Write(**/kb-qa/**)",
+      "Edit(.git/hooks/**)",
+      "Write(.git/hooks/**)",
+      "Edit(.github/workflows/**)",
+      "Write(.github/workflows/**)",
+      "Edit(.claude/skills/**)",
+      "Write(.claude/skills/**)",
+      "Edit(.claude/settings.json)",
+      "Write(.claude/settings.json)",
+      "Bash(pip:*)",
+      "Bash(pip3:*)",
+      "Bash(python -m pip:*)",
+      "Bash(python3 -m pip:*)",
+      "Bash(uv pip:*)",
+      "Bash(uv add:*)",
+      "Bash(git push:*--no-verify*)",
+      "Bash(git commit:*--no-verify*)"
+    ]
+  }
+}

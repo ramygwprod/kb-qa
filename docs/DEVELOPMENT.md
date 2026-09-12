@@ -65,6 +65,105 @@ The test for which layer something belongs in:
 | `probe.py` | shape-only diagnostic |
 | `cli.py` | dispatch, `--profile`, recording flags |
 
+### Data flow, end to end
+
+```
+      Bronze (immutable)              Silver (checked)        Gold (merged)
+ ┌──────────────────────────┐   ┌────────────────────┐   ┌─────────────────┐
+ │ _robots-<host>.txt       │   │ _collect-*-        │   │ feature-tree.md │
+ │ _capture-*.raw.txt       │──▶│   staging.md       │──▶│                 │
+ │ _denominator-*.md        │   │ _qa/*.verdict.json │   │  G6 ───────────▶│
+ └──────────────────────────┘   └────────────────────┘   └─────────────────┘
+        ▲ fetcher agent              ▲ row-writer agent        ▲ merger
+        │ network, no row writing    │ no network access       │
+        └── G0 ──────────────────────┴── G1 G2 G3 G4 G5 ───────┘
+
+   parsing.py ──▶ StagingFile{frontmatter, rows, declared_pages}
+              ──▶ Capture{pages: {url: text}}
+              ──▶ Denominator{items: [{url, label}]}
+                        │
+                        ▼
+   gates/  (pure: structures in, Verdict out — never write the inputs)
+                        │
+                        ▼
+   verdict.py ──▶ Verdict{gate, status, findings[], manifest_sha256, ...}
+                        │
+             ┌──────────┴──────────┐
+             ▼                     ▼
+       _qa/<b>.verdict.json   report.py ──▶ _qa/<b>.report.md + .report.json
+```
+
+Every arrow is one-directional. No gate writes to Bronze or Silver inputs; the
+only files the package creates are under `_qa/` and the append-only log.
+
+### Gate anatomy
+
+| gate | reads | asks | emits on failure |
+|---|---|---|---|
+| `g0` | network (`robots.txt`) | are we permitted to fetch this host? | exit **2** = DECLINED, and a stored robots artifact |
+| `g1` | staging + capture bytes, mtimes | did this capture exist, unmodified, before these rows? | `capture_missing`, `capture_hash_*`, `capture_not_before_staging`, `marker_unbalanced`, `capture_has_no_page_blocks`, `no_declared_pages` |
+| `g2` | staging | do the rows satisfy the contract? | `schema_violation` (contract breach *and* unregistered field), `duplicate_id`, `zero_rows`, `parser_disagrees_with_naive_count` |
+| `g3` | staging + capture | is each quote verbatim **on the page it cites**? | `quote_not_in_capture`, `quote_from_wrong_page`, `url_not_in_capture` |
+| `g4` | denominator + rows + stops | is every index item covered or explicitly stopped? | `index_item_without_row`, `stop_condition_without_reason` |
+| `g5` | rows | do any rows look like bundled terms? | advisory only — **always exits 0** |
+| `g6` | project root | do verdicts, manifests and the merged tree agree? | `manifest_mismatch`, `verdict_stale`, `batch_unchecked`, `role_collapse`, `proof_count_mismatch` |
+
+Two properties hold across all seven:
+
+**Purity.** A gate takes parsed structures and returns a `Verdict`. It does not
+read the filesystem outside its declared inputs, does not fetch, and does not
+repair. Recording is the CLI's job, behind explicit flags — so a bare gate run
+is side-effect-free and safe to run anywhere.
+
+**Non-tautology.** A gate never computes a value it then verifies. G1 compares
+the capture's sha256 against what the *collector* wrote in frontmatter; if the
+gate computed both sides, it would be checking arithmetic rather than evidence.
+The same reasoning forbids the gate deriving the page list from the capture it
+is validating.
+
+### On-disk contract
+
+```
+<subject-dir>/
+  _robots-<host>-<date>.txt           Bronze · G0 artifact
+  _denominator-<source>-<date>.md      Bronze · the coverage baseline
+  _capture-<batch>.raw.txt             Bronze · page text with BEGIN/END markers
+  _collect-<batch>-staging.md          Silver · frontmatter + rows
+  _stop-conditions.md                  Silver · deliberate non-coverage, with reasons
+  _qa/
+    <batch>.verdict.json               written only with recording flags
+    <batch>.report.md / .report.json
+  feature-tree.md                      Gold · merged, with a proof: count
+_qa-log.jsonl                          append-only run log
+```
+
+Names and marker syntax come from `profile.conventions()`, not from constants —
+a new profile may use entirely different ones without touching a gate.
+
+### Key structures
+
+| type | in | carries |
+|---|---|---|
+| `Conventions` | `conventions.py` | 17 fields: file globs and names (`staging_glob`, `capture_template`, `stops_name`, `gold_name`, `verdict_dir`, `log_name`, …), capture delimiters (`begin_pattern`, `end_pattern`), `id_pattern`, fence patterns |
+| `ExtensionField` | `extensions.py` | NamedTuple: `kind` (`VERBATIM` / `PROVENANCE` / `BATCH_LEVEL` / `ANNOTATION`), `alias_of`, `note` — built by `ext()` |
+| `Profile` | `profile.py` | `name`, `description`, `row_model`, `extensions`, `conventions` |
+| `CoreRow` | `models.py` | the universal fields, `extra="allow"` plus a registry check |
+| `Finding` | `verdict.py` | `code`, `message`, `where` — the observation only |
+| `Verdict` | `verdict.py` | `gate`, `verdict`, `inputs` (paths + hashes), `counts`, `findings`, `extra`; serialises with `MANIFEST_SHA256` |
+| `Remedy` | `report.py` | `kind` (structural / planner / fixable) + remedy text, keyed by finding code |
+
+A `Finding` deliberately carries **no classification.** A gate states what it
+observed; whether that is `structural`, `planner` or `fixable`, and whether it
+is a gap or an issue, is decided in `report.py`, keyed by code. Keeping the
+judgement out of the gate is what stops a gate relabelling its own finding as
+something a maker may edit away.
+
+`extra="forbid"` was **moved, not removed**: `CoreRow` allows unknown keys
+through pydantic and then rejects unregistered ones in a model validator. The
+difference is that the rejection is about the field's **name**, and its value is
+never constrained — which is what lets a subject's own vocabulary survive
+intact. See DECISIONS.md D-005.
+
 ### Why gates never see a profile
 
 A gate takes parsed structures and a row model. It never imports a profile
@@ -318,7 +417,12 @@ each `bad_*` fails for exactly one known reason.
    contract change, with evidence and a reversal condition
 3. Bump `pyproject.toml` **and** `src/kbqa/__init__.py` together
 4. `pytest tests/ -q` green; fixtures regenerate byte-identically
-5. Update pins in `ci/estate-qa.yml` and `ci/estate-pre-push`
+5. Update pins in `ci/estate-qa.yml`, `ci/estate-pre-push`, **and**
+   `skills/kbqa-check/SKILL.md` — the skill pins the version *and* the
+   `manifest_sha256`, and `tests/test_skill_pin.py` fails the release if either
+   is stale. A stale pin fires the skill's tamper check on a legitimate
+   upgrade, and an agent that learns to ignore that check has lost the only
+   signal that a validator was swapped
 6. **Put `Co-Authored-By` in the PR *body*** — squash merges use the body, not
    the commit message. A trailer only in the commit is lost on merge
 7. Merge, wait for the **Merged** badge, *then* resync locally. Resetting before

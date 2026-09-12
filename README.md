@@ -8,7 +8,9 @@ validator**. Implements a private commissioning specification, which is not
 published — nothing here requires it at runtime.
 
 📖 **[docs/MANUAL.md](docs/MANUAL.md)** — user manual: quickstart, workflows for
-operators and maker agents, command and findings reference, trust model.
+operators and maker agents, the full action surface, what a well-formed dataset
+is, findings reference, troubleshooting, and the **Do/Don't boundary** (§11)
+that says what a maker agent may and may not do when a gate fails.
 🔧 **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** — developer guide:
 architecture, adding a domain, invariants, known traps, release process.
 📋 **[CHANGELOG.md](CHANGELOG.md)** · 🧾 **[docs/DECISIONS.md](docs/DECISIONS.md)**
@@ -175,6 +177,28 @@ Fixtures are **generated, not hand-edited**:
 
 CI regenerates them and fails if the committed copies differ. Editing a fixture
 to make a gate pass is the exact failure mode this package exists to catch.
+
+## Skill — how an agent is meant to run this
+
+```
+skills/kbqa-check/SKILL.md
+skills/kbqa-check/settings-snippet.json
+```
+
+The canonical checking skill, for the sessions that *run* the validator against
+an estate. It carries the procedure — verify the manifest, run the report cycle,
+read the Coverage section, route findings by class — and the boundary.
+
+The boundary is a capability, not a request. The skill declares
+`allowed-tools: Bash, Read` — **no `Edit`, no `Write`** — so an agent working
+under it cannot modify a gate, a capture, or a row. The settings snippet closes
+the rest: writes into an installed `kbqa`, `pip` in any form, `.git/hooks`,
+`.github/workflows`, `--no-verify`, and the boundary file itself.
+
+It pins the version and the manifest SHA, and `tests/test_skill_pin.py` fails
+the build if either goes stale — including negative tests proving each check can
+fail. See [skills/README.md](skills/README.md) for what this does and does not
+close.
 
 ## How this was built
 
