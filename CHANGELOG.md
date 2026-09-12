@@ -16,6 +16,33 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.1.0] — 2026-09-13
+
+### Changed
+
+- **`source_url` must be an `http(s)` URL.** `doc:` references were permitted
+  and, by construction, could never appear as a BEGIN marker in a capture — so
+  every `doc:` row failed G3 while looking like a legitimate citation. The
+  alternative remedy, exempting them from G3, would have created a class of
+  claim nobody can check. An internal document is captured like any other page
+  and cited by the URL it was served from. A `doc:` row now fails G2, which is
+  the correct place: the citation is malformed, not ungrounded. D-008.
+
+### Added
+
+- **`agents/fetcher.md` and `agents/row-writer.md` state their output
+  contracts.** Both were eight lines and named none of the frontmatter G1
+  checks, which is why every batch in the estate failed `capture_hash_absent`
+  and `no_declared_pages` — a gap in these files, not in the collector's
+  intent. Written against a real batch: 221 rows, fenced-JSONL, 23 balanced
+  page blocks.
+
+  The fetcher now runs G0 before any fetch, captures the subject's own index as
+  the denominator, and returns a receipt carrying the capture's sha256 and its
+  page list. The row-writer **copies** that hash rather than computing it — it
+  has `Bash` and could, but a hash produced and verified on the same side
+  proves only that a file hashes to its own hash.
+
 ## [6.0.0] — 2026-09-13
 
 ### Removed

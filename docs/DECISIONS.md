@@ -388,3 +388,33 @@ made it structural-only.
 on the subject's identity — none is foreseen, since identity is not a
 structural property — this rule would have to be revisited rather than worked
 around by re-adding a metadata field.
+
+
+## D-008 · A source must be re-fetchable by someone who does not trust us
+
+**Date:** 2026-09-13 · **Version:** 6.1.0
+
+`CoreRow.source_url` accepted `doc:` references. §G3 requires every
+`source_url` to appear as a BEGIN marker in the capture, and a `doc:` reference
+by construction never can — so every such row failed G3 while looking like a
+legitimate citation. The failure was the lesser problem. The obvious remedy —
+exempting `doc:` from G3 — would have created a class of claim nobody outside
+the collecting session can check, which is the single thing the contract exists
+to prevent.
+
+**Ruling.** `source_url` must begin `http://` or `https://`. There is no
+unfetchable reference class. An internal document is not exempt from evidence:
+it is captured like any other page, and cited by whatever stable URL serves it.
+
+**Evidence.** The one verifiable batch probed on 2026-09-13 carried 221 rows
+across 22 distinct `source_url` values, every one an `http(s)` URL, against a
+capture of 23 balanced page blocks. No row in the estate's checkable corpus
+relies on the permission being removed.
+
+**Cost.** Any existing row citing `doc:` now fails G2 rather than G3. That is
+the correct place for it to fail — the citation is malformed, not ungrounded —
+and such a row must be re-sourced against a captured page.
+
+**Reversal condition.** If a subject publishes material that is genuinely
+retrievable but not over HTTP, the rule needs a new scheme with a **capture
+mechanism attached**, never an exemption from grounding.
