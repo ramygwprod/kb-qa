@@ -417,7 +417,12 @@ each `bad_*` fails for exactly one known reason.
    contract change, with evidence and a reversal condition
 3. Bump `pyproject.toml` **and** `src/kbqa/__init__.py` together
 4. `pytest tests/ -q` green; fixtures regenerate byte-identically
-5. Update pins in `ci/estate-qa.yml` and `ci/estate-pre-push`
+5. Update pins in `ci/estate-qa.yml`, `ci/estate-pre-push`, **and**
+   `skills/kbqa-check/SKILL.md` — the skill pins the version *and* the
+   `manifest_sha256`, and `tests/test_skill_pin.py` fails the release if either
+   is stale. A stale pin fires the skill's tamper check on a legitimate
+   upgrade, and an agent that learns to ignore that check has lost the only
+   signal that a validator was swapped
 6. **Put `Co-Authored-By` in the PR *body*** — squash merges use the body, not
    the commit message. A trailer only in the commit is lost on merge
 7. Merge, wait for the **Merged** badge, *then* resync locally. Resetting before
