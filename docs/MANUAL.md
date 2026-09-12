@@ -1,6 +1,6 @@
 # kbqa — product manual
 
-**Version 3.0.0** · for operators and for agents
+**Version 5.0.0** · for operators and for agents
 
 ---
 
@@ -22,7 +22,7 @@ A PASS is worth something only when three things hold together:
 
 | condition | how it is met |
 |---|---|
-| the gates catch what they claim | 171 tests; every blocking gate proven to fail on a purpose-built fixture |
+| the gates catch what they claim | 189 tests; every blocking gate proven to fail on a purpose-built fixture |
 | the gates could not have been edited to pass | installed from a pinned tag of a repo whose CI is enforced |
 | the gates ran against the real files | the parser is confirmed against collector output |
 
@@ -48,7 +48,7 @@ python3 -m venv .venv
 For an estate or CI, install from the pinned tag rather than a branch:
 
 ```bash
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v3.0.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v5.0.0"
 ```
 
 **Always a tag, never a branch.** A branch would let the gates and the data they
@@ -93,33 +93,44 @@ specification. Everything else tests conformance to what we decided.
 **Exit 2 means DECLINED and nothing else.** A usage error exits 1, never 2 — a
 typo must never be readable as a permission decision.
 
-### The contract has two halves
+### The contract has three layers
 
-Vendors differ in product structure, naming, depth and scale — genuinely. A
-vendor with six hierarchy levels and one with three are not two encodings of the
-same tree. So the row contract is split by **owner**:
+Subjects differ in structure, naming, depth and scale — genuinely. So the row
+contract is split by **owner**, and the outer split is by **domain**:
 
-| half | rule | why |
+| layer | rule | who owns it |
 |---|---|---|
-| **core** | strict, enum-validated | ours. `id`, `source_url`, `source_quote`, `access_date`, `evidence_grade`… the fields that make a claim checkable |
-| **vendor fields** | the NAME must be registered in `vendor_fields.py`; the VALUE is never constrained | theirs. Their taxonomy, depth, node kinds, raw wording |
+| **universal core** | strict | everyone. `id`, `source_url`, `source_quote`, `access_date`, `broken_source` — what makes *any* claim checkable |
+| **profile** | strict, but swappable | one programme's analytical framework. For `vendor-catalogue`: `mechanism`, `outcome`, `depth_level`, `evidence_grade`, `confidence` |
+| **extensions** | NAME registered, VALUE never constrained | the subject's own vocabulary |
 
-`extra="forbid"` did not go away — it **moved**. A collector inventing
-`confidence_note` still fails on the first row, and the message names the file
-to register it in. What no longer happens is rejecting a vendor for using a word
-the vendors collected first did not use.
+`extra="forbid"` did not go away — it **moved**. A collector inventing a field
+still fails on the first row, and the message names the profile to register it
+in. What no longer happens is rejecting a subject for using a word the subjects
+collected first did not use.
 
 **Nothing is renamed.** Rows keep the exact keys the collector wrote.
-`alias_of` in the registry records how a field relates to a core one —
-`mechanism_raw` → `mechanism` — without touching either. Renaming would itself
-be the editing this package exists to prevent.
+`alias_of` records how an extension relates to a core field without touching
+either. Renaming would itself be the editing this package exists to prevent.
 
 §G3 already settles the principle for text: *never normalise spelling, because
-vendor typos are evidence.* Structure is evidence by the same argument.
+a subject's typos are evidence.* Structure is evidence by the same argument.
 
-Registry entries are classified `verbatim` (the vendor's own structure),
-`provenance` (how we came to record it), `batch-level` (a batch fact repeated
-per row) or `annotation` (a one-off note — a candidate for consolidation).
+### Profiles
+
+```bash
+python -m kbqa --profiles                    # list
+python -m kbqa --profile <name> <command>    # select
+```
+
+A profile bundles the analytical framework, the extension registry, and the
+**conventions** — file naming, capture marker syntax, id pattern. All are one
+programme's choices, not facts about the world: a corpus that delimits pages
+differently would otherwise parse to zero blocks, and zero blocks reads as
+"nothing to check against", not "wrong syntax".
+
+Adding a domain is a new module under `src/kbqa/profiles/`. No gate changes;
+the gates work against parsed structures and a row model.
 
 ### Findings: kind and nature
 
@@ -154,8 +165,11 @@ kb-qa/
 ├── src/kbqa/
 │   ├── __init__.py                 __version__
 │   ├── __main__.py                 python -m kbqa
-│   ├── models.py                   THE CONTRACT — schema v3 core, strict
-│   ├── vendor_fields.py            the vendor-field registry — names only
+│   ├── models.py                   the UNIVERSAL core — domain-neutral
+│   ├── extensions.py               extension-field type and kinds
+│   ├── conventions.py              file naming, markers, id pattern
+│   ├── profile.py                  profile registry and activation
+│   ├── profiles/                   one module per analytical framework
 │   ├── parsing.py                  readers for staging / capture / denominator
 │   ├── manifest.py                 SHA-256 of every module, computed at import
 │   ├── verdict.py                  Verdict + Finding + JSON writer + log writer

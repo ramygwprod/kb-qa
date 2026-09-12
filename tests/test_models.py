@@ -17,7 +17,7 @@ Row = row_model()
 REGISTRY = active().extensions
 
 CORE = dict(
-    id="acme.widgets",
+    id="widgets.overview",
     vendor_term="Widgets",
     what_it_does="Compose reusable UI blocks.",
     source_url="https://docs.acme.test/widgets",
@@ -125,10 +125,10 @@ def test_an_unknown_evidence_grade_is_still_rejected():
 
 
 @pytest.mark.parametrize("ident", [
-    "acme.products.net.a2p_monetization",   # underscore — 857 rows failed on this
-    "acme",                                  # single segment — 47 rows failed
+    "products.net.a2p_monetization",  # underscore — 857 rows failed on this
+    "overview",                      # single segment — 47 rows failed
     "a.b.c.d.e.f",                           # six segments, as the estate uses
-    "acme.widgets-pro.v2",                   # hyphens and digits still fine
+    "widgets-pro.v2",                # hyphens and digits still fine
 ])
 def test_real_id_shapes_are_accepted(ident):
     """Regression: 904 rows rejected by an invented id pattern.
@@ -139,7 +139,7 @@ def test_real_id_shapes_are_accepted(ident):
     assert row(id=ident).id == ident
 
 
-@pytest.mark.parametrize("ident", ["sap-btp", "a-b.c-d", "x_y-z"])
+@pytest.mark.parametrize("ident", ["btp-cockpit", "a-b.c-d", "x_y-z"])
 def test_hyphen_is_allowed_in_the_first_id_segment(ident):
     """Regression: `_` was allowed in segment one and `-` was not.
 
@@ -150,7 +150,7 @@ def test_hyphen_is_allowed_in_the_first_id_segment(ident):
     assert row(id=ident).id == ident
 
 
-@pytest.mark.parametrize("ident", ["Acme.Widgets", "acme widgets", "acme..widgets", ""])
+@pytest.mark.parametrize("ident", ["Widgets", "widgets overview", "widgets..pro", ""])
 def test_malformed_ids_are_still_rejected(ident):
     """Widened is not unconstrained.
 

@@ -31,7 +31,7 @@ if ! python3 -c "import kbqa" >/dev/null 2>&1; then
   cat >&2 <<'EOF'
 pre-push: kbqa is not installed, so the gates did not run.
 
-  pip install "git+https://github.com/ramygwprod/kb-qa.git@v1.0.0"
+  pip install "git+https://github.com/ramygwprod/kb-qa.git@v5.0.0"
 
 Refusing the push: a hook that silently passes when it cannot check is worse
 than no hook, because it reads as a green light.
