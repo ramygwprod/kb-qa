@@ -1,6 +1,44 @@
-# kbqa — product manual
+# kbqa — user manual
 
-**Version 5.0.0** · for operators and for agents
+**Version 5.0.0** · for operators and for maker agents
+
+Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
+
+---
+
+## 0 · Quickstart
+
+```bash
+pip install --upgrade pip
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v5.0.0"
+python -m kbqa --version          # must print 5.0.0
+```
+
+**Audit a corpus** — needs no captures, changes nothing, answers "what here can
+be checked at all?"
+
+```bash
+python -m kbqa sweep --root <corpus> --field-values
+```
+
+**Check one batch** and produce a report a maker can act on:
+
+```bash
+python -m kbqa report --vendor-dir <corpus>/<Subject> --batch <name> \
+  --vendor <Subject> --log <corpus>/_qa-log.jsonl
+```
+
+Exit 0 means every gate that ran is green. Exit 1 means something failed — read
+`_qa/<batch>.report.md`, starting with the **Coverage** section, which names the
+gates that did *not* run.
+
+**Confirm a file's format without disclosing its contents:**
+
+```bash
+python -m kbqa probe --staging <f> --capture <f>
+```
+
+Everything else in this manual is detail on those four commands.
 
 ---
 
@@ -163,49 +201,7 @@ Conflating these is how "fix the failures" becomes "edit rows until green".
 
 ---
 
-## 4 · Structure
-
-```
-kb-qa/
-├── pyproject.toml
-├── CHANGELOG.md                    release history, SemVer
-├── README.md
-├── src/kbqa/
-│   ├── __init__.py                 __version__
-│   ├── __main__.py                 python -m kbqa
-│   ├── models.py                   the UNIVERSAL core — domain-neutral
-│   ├── extensions.py               extension-field type and kinds
-│   ├── conventions.py              file naming, markers, id pattern
-│   ├── profile.py                  profile registry and activation
-│   ├── profiles/                   one module per analytical framework
-│   ├── parsing.py                  readers for staging / capture / denominator
-│   ├── manifest.py                 SHA-256 of every module, computed at import
-│   ├── verdict.py                  Verdict + Finding + JSON writer + log writer
-│   ├── cli.py                      command dispatch
-│   ├── probe.py                    format diagnostic — shape without content
-│   ├── report.py                   remediation report for the maker
-│   ├── sweep.py                    estate audit — what can be checked at all
-│   └── gates/
-│       ├── g0_permission.py … g6_integrity.py
-├── tests/
-│   ├── build_fixtures.py           fixtures are GENERATED, never hand-edited
-│   ├── conftest.py
-│   ├── fixtures/                   21 fixtures: 1 good, 20 purpose-built failures
-│   ├── test_gates.py  test_cli.py  test_probe.py  test_report.py
-│   ├── test_sweep.py  test_parsing.py  test_models.py
-├── agents/                         role definitions — INSTALL INTO THE ESTATE
-│   ├── fetcher.md                  tools: WebFetch, Write, Read
-│   └── row-writer.md               tools: Read, Write, Bash — NO WebFetch
-├── ci/
-│   ├── estate-qa.yml               copy to <estate>/.github/workflows/qa.yml
-│   └── estate-pre-push             copy to <estate>/.git/hooks/pre-push
-└── docs/
-    ├── MANUAL.md                   this file
-    ├── DECISIONS.md                contract changes, with evidence
-    └── STAGING-FORMAT.md           on-disk formats the gates read
-```
-
-### The estate it validates
+## 4 · The corpus
 
 The container directory's name varies by estate (`Competitors/`, `kk/`, …).
 Every tool discovers batches recursively and derives the vendor from position
@@ -485,56 +481,31 @@ holding, and GitHub Team becomes the cheap answer. See DECISIONS.md D-003.
 
 ---
 
-## 9 · Versioning and release
+## 9 · Versions
 
-### Scheme
+Corpora install from a **tag, never a branch** — a branch would let the gates
+and the data they judge change in the same push.
 
-[Semantic Versioning 2.0.0](https://semver.org/), with one project rule:
+```bash
+pip install --upgrade pip
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v5.0.0"
+```
 
-> **The row contract is part of the public API.** Any change to `models.py` that
-> could make a previously valid row invalid is a MAJOR bump, even if no Python
-> signature changed. A batch that passed yesterday and fails today without the
-> data changing is a breaking change to its consumers.
+> `pip < 21.3` cannot read this project's metadata and installs an empty package
+> named `UNKNOWN-0.0.0` while printing `Successfully installed`. If
+> `python -m kbqa --version` errors after an install that looked fine, that is
+> why: `pip uninstall UNKNOWN`, upgrade pip, reinstall.
 
-| bump | when |
-|---|---|
-| MAJOR | contract change; a gate becomes stricter; a finding code is removed or reclassified |
-| MINOR | a new gate, command, or finding code; a gate becomes more precise without rejecting previously valid rows |
-| PATCH | a fix that changes no verdict on valid data; docs; tests |
-
-### Release process
-
-1. Land all changes on `main` through a PR with both `gates` checks green
-2. Update `CHANGELOG.md` — Keep a Changelog format, newest first, with the
-   evidence for anything breaking
-3. Record contract changes in `docs/DECISIONS.md` with the observation behind
-   them and a reversal condition
-4. Bump `pyproject.toml` and `src/kbqa/__init__.py` together
-5. `pytest tests/ -q` — all green, fixtures regenerate byte-identically
-6. Tag `vMAJOR.MINOR.PATCH` and push the tag
-7. Confirm CI is green **on the tag**, not just on `main` — that is the artifact
-   estates will pin
-8. Move estate pins deliberately, one estate at a time
-
-### Pinning
-
-Estates install from a **tag**. Never a branch. A branch would let the gates and
-the data they judge change in the same push.
-
-Moving a pin is a deliberate act: read the CHANGELOG, expect new findings on
-data that previously passed, and re-run `kbqa sweep` before and after so the
+**Moving a pin is a deliberate act.** Read the CHANGELOG, expect new findings on
+data that previously passed, and run `kbqa sweep` before and after so any
 difference is attributable to the version rather than to the data.
 
-### Compatibility
+After a version bump, G6 reports `manifest_mismatch` once per gate against
+verdicts recorded under the old code. That is tamper-evidence working: re-run
+the gates. Never reconcile by editing a recorded manifest.
 
-`manifest_sha256` in every verdict identifies the exact gate code that produced
-it. Verdicts from different versions are distinguishable, and G6's
-`manifest_mismatch` fires when recorded verdicts came from code other than what
-is installed. That is tamper-evidence, not a version check — treat it as a
-signal to establish which version is approved and re-run, never to reconcile by
-editing the recorded manifest.
-
----
+Release process, versioning rules and how to extend the package are in
+[DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## 10 · Troubleshooting
 
