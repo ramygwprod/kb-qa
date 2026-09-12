@@ -42,8 +42,16 @@ claim and easy to mistake for the strong one.
 
 ```bash
 python3 -m venv .venv
+.venv/bin/pip install --upgrade pip
 .venv/bin/pip install -e ".[test]"
 ```
+
+> **Requires pip ≥ 21.3.** Older pip cannot read PEP 621 metadata and will
+> silently install an empty package named `UNKNOWN-0.0.0`, reporting
+> `Successfully installed`. If `python -m kbqa --version` errors after an
+> install that looked fine, that is what happened:
+> `pip uninstall UNKNOWN`, upgrade pip, reinstall.
+
 
 For an estate or CI, install from the pinned tag rather than a branch:
 
