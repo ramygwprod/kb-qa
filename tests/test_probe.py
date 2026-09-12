@@ -243,7 +243,7 @@ last_updated: 2026-08-01
 # Northwind Phase A — sitemap skeleton COMPLETE (9/9 surfaces)
 
 The nine ids are present and untouched: `northwind.arabic-model` ·
-`northwind.platform` · `northwind.datasphere`.
+`northwind.platform` · `northwind.dataplane`.
 
 | surface | state |
 |---|---|
@@ -255,7 +255,7 @@ The nine ids are present and untouched: `northwind.arabic-model` ·
 """
 
 SECRETS = [
-    "Northwind", "northwind", "Contoso", "Datasphere", "datasphere",
+    "Northwind", "northwind", "Contoso", "dataplane",
     "arabic-model", "workflow families", "sitemap skeleton", "overclaim",
     "D-014", "catalogue",
 ]

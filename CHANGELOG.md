@@ -16,6 +16,31 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.0.0] — 2026-09-13
+
+### Removed
+
+- **`--vendor`, and the subject name it stored.** No gate reads it. It existed
+  only to label a line in `_qa-log.jsonl`, which made the QA layer a second
+  place a subject's identity accumulates — in the artifacts most likely to be
+  pasted into a message or attached to a review. A structural check has no use
+  for who the subject is: the path locates the file, and a name stored beside it
+  is a copy, not information.
+
+  The flag is **rejected**, not ignored. A caller still passing it learns it no
+  longer means anything rather than believing the name was recorded.
+
+  `write_verdict()` and `report.build()` lose their `vendor` parameter.
+  `_qa/<batch>.<gate>.json`, `_qa/<batch>.report.json` and the log line lose the
+  `vendor` key. Reports title themselves from the directory name.
+
+### Fixed
+
+- Two real product identifiers had reached the public repository in test data —
+  one in an id fixture, one in a leak-test fixture added the same day. Replaced
+  with invented names. `tests/test_report.py` now asserts no verdict or log line
+  carries a subject name.
+
 ## [5.1.0] — 2026-09-13
 
 Both changes were found by running `probe` against a real estate for the first

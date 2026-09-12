@@ -139,7 +139,7 @@ def test_real_id_shapes_are_accepted(ident):
     assert row(id=ident).id == ident
 
 
-@pytest.mark.parametrize("ident", ["btp-cockpit", "a-b.c-d", "x_y-z"])
+@pytest.mark.parametrize("ident", ["ops-console", "a-b.c-d", "x_y-z"])
 def test_hyphen_is_allowed_in_the_first_id_segment(ident):
     """Regression: `_` was allowed in segment one and `-` was not.
 

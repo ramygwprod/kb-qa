@@ -42,7 +42,6 @@ gates:
 recording args (optional, apply to every gate):
   --vendor-dir <dir>   write _qa/<batch>.<gate>.json under this directory
   --batch <name>       batch name used in the verdict filename
-  --vendor <name>      subject name recorded in the log line
   --log <path>         append one line to this _qa-log.jsonl
 
 cycle:
@@ -65,14 +64,13 @@ other:
 """.format(version=__version__)
 
 
-RECORDING_FLAGS = ("--vendor-dir", "--batch", "--vendor", "--log")
+RECORDING_FLAGS = ("--vendor-dir", "--batch", "--log")
 
 
 class Recording:
     def __init__(self):
         self.vendor_dir = None
         self.batch = None
-        self.vendor = None
         self.log = None
 
     def set(self, flag: str, value: Optional[str]) -> None:
@@ -180,7 +178,6 @@ def main(argv: Optional[List[str]] = None) -> int:
             Path(rec.vendor_dir) if rec.vendor_dir else None,
             batch,
             Path(rec.log) if rec.log else None,
-            rec.vendor,
         )
 
     return code

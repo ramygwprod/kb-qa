@@ -82,7 +82,6 @@ def write_verdict(
     vendor_dir: Optional[Path],
     batch: str,
     log_path: Optional[Path] = None,
-    vendor: Optional[str] = None,
 ) -> Optional[Path]:
     """Write _qa/<batch>.<gate>.json and append one line to _qa-log.jsonl.
 
@@ -101,7 +100,6 @@ def write_verdict(
         d = verdict.to_dict()
         line = {
             "ts": d["run_at"],
-            "vendor": vendor,
             "batch": batch,
             "gate": verdict.gate,
             "verdict": verdict.verdict,

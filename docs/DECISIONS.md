@@ -355,3 +355,36 @@ keys and no rows — an empty batch with a bare name — this rule would classif
 real batch as a document. `zero_rows` already treats an empty batch as a defect,
 so such a file should not exist; if one legitimately does, identification must
 move to an explicit marker the collector writes.
+
+
+## D-007 · The checker stores structure, never identity
+
+**Date:** 2026-09-13 · **Version:** 6.0.0
+
+The tool is a structural and schema check. Whether a quote is verbatim on the
+page it cites, whether a row satisfies the contract, whether an index item is
+covered — none of these depend on who the subject is, and no gate reads a
+subject name. `--vendor` existed only to label a log line.
+
+That made the QA layer a second place identity accumulates, in exactly the
+artifacts most likely to travel: a verdict pasted into a message, a report
+attached to a review, a log shipped with a bug. The estate is private; its QA
+sidecar should not quietly become a roster of who is in it.
+
+**Ruling.** The checker stores no subject name. `--vendor` is removed, and
+rejected rather than ignored — a caller who keeps passing it is entitled to
+learn it no longer means anything.
+
+**What identity necessarily remains, and why.** A remediation report must name
+the row and the page that failed, or it cannot be acted on. Findings therefore
+carry `id`s and URLs, and verdicts carry the paths of their inputs. These are
+the estate's own filesystem and its own rows, inside the estate. The rule is
+not that identity never appears — it is that the checker never keeps a
+**separate copy** of it, and that anything designed to leave the estate carries
+none. `probe` is the artifact designed to travel, and D-006's companion fix
+made it structural-only.
+
+**Reversal condition.** If a gate is ever written whose check genuinely depends
+on the subject's identity — none is foreseen, since identity is not a
+structural property — this rule would have to be revisited rather than worked
+around by re-adding a metadata field.
