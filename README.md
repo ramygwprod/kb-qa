@@ -8,7 +8,9 @@ validator**. Implements a private commissioning specification, which is not
 published — nothing here requires it at runtime.
 
 📖 **[docs/MANUAL.md](docs/MANUAL.md)** — user manual: quickstart, workflows for
-operators and maker agents, command and findings reference, trust model.
+operators and maker agents, the full action surface, what a well-formed dataset
+is, findings reference, troubleshooting, and the **Do/Don't boundary** (§11)
+that says what a maker agent may and may not do when a gate fails.
 🔧 **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** — developer guide:
 architecture, adding a domain, invariants, known traps, release process.
 📋 **[CHANGELOG.md](CHANGELOG.md)** · 🧾 **[docs/DECISIONS.md](docs/DECISIONS.md)**

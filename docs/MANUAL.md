@@ -228,6 +228,63 @@ looks exactly like a clean estate.
 
 ---
 
+### What a well-formed dataset looks like
+
+"Passing the gates" and "well-formed" are not the same claim. The gates check
+what can be checked mechanically; this is the target they approximate.
+
+#### A well-formed **row**
+
+| property | test | gate |
+|---|---|---|
+| Addresses one node | `id` is a lowercase dotted path, unique in the batch | G2 |
+| Cites one page | `source_url` is a URL that was actually fetched | G3 |
+| Carries verbatim evidence | `source_quote` appears **character-for-character** in that page's block | G3 |
+| Says when | `access_date` is the date the page was read | G2 |
+| Grades its source | `evidence_grade` reflects what the page is, not how confident we feel | G2 |
+| **Claims no more than the quote supports** | — | **none — human judgement** |
+| Says `unknown` where the page is silent | — | **none — human judgement** |
+| Uses the subject's own words for the subject's own concepts | extension fields are registered, values unconstrained | G2 |
+
+The last three are the ones no gate reaches. See §11.
+
+#### A well-formed **batch**
+
+- Every row's `source_url` has a page block in the capture · **G1, G3**
+- The capture was written **before** the staging file, and its sha256 matches
+  what the frontmatter records · **G1**
+- The batch declares its pages — frontmatter `pages:` or a markdown table · **G1**
+- `fetched_by_this_agent: false` — one agent fetched, a different one wrote rows · **G6**
+- Row count from the parser equals the naive count · **G2**
+- Non-zero rows. An empty batch is a defect, not a clean pass · **G2**
+
+#### A well-formed **subject**
+
+- `g0` returned 0, and its robots artifact is stored · **G0**
+- Every index item in the denominator is covered by a row **or** a stop-condition
+  with a stated reason · **G4**
+- `feature-tree.md`'s `proof:` count matches its content · **G6**
+- Every batch has a verdict, recorded against the bytes the file currently has ·
+  **G6 `batch_unchecked`, `verdict_stale`**
+
+#### A well-formed **corpus**
+
+`kbqa sweep` sorts every batch into one of three tiers. A corpus is in good
+order when **each batch is in the tier it ought to be**, not when all of them
+are verifiable:
+
+| tier | what it means | acceptable? |
+|---|---|---|
+| `verifiable` | capture splits into pages; every quote checkable | yes |
+| `unassessable-no-page-markers` | text stored, no page boundaries | only as a **known backlog** — recoverable by re-fetch |
+| `unverifiable-no-capture` | page text never stored | only if **recorded as such**; not recoverable |
+
+The failure state is not "some rows are unverifiable". It is **not knowing which
+ones are**, or presenting an unverifiable tree as though it carried the same
+weight as a verified one.
+
+---
+
 ## 5 · Workflows
 
 ### 5.1 · Operator — auditing what you already have
@@ -559,28 +616,72 @@ output.
 **Read Coverage first.** The report names gates that did *not* run. A gate that
 did not run has found nothing — not the same as having found nothing wrong.
 
-## 6 · Command reference
+## 6 · All available actions
 
-| command | purpose | exit |
+Thirteen actions. **Ten are read-only by default; three write, and only ever to
+`_qa/`, the log, or a robots artifact.** No action mutates collected data — if
+something in a pipeline appears to "fix" a row, it is not kbqa doing it.
+
+### Gates — check one thing, emit a verdict
+
+| action | reads | writes by default | exit |
+|---|---|---|---|
+| `g0 --host <h> --out <dir>` | robots.txt over the network | `_robots-<host>-<date>.txt` ⚠ | 0 allowed · 1 unreachable · **2 DECLINED** |
+| `g1 --staging <f> --capture <f>` | staging, capture | nothing | 0 / 1 |
+| `g2 --staging <f>` | staging | nothing | 0 / 1 |
+| `g3 --staging <f> --capture <f>` | staging, capture | nothing | 0 / 1 |
+| `g4 --denominator <f> --rows <f>… [--stops <f>]` | denominator, rows, stops | nothing | 0 only when `without_row == 0` |
+| `g5 --rows <f>…` | rows | nothing | **always 0** — advisory |
+| `g6 --root <dir>` | whole corpus and its `_qa/` verdicts | nothing | 0 / 1 |
+
+`g0` is the only gate that writes unasked: it must store the robots.txt it
+judged, or its verdict cites nothing.
+
+### Cycle — several gates plus an artifact
+
+| action | reads | writes |
 |---|---|---|
-| `g0 --host <host> --out <vendor-dir>` | permission | 0 · **2 DECLINED** · 1 |
-| `g1 --staging <f> --capture <f>` | capture integrity | 0 / 1 |
-| `g2 --staging <f>` | conformance | 0 / 1 |
-| `g3 --staging <f> --capture <f>` | grounding | 0 / 1 |
-| `g4 --denominator <f> --rows <f>... [--stops <f>]` | completeness | 0 / 1 |
-| `g5 --rows <f>...` | bundles | **always 0** |
-| `g6 --root <project>` | integrity | 0 / 1 |
-| `report --vendor-dir <d> --batch <n>` | remediation report | 0 / 1 |
-| `sweep --root <estate>` | estate audit | 0 / 1 |
-| `probe --staging <f>` | format diagnostic | 0 / 1 |
-| `--manifest` · `--version` | provenance | 0 |
+| `report --vendor-dir <d> --batch <b> [--denominator <f>] [--stops <f>] [--log <f>]` | staging, capture, denominator, stops | `_qa/<b>.report.md`, `_qa/<b>.report.json`, one verdict per gate, one log line |
+| `sweep --root <c> [--field-values] [--exclude <glob>] [--vendor-depth N] [--out <f>]` | every staging and capture under root | `_qa-estate-audit.md` and `.json` at the root |
 
-**Recording flags** apply to any gate: `--vendor-dir`, `--batch`, `--vendor`,
-`--log`. Without them a gate run is **side-effect-free** — the verdict goes to
-stdout and nothing is written.
+### Diagnostics and metadata — never write
 
-**`sweep` flags:** `--field-values` collects value distributions; `--out` sets
-the output path.
+| action | purpose |
+|---|---|
+| `probe --staging <f> [--capture <f>]` | file **shape** without content: field names, types, lengths, marker syntax, and whether the parser agrees. Tested to disclose nothing |
+| `--manifest` | SHA-256 of every module — what a verdict's `manifest_sha256` is checked against |
+| `--profiles` | list available profiles |
+| `--version` · `--help` | metadata |
+
+`--profile <name>` is a modifier on any command. It selects the contract, so it
+changes what a row **is**, not how one gate behaves.
+
+### Recording flags
+
+Apply to any gate. Without them a gate run is **side-effect-free** — the verdict
+goes to stdout and nothing is written.
+
+| flag | effect |
+|---|---|
+| `--vendor-dir <d>` | write `_qa/<batch>.<gate>.json` under this directory |
+| `--batch <name>` | batch name used in the verdict filename |
+| `--vendor <name>` | subject name recorded in the log line |
+| `--log <path>` | append one line to this `_qa-log.jsonl` |
+
+### Exit-code contract
+
+```
+0  PASS · allowed · advisory
+1  FAIL · unreachable · usage error
+2  DECLINED — g0 only, terminal for that subject
+```
+
+Two ways a script gets this wrong:
+
+- **`g5` always exits 0.** It is advisory. Reading that as "passed" is a misread:
+  it reports `term_at_multiple_urls` and resolves nothing.
+- **Exit 2 is only ever `g0`.** A usage error exits 1, never 2, so a typo can
+  never be read as a permission decision.
 
 ---
 
@@ -711,27 +812,32 @@ Release process, versioning rules and how to extend the package are in
 
 ## 10 · Troubleshooting
 
-**Every batch fails G1 with `capture_hash_absent` / `no_declared_pages`.**
-The collector does not write `source_capture_sha256` or a `pages:` list, both
-required by §G1. This is a real gap in the collector's output, not a checker
-defect — but it means no batch can be fully CLEAR until the collector emits
-them.
+Find the symptom, not the gate. Each entry says what the tool is telling you,
+what actually causes it, and what to do — including, where it matters, what
+*not* to do.
 
-**Every row fails G2 with `schema_violation`.**
-The collector emits a field the contract does not name. Confirm with
-`kbqa sweep --field-values`, then either extend `models.py` by a deliberate
-version bump with a DECISIONS.md entry, or remove the field from the collector.
-Do not silence it.
+### Install and invocation
 
-**G3 fails on rows that look correct.**
-Check `quote_from_wrong_page` versus `quote_not_in_capture`. The first is a
-misattributed `source_url`, the second means the text is not on the cited page
-at all. Normalisation folds Unicode quotes, dashes and whitespace only — **never
-spelling.** A vendor typo is evidence; correcting it breaks the match correctly.
+**`python -m kbqa` says `No module named kbqa`, but pip said `Successfully installed`.**
+pip < 21.3 cannot read PEP 621 metadata and installs an empty package called
+`UNKNOWN-0.0.0` while reporting success. Confirm with `pip show UNKNOWN`, then
+`pip uninstall UNKNOWN`, `pip install --upgrade pip`, and reinstall.
 
-**`manifest_mismatch` from G6.**
-Recorded verdicts came from different gate code than is installed. Establish
-which version is approved, then re-run the gates from it.
+**`RuntimeError: no profile is active`.**
+No profile was selected and none defaulted. Pass `--profile <name>`; list them
+with `kbqa --profiles`. A gate with no contract to validate against cannot
+produce a meaningful PASS, which is why this raises rather than guessing.
+
+**`KeyError: unknown profile`.**
+The profile module was never imported, so its `register()` never ran. Profiles
+register on import — check it is imported in `src/kbqa/profiles/__init__.py`.
+
+**A gate exits 1 and I cannot tell whether that is FAIL or a usage error.**
+Read stderr. Usage errors print an argparse message and no verdict. Only `g0`
+uses exit 2, and only for DECLINED — a typo must never be readable as a
+permission decision.
+
+### Parsing and shape
 
 **The probe says `DOES NOT MATCH`.**
 The sections above the verdict say where — a missing `---`, different marker
@@ -739,22 +845,206 @@ syntax, fields outside the contract, rows that do not parse. Only
 `src/kbqa/parsing.py` needs correcting; gate logic is written against parsed
 structures and does not move.
 
+**A file with obvious rows parses as zero rows.**
+Almost always a serialisation mismatch. Three shapes are supported — bare
+JSONL, a fenced JSON array, and fenced JSONL — and the parser falls back
+between the fenced two. If yours is a fourth shape, the parser is what changes;
+never reformat Bronze or a real staging file to suit it.
+
+**G2 row count disagrees with `grep -c`.**
+The naive cross-check counts lines beginning `{"id"`. A row that serialises
+`id` anywhere but first is invisible to it. Serialise `id` first; do not change
+the cross-check to agree, since a cross-check that always agrees checks nothing.
+
+**Frontmatter parses but `pages:` comes out empty.**
+Pages may be declared as a YAML list *or* as a markdown table. Folded scalars
+(`>`/`|`) are supported. If yours is a further variant, extend `_declared_pages`.
+
+### Grounding
+
+**Every row fails G3 with `url_not_in_capture`, and the capture clearly has the text.**
+The capture has no page markers, so no page owns any text. G1 reports this once
+as `capture_has_no_page_blocks` (structural), and the batch is
+**`unassessable`, not `ungrounded`** — the difference between "we cannot check"
+and "we checked and it failed". Recover it by re-fetching with markers.
+
+**G3 fails on rows that look correct.**
+Check `quote_from_wrong_page` versus `quote_not_in_capture`. The first is a
+misattributed `source_url`, the second means the text is not on the cited page
+at all. Normalisation folds Unicode quotes, dashes and whitespace only — **never
+spelling.** A vendor typo is evidence; correcting it breaks the match correctly.
+
+**The quote matches visually but fails byte-for-byte.**
+Usually a soft hyphen, non-breaking space, or zero-width character copied out
+of rendered HTML. Re-copy from the stored capture, which is the ground truth,
+not from the rendered page.
+
+**Every batch fails G1 with `capture_hash_absent` / `no_declared_pages`.**
+The collector does not write `source_capture_sha256` or a `pages:` list, both
+required by §G1. This is a real gap in the collector's output, not a checker
+defect — but it means no batch can be fully CLEAR until the collector emits
+them.
+
+**`capture_not_before_staging`.**
+The capture's mtime is later than the staging file's, so the rows cannot have
+come from it. Re-fetch, then re-write the rows. Do not touch timestamps.
+
+### Conformance
+
+**Every row fails G2 with `schema_violation`.**
+The collector emits a field the contract does not name. Confirm with
+`kbqa sweep --field-values`, then either extend `models.py` by a deliberate
+version bump with a DECISIONS.md entry, or remove the field from the collector.
+Do not silence it.
+
+**A whole corpus fails one narrow rule (an id pattern, an enum, a type).**
+Before concluding the data is wrong, check whether the rule is defensible. Ten
+defects in this package were exactly this: a constraint invented from a spec or
+one sample, applied as law. See [DEVELOPMENT.md §7](DEVELOPMENT.md).
+
+**`schema_violation` (unregistered field) on a field that is genuinely the subject's own.**
+Register the name in the profile's `EXTENSIONS` with a kind and a note. The
+registry constrains **names, never values** — registering does not mean
+validating their vocabulary.
+
+### Coverage and integrity
+
+**G4 reports `index_item_without_row` for pages that were deliberately skipped.**
+Each needs a stop-condition with a stated observation — `404 on 2026-09-12`,
+`behind login`, `superseded by X`. "Out of scope" is not an observation.
+Removing the entry from the denominator closes the gap by measuring our plan
+instead of the subject's product.
+
+**G4 collapses two different pages into one index item.**
+Distinct URLs sharing a link label. Matching is by URL, not label; if they are
+collapsing, the denominator is storing labels only.
+
+**`manifest_mismatch` from G6.**
+Recorded verdicts came from different gate code than is installed. Establish
+which version is approved, then re-run the gates from it.
+
+**`verdict_stale` / `batch_unchecked`.**
+The staging file changed after its verdict was recorded, or never had one.
+Re-run the gates; a verdict is bound to the bytes it was computed over.
+
+**`role_collapse`.**
+`fetched_by_this_agent: true` — one agent both fetched and wrote rows, so the
+rows have no independent source. Re-collect with the roles separated. Clearing
+the flag hides the collapse without repairing it.
+
+**`proof_count_mismatch` in `feature-tree.md`.**
+Its declared `proof:` count disagrees with its content. Recount from the file;
+do not edit the declaration to match a number you have not verified.
+
+### Reports and sweeps
+
 **A gate reported FAIL with no findings.**
 That is a defect in the gate, not a clean batch. Do not read it as a pass.
 
+**The report looks clean but the batch is not.**
+Read the **Coverage** section first — it names the gates that did not run. A
+gate that did not run has found nothing, which is not the same as having found
+nothing wrong.
+
+**`sweep` attributes batches to the wrong subject.**
+Subject is derived from path depth. Set `--vendor-depth`, and `--exclude`
+anything that is not corpus.
+
+**`sweep` field distribution is missing fields I know exist.**
+Fixed in v5 — earlier versions skipped long values while counting. If a field
+you can see is absent, that is a defect worth reporting, not a data problem.
+
+### CI
+
+**CI passes locally and fails in the workflow, or the reverse.**
+CI runs the gates from a **pinned tag**, not your working tree. That divergence
+is the point — level 4 is the only tamper-proof level. Align by checking out
+the tag, not by loosening the workflow.
+
+**Fixture drift fails CI.**
+Fixtures are generated. Run `python tests/build_fixtures.py` and commit the
+result. Hand-editing a fixture to make a gate pass is the precise failure this
+package exists to catch.
+
 ---
 
-## 11 · Rules that are not negotiable
+## 11 · Do / Don't — the boundary
 
-- **Bronze is never edited.** Not for a typo, not for whitespace. Re-fetch into
-  a new dated file.
-- **A failed gate returns to the planner**, never to the executor as "try
-  again". That is the retry loop, and it is where gaming begins.
-- **Zero rows is a FAIL.** A parser that sees nothing and a file that holds
-  nothing look identical; treat the ambiguity as a defect.
-- **A missing capture is a FAIL**, never a warning.
-- **Exit 2 means DECLINED and nothing else.**
-- **Never normalise spelling** when matching quotes.
-- **A gate that has never failed has not been tested.**
-- **Fixtures are generated, not hand-edited.** Editing a fixture to make a gate
-  pass is the exact failure mode this package exists to catch.
+These exist because an agent optimising for *task completion* will find every
+one of them. None of what follows requires bad intent; it is what "make the
+batch pass" looks like from the inside.
+
+### The line
+
+> **A gate exists to be satisfied by the data, never by changing what the gate
+> or the contract says.**
+
+If a check fails, exactly three things are legitimate: correct the data, produce
+the missing artifact, or **change the contract deliberately** — a version bump, a
+`DECISIONS.md` entry with evidence and a reversal condition, and a release. What
+is never legitimate is making one batch pass by adjusting the rule under it.
+
+### Never
+
+| ❌ | why |
+|---|---|
+| Edit a gate, `models.py`, a profile, or a convention so a batch passes | This is the failure the package exists to catch. Every verdict records `manifest_sha256`; edited gates are visible, and `main` blocks the push |
+| Search the capture for **any** text your quote matches, then repoint `source_url` at it | This passes G3 and is invention. The quote must come from the page the claim is about |
+| Paraphrase and present as `source_quote` | The original defect. A paraphrase reads exactly like a quote |
+| Fill `mechanism`, `outcome`, or any field with a plausible value where the page is silent | Write `unknown`. A confident wrong value is worse than an absent one |
+| Write a row from what you already know about the subject | Your only source is the capture. If you know it and the page does not say it, it is not evidence |
+| Edit Bronze — a capture, robots artifact, or denominator | Not for a typo, not for whitespace. Re-fetch into a new dated file |
+| "Fix" a typo in a captured page | Typos are evidence. Correcting one breaks the match *correctly* |
+| Clear `fetched_by_this_agent` to silence `role_collapse` | Hides the collapse. Re-collect with separated agents |
+| Delete or lower a denominator entry to close a G4 gap | Measures our plan instead of the subject's product |
+| Write a stop-condition that technically has a reason | "We stopped", "not relevant", "out of scope" are not observations |
+| Treat a `structural` finding as `fixable` | Structural means *no edit to the rows can make this true*. Editing anyway is fabrication |
+| Send a failed gate back to the executor as "try again" | The retry loop is where gaming begins. Failures route to the planner |
+| Report only the gates that passed | A gate that did not run has found nothing — not the same as having found nothing wrong |
+| Disable a check because it fired | The check catching something is it working |
+
+### Always
+
+| ✅ | why |
+|---|---|
+| Quote character-for-character, from the page the row cites | The only thing that makes a claim checkable |
+| Write `unknown` where the capture is silent | Absence recorded is information; absence filled in is not |
+| Drop a row the page does not support | Deleting an unsupported row is a correct outcome, not a failure |
+| Re-fetch when Bronze is wrong | New dated file. Bronze accumulates, never mutates |
+| Read the report's **Coverage** section first | It names the gates that did not run |
+| Register a subject's own field by name, leave its value unconstrained | Their vocabulary is evidence; our enum is a guess |
+| Cite `manifest_sha256` when you think a gate is wrong | Disputing a gate is legitimate. Editing it is not |
+| State a stop-condition as an observation | "404 on 2026-09-12", "behind login", "superseded by X" |
+| Re-run the same command to verify | A finding is resolved when it stops appearing — not when it is explained |
+
+### What the gates cannot see
+
+Three gaps, named so nobody mistakes a green run for more than it is:
+
+**G3 checks that the quote is real and on the cited page. It does not check that
+the quote supports the claim.** A row can pass every gate with `what_it_does`
+saying far more than its `source_quote` warrants. This is the largest gap, and
+the one quote-shopping exploits.
+
+**G4 measures coverage against the denominator we captured.** If the *index* was
+selective, nothing notices.
+
+**Nothing checks `unknown` avoidance.** No gate asks whether `mechanism: Native`
+is supported by anything on the page.
+
+All three are human judgement. The tool makes invention *detectable*; it does
+not make review *unnecessary*.
+
+### For maintainers
+
+Changing the contract is legitimate — that is what versioning is for. What
+distinguishes it from gaming is the paper trail: a version bump, a
+`DECISIONS.md` entry with the evidence and a reversal condition, and a release.
+A contract change made to clear today's failing batch, with no record of why,
+is the same act as editing the gate.
+
+Ten defects in this package were found by running it against a real corpus, and
+**every one was a constraint invented from a specification or a single sample,
+then applied as if it were a law.** When a whole batch fails, check whether the
+rule it breaks is one you can justify before concluding the data is bad. See
+[DEVELOPMENT.md §7](DEVELOPMENT.md).
