@@ -16,6 +16,40 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [5.1.0] — 2026-09-13
+
+Both changes were found by running `probe` against a real estate for the first
+time. Neither was a data problem.
+
+### Fixed
+
+- **`probe` printed prose verbatim.** `_line_shape` redacts by removing the
+  value of a quoted `"key": "value"` pair. Markdown prose is not quoted, so
+  nothing matched and the "other body lines" section reproduced headings, list
+  items and sentences — vendor names and ids among them — beneath a banner
+  promising that none of it appears. A line outside the frontmatter and outside
+  a fence is not a row, so none of its text is schema: `_prose_shape` now
+  reports the line's KIND and length, never a character of it. The existing
+  leak tests covered row content only, which is why this survived.
+
+### Added
+
+- **`not-a-batch`, a fourth sweep classification.** Discovery matched on the
+  filename alone, so a session log or a ruling named `_collect-*-staging.md`
+  was audited as a batch — inflating every estate total and producing gate
+  failures about files nobody ever collected into. A file that declares no
+  batch frontmatter *and* holds no rows is now classified `not-a-batch`,
+  excluded from every figure, and named in both the report and the terminal
+  summary. Rows without provenance still count as a batch: that is a G1
+  finding, owned by a different gate.
+- **`probe` says "this file is NOT a collection batch"** in that case, instead
+  of `parser DOES NOT MATCH` — which sent the reader to `parsing.py` to correct
+  something that was not wrong, and hid the real finding.
+
+### Changed
+
+- `skills/kbqa-check/SKILL.md` pins `5.1.0` and the new manifest.
+
 ## [5.0.0] — 2026-09-12
 
 An audit for the one failure v4 could not have caught: **is anything from the

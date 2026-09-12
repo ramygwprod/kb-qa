@@ -1,6 +1,6 @@
 # kbqa — user manual
 
-**Version 5.0.0** · for operators and for maker agents
+**Version 5.1.0** · for operators and for maker agents
 
 Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -10,8 +10,8 @@ Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v5.0.0"
-python -m kbqa --version          # must print 5.0.0
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v5.1.0"
+python -m kbqa --version          # must print 5.1.0
 ```
 
 **Audit a corpus** — needs no captures, changes nothing, answers "what here can
@@ -94,7 +94,7 @@ python3 -m venv .venv
 For an estate or CI, install from the pinned tag rather than a branch:
 
 ```bash
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v5.0.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v5.1.0"
 ```
 
 **Always a tag, never a branch.** A branch would let the gates and the data they
@@ -278,6 +278,12 @@ are verifiable:
 | `verifiable` | capture splits into pages; every quote checkable | yes |
 | `unassessable-no-page-markers` | text stored, no page boundaries | only as a **known backlog** — recoverable by re-fetch |
 | `unverifiable-no-capture` | page text never stored | only if **recorded as such**; not recoverable |
+
+A fourth classification sits outside the tiers. `not-a-batch` is a file that
+matched the staging filename pattern while declaring no batch frontmatter and
+holding no rows — a note, a ruling, a session log. It is excluded from every
+figure and named in the report, because a file that vanishes from a total
+without explanation is indistinguishable from one that was never there.
 
 The failure state is not "some rows are unverifiable". It is **not knowing which
 ones are**, or presenting an unverifiable tree as though it carried the same
@@ -791,7 +797,7 @@ and the data they judge change in the same push.
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v5.0.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v5.1.0"
 ```
 
 > `pip < 21.3` cannot read this project's metadata and installs an empty package
@@ -945,6 +951,13 @@ That is a defect in the gate, not a clean batch. Do not read it as a pass.
 Read the **Coverage** section first — it names the gates that did not run. A
 gate that did not run has found nothing, which is not the same as having found
 nothing wrong.
+
+**`sweep` says a file is `not-a-batch`, or the batch count dropped after
+upgrading to 5.1.0.**
+That file matched the staging filename pattern but declares no batch
+frontmatter and holds no rows. Before 5.1.0 it was counted as a batch, so
+totals were inflated and CI reported gate failures about it. If it really is a
+batch, give it frontmatter; if it is a document, rename it out of the pattern.
 
 **`sweep` attributes batches to the wrong subject.**
 Subject is derived from path depth. Set `--vendor-depth`, and `--exclude`

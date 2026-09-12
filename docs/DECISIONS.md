@@ -316,3 +316,42 @@ this decision.
 
 None of these is a validation question. They are all questions about what the
 estate is for, and they are the operator's to answer.
+
+
+## D-006 · A filename is a convention; provenance is evidence
+
+**Date:** 2026-09-13 · **Version:** 5.1.0
+
+Discovery — in `sweep`, in `ci/estate-qa.yml`, and in the probe's verdict —
+identified a collection batch by matching `_collect-*-staging.md`. The first
+probe run against a real estate landed on a ruling document that carried that
+name: document-control frontmatter, 745 lines of prose, zero rows.
+
+Three things followed from that, all of them wrong:
+
+1. The estate totals counted it as a batch, so every figure derived from them
+   was inflated by an unknown amount.
+2. CI would run G1–G3 against it and report failures about a file nobody had
+   ever collected into.
+3. The probe reported `parser DOES NOT MATCH`, sending the reader to
+   `parsing.py` to correct something that was not wrong.
+
+**Ruling.** A file is a batch when it declares batch frontmatter — any of
+`batch`, `source_capture`, `source_capture_sha256`, `pages`,
+`fetched_by_this_agent` — **or** holds rows. A file with neither is classified
+`not-a-batch`: excluded from every total, and named in the report and the
+terminal summary rather than silently dropped.
+
+Rows without provenance remain a batch. That is a G1 finding about missing
+provenance, owned by a different gate, and the sweep pre-empting it would be
+the same category error in the other direction.
+
+**Evidence.** One estate file, probed 2026-09-13: frontmatter keys `code`,
+`nature`, `stage`, `type`, `status`, `read_when`, `rule`, `ruling`, `owner`,
+`last_updated`; 943 lines; 0 rows parsed; 0 naive matches.
+
+**Reversal condition.** If a collector emits batches carrying none of those
+keys and no rows — an empty batch with a bare name — this rule would classify a
+real batch as a document. `zero_rows` already treats an empty batch as a defect,
+so such a file should not exist; if one legitimately does, identification must
+move to an explicit marker the collector writes.
