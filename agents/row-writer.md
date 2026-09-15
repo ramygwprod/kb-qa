@@ -22,6 +22,8 @@ pages:
   - <url>                    # one per BEGIN marker in the capture, verbatim
   - <url>
 fetched_by_this_agent: false
+window_requested: <from the receipt, if the batch was one window>
+window_returned: <from the receipt — items the SOURCE returned>
 access_date: <YYYY-MM-DD the pages were fetched>
 status: <the estate's own status>
 note: <optional>

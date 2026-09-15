@@ -52,6 +52,8 @@ GAP_CODES = {
     "index_item_without_row", "stop_condition_without_reason",
     "zero_rows", "nothing_checked", "robots_unreachable",
     "batch_unchecked", "capture_has_no_page_blocks",
+    "completeness_unassessable", "no_exhaustion_evidence",
+    "window_declaration_incomplete",
 }
 
 
@@ -366,6 +368,37 @@ REMEDIES: Dict[str, Remedy] = {
         "An index item has no row citing it. Plan a batch covering it, or "
         "record a stop-condition with a stated reason. Do not lower the "
         "denominator to close the gap.",
+    ),
+    "completeness_unassessable": Remedy(
+        PLANNER,
+        "Nothing establishes how much of this subject exists, so nothing can "
+        "say how much of it we hold. Capture the subject's own index as a "
+        "denominator — that is the preferred fix. Where the surface publishes "
+        "no index, declare `window_requested` and `window_returned` per batch "
+        "so exhaustion can be evidenced instead. Leaving both absent does not "
+        "make the subject complete; it makes completeness unknown.",
+    ),
+    "no_exhaustion_evidence": Remedy(
+        PLANNER,
+        "Windows were declared but none came back empty. A window returning "
+        "fewer items than it asked for is not proof the list ended — it is "
+        "equally consistent with a run that stopped early. Probe one more "
+        "window and record the result, even when you are confident it will be "
+        "zero. Do NOT infer the end from a short return.",
+    ),
+    "window_underwritten": Remedy(
+        FIXABLE,
+        "The batch declares more items returned than it holds rows. Items came "
+        "back from the source that no row records. Either write the missing "
+        "rows, or correct the declaration if it over-counted — but establish "
+        "which before changing either. Lowering `window_returned` to match the "
+        "rows makes the finding disappear without recovering the items.",
+    ),
+    "window_declaration_incomplete": Remedy(
+        FIXABLE,
+        "Half a window declaration cannot distinguish exhaustion from "
+        "abandonment. Record both `window_requested` and `window_returned`, "
+        "from what the source actually returned — not from what was written.",
     ),
 }
 

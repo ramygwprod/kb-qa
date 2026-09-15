@@ -456,3 +456,52 @@ one is silence rather than an error.
 **Reversal condition.** If a corpus emerges where `_denominator*.md` matches a
 file that is not a denominator, discovery must move to content — a declared key
 inside the file — rather than to a narrower name.
+
+
+## D-010 · Exhaustion must be evidenced, not inferred from a short return
+
+**Date:** 2026-09-16 · **Version:** 6.4.0
+
+Large surfaces — an alphabetical feature list running to hundreds of items —
+cannot be collected in one pass; the run is killed partway and what it finished
+is unknowable from the output. The answer is windows: ask for twenty, save what
+comes back, ask for the next twenty, and stop when a window returns nothing.
+
+That protocol has a property worth checking. **A window returning fewer items
+than requested is not proof the list ended.** Fifteen returned against twenty
+asked is equally consistent with:
+
+- the list genuinely ending at fifteen,
+- a run that stopped early because the task was long,
+- a fetch that failed partway and reported what it had.
+
+Only a subsequent window returning **zero** separates the first from the others,
+and only if it is recorded. An unrecorded probe is a memory, not evidence.
+
+**Ruling.** Where a subject has a captured denominator, G4 measures coverage
+against it as before — that remains the preferred answer, because an index is a
+statement by the subject about what exists, and a window count is a statement by
+us about what we received. Where no index is published, a batch may declare
+`window_requested` and `window_returned`, and the subject is complete only when
+some window returned 0.
+
+**The cross-check.** `window_returned` counts items the source returned; the
+gate counts rows in the batch itself. Fewer rows than items returned means items
+came back that no row records — the signature of a truncated write. Neither side
+computes both numbers, which is what keeps this from being arithmetic about
+itself (the tautology principle, D-003).
+
+The check is one-directional on purpose: rows exceeding items returned is
+normal, since one index item can yield several rows.
+
+**Also changed:** a G4 run with neither a denominator nor windows now FAILs with
+`completeness_unassessable` instead of not running. Previously it surfaced as a
+Coverage line — accurate, quiet, and in the place a reader skims. That is the
+same failure shape as D-009, and it is worth stating as a rule: **when this
+package cannot assess something, it says so loudly rather than staying silent.**
+Silence and success must never render identically.
+
+**Reversal condition.** If a surface emerges where a zero-return is impossible
+to obtain — an endpoint that errors rather than returning empty — the terminal
+condition needs a second recordable form (a recorded error at offset N), not an
+exemption from evidencing exhaustion.

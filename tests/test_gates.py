@@ -571,3 +571,134 @@ def test_batch_metadata_in_the_rows_block_is_not_a_malformed_row(fx):
     assert "non_row_object" in codes(v)
     assert "schema_violation" not in codes(v), "the real rows are unaffected"
     assert len([f for f in v.findings if f.code == "non_row_object"]) == 1
+
+
+# --------------------------------------------------------------------------
+# G4 window mode — exhaustion for surfaces with no published index
+# --------------------------------------------------------------------------
+
+def _windowed(tmp_path, name, requested, returned, n_rows, **extra):
+    """A staging file declaring one window of a paginated surface."""
+    import json as _json
+
+    rows = "\n".join(
+        _json.dumps({
+            "id": f"acme.item{i}",
+            "vendor_term": f"Item {i}",
+            "what_it_does": "Does a thing.",
+            "source_url": "https://docs.acme.test/list",
+            "source_quote": "Acme Widgets let you compose reusable UI blocks.",
+            "access_date": "2026-08-23",
+            "evidence_grade": "official-doc",
+            "confidence": "high",
+            "mechanism": "Native",
+            "outcome": "yes",
+            "depth_level": "feature",
+        })
+        for i in range(n_rows)
+    )
+    fm = [f"batch: {name}"]
+    if requested is not None:
+        fm.append(f"window_requested: {requested}")
+    if returned is not None:
+        fm.append(f"window_returned: {returned}")
+    for k, v in extra.items():
+        fm.append(f"{k}: {v}")
+    f = tmp_path / f"_collect-{name}-staging.md"
+    f.write_text("---\n" + "\n".join(fm) + "\n---\n\n" + rows + "\n", encoding="utf-8")
+    return str(f)
+
+
+def test_windows_without_a_terminal_zero_fail(tmp_path):
+    """A short window is not proof the list ended.
+
+    Twenty asked, fifteen returned, stop. That is equally consistent with a run
+    that gave up. Only a window that came back empty distinguishes exhaustion
+    from abandonment, and the distinction is the whole point of the mode.
+    """
+    from kbqa.gates import g4_completeness
+
+    w1 = _windowed(tmp_path, "w1", 20, 20, 20)
+    w2 = _windowed(tmp_path, "w2", 20, 15, 15)
+    v, code = g4_completeness.run(["--rows", w1, w2])
+
+    assert code == 1
+    assert v.verdict == "FAIL"
+    assert any(f.code == "no_exhaustion_evidence" for f in v.findings)
+
+
+def test_a_terminal_zero_window_passes(tmp_path):
+    from kbqa.gates import g4_completeness
+
+    w1 = _windowed(tmp_path, "w1", 20, 20, 20)
+    w2 = _windowed(tmp_path, "w2", 20, 15, 15)
+    w3 = _windowed(tmp_path, "w3", 20, 0, 0)
+    v, code = g4_completeness.run(["--rows", w1, w2, w3])
+
+    assert code == 0
+    assert v.verdict == "PASS"
+    assert v.counts["terminal_zero_windows"] == 1
+    assert v.counts["items_returned"] == 35
+
+
+def test_fewer_rows_than_items_returned_is_caught(tmp_path):
+    """The truncation signal: items came back that no row records.
+
+    Non-tautological — the collector declares what the source returned, the
+    checker counts rows independently. Neither side computes both numbers.
+    """
+    from kbqa.gates import g4_completeness
+
+    w = _windowed(tmp_path, "w1", 20, 20, 8)
+    z = _windowed(tmp_path, "w2", 20, 0, 0)
+    v, code = g4_completeness.run(["--rows", w, z])
+
+    assert code == 1
+    assert any(f.code == "window_underwritten" for f in v.findings)
+
+
+def test_more_rows_than_items_returned_is_fine(tmp_path):
+    """One index item can legitimately yield several rows."""
+    from kbqa.gates import g4_completeness
+
+    w = _windowed(tmp_path, "w1", 20, 5, 12)
+    z = _windowed(tmp_path, "w2", 20, 0, 0)
+    v, code = g4_completeness.run(["--rows", w, z])
+
+    assert not any(f.code == "window_underwritten" for f in v.findings)
+    assert code == 0
+
+
+def test_half_a_window_declaration_is_caught(tmp_path):
+    from kbqa.gates import g4_completeness
+
+    w = _windowed(tmp_path, "w1", 20, None, 20)
+    v, code = g4_completeness.run(["--rows", w])
+
+    assert code == 1
+    assert any(f.code == "window_declaration_incomplete" for f in v.findings)
+
+
+def test_neither_denominator_nor_windows_is_loud_not_silent(tmp_path):
+    """Previously G4 simply did not run, which read as a clean gate."""
+    from kbqa.gates import g4_completeness
+
+    w = _windowed(tmp_path, "plain", None, None, 5)
+    v, code = g4_completeness.run(["--rows", w])
+
+    assert code == 1
+    assert any(f.code == "completeness_unassessable" for f in v.findings)
+
+
+def test_a_denominator_still_takes_precedence(fx):
+    """Window mode is the fallback, not a replacement for a real index."""
+    from kbqa.gates import g4_completeness
+
+    d = fx("good")
+    v, code = g4_completeness.run([
+        "--denominator", str(d / "_denominator-docs-2026-08-23.md"),
+        "--rows", str(d / "_collect-widgets-staging.md"),
+    ])
+    assert code == 0
+    assert "existence_index_items" in v.counts
+    assert "terminal_zero_windows" not in v.counts

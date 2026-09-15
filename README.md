@@ -68,7 +68,7 @@ python -m kbqa g3 --staging <f> --capture <f> \
 | G1 capture integrity | `g1 --staging <f> --capture <f>` | 0 / 1 |
 | G2 conformance | `g2 --staging <f>` | 0 / 1 |
 | G3 grounding | `g3 --staging <f> --capture <f>` | 0 / 1 |
-| G4 completeness | `g4 --denominator <f> --rows <f>... [--stops <f>]` | 0 only when `without_row == 0` |
+| G4 completeness | `g4 [--denominator <f>] --rows <f>... [--stops <f>]` | 0 only when `without_row == 0`, or in window mode when a window returned 0 |
 | G5 bundles | `g5 --rows <f>...` | **always 0** (advisory) |
 | G6 integrity | `g6 --root <project>` | 0 / 1 |
 

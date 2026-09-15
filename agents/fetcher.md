@@ -62,6 +62,35 @@ subject's list, not a list of what you intend to fetch. Capture it before
 deciding scope, and do not prune it to match what you fetched: an index item
 nobody collected is a finding for the planner, and removing it hides that.
 
+## 3b · Large surfaces — windows
+
+An index running to hundreds of items will not survive one pass. Take it in
+windows: ask for a fixed count, capture what comes back, ask for the next.
+
+Each window is **its own batch** — its own capture, its own staging file, its
+own verdict. A run killed partway then costs one window rather than a subject.
+
+Record, for every window, what you asked for and what came back:
+
+```
+window_requested: 20
+window_returned: 15
+```
+
+`window_returned` counts the items the **source** returned, not the rows anyone
+later writes from them.
+
+**Keep going until a window returns 0, and record that empty window too.** A
+short return is not the end of the list — fifteen against twenty asked is
+equally consistent with the list ending, with a run stopping early, and with a
+fetch that failed partway. Only the empty window separates them, and only if it
+exists on disk. Do not skip the final probe because the answer seems obvious;
+the probe *is* the evidence.
+
+If the surface publishes an index, capture it as the denominator anyway. The
+index is the subject's own statement of what exists; a window count is only our
+statement of what we received.
+
 ## 4 · The receipt — what you hand over
 
 Return, and write nothing else:

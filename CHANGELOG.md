@@ -16,6 +16,44 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.4.0] — 2026-09-16
+
+### Added
+
+- **G4 window mode — exhaustion evidence where no index exists.** A paginated
+  surface that publishes no index offers nothing to measure coverage against,
+  and G4 simply did not run. A gate that does not run reads as a clean gate.
+
+  Batches may now declare, in frontmatter:
+
+  ```yaml
+  window_requested: 20
+  window_returned: 15
+  ```
+
+  Run `g4 --rows <f>...` with no `--denominator` and the gate asks a different
+  question: did the collector keep going until a window came back empty? A
+  window returning fewer items than it asked for is **not** proof the list
+  ended — it is equally consistent with a run that stopped early, or one killed
+  mid-surface. Only a terminal zero distinguishes exhaustion from abandonment.
+
+  New findings: `no_exhaustion_evidence` (windows declared, none returned 0),
+  `completeness_unassessable` (neither a denominator nor windows — previously
+  silent), `window_underwritten`, `window_declaration_incomplete`.
+
+- **`window_underwritten` is the truncation check.** `window_returned` counts
+  items the source returned; the gate counts rows independently and flags a
+  batch holding fewer rows than items it says came back. Neither side computes
+  both numbers, so the comparison is evidence rather than arithmetic. Rows
+  exceeding returned is normal — one index item can yield several rows — so the
+  check is deliberately one-directional.
+
+### Changed
+
+- `--denominator` is now optional on `g4`. A captured index remains the
+  preferred answer and takes precedence when given; windows are the fallback
+  for surfaces that publish no list.
+
 ## [6.3.0] — 2026-09-15
 
 ### Fixed

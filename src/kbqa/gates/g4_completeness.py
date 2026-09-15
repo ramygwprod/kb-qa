@@ -123,21 +123,101 @@ def parse_stops(path: Path) -> Tuple[Dict[str, str], List[str]]:
     return stops, errors
 
 
+def _int_or_none(v) -> Optional[int]:
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return v
+    if isinstance(v, str) and v.strip().lstrip("-").isdigit():
+        return int(v.strip())
+    return None
+
+
+def read_windows(
+    rows_files: List[str], findings: List[Finding]
+) -> List[Dict[str, object]]:
+    """Per-batch window declarations, for surfaces with no published index.
+
+    A paginated surface with no index offers nothing to measure coverage
+    against. The only evidence the list ended is that asking for the next
+    window returned nothing — so a run that received 15 and stopped is
+    indistinguishable from one that received 15 because 15 was all there was,
+    unless the zero-return is recorded.
+
+    Declared in the staging frontmatter:
+
+        window_requested: 20
+        window_returned: 15
+
+    `window_returned` counts ITEMS the source returned, not rows written. One
+    item can legitimately yield several rows, so rows >= returned is normal and
+    rows < returned is the truncation signal.
+    """
+    windows: List[Dict[str, object]] = []
+    for r in rows_files:
+        p = Path(r)
+        if not p.exists():
+            continue
+        parsed = parse_staging(p)
+        fm = parsed.frontmatter_raw or {}
+        req = _int_or_none(fm.get("window_requested"))
+        ret = _int_or_none(fm.get("window_returned"))
+        if req is None and ret is None:
+            continue
+
+        rows_here = len([x for x in parsed.rows if x.obj is not None])
+        if req is None or ret is None:
+            findings.append(
+                Finding(
+                    "window_declaration_incomplete",
+                    f"{p.name} declares only one half of its window "
+                    f"(window_requested={fm.get('window_requested')!r}, "
+                    f"window_returned={fm.get('window_returned')!r}); both are "
+                    "needed to tell exhaustion from abandonment",
+                    where=str(p),
+                )
+            )
+            continue
+
+        # Non-tautological: the collector declares how many items came back,
+        # the checker counts rows independently. Neither side computes both.
+        if rows_here < ret:
+            findings.append(
+                Finding(
+                    "window_underwritten",
+                    f"{p.name} declares {ret} item(s) returned but holds "
+                    f"{rows_here} row(s); items came back that no row records",
+                    where=str(p),
+                )
+            )
+        windows.append(
+            {"file": str(p), "requested": req, "returned": ret, "rows": rows_here}
+        )
+    return windows
+
+
 def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
     ap = argparse.ArgumentParser(prog="kbqa g4")
-    ap.add_argument("--denominator", required=True)
+    ap.add_argument("--denominator", default=None)
     ap.add_argument("--rows", required=True, nargs="+")
     ap.add_argument("--stops", default=None)
     args = ap.parse_args(argv)
 
-    denom = Path(args.denominator)
     findings: List[Finding] = []
-    inputs = {"denominator": input_ref(denom)}
+    inputs: Dict[str, object] = {}
+    if args.denominator:
+        inputs["denominator"] = input_ref(Path(args.denominator))
     for i, r in enumerate(args.rows):
         inputs[f"rows[{i}]"] = input_ref(Path(r))
     if args.stops:
         inputs["stops"] = input_ref(Path(args.stops))
 
+    windows = read_windows(args.rows, findings)
+
+    if args.denominator is None:
+        return _window_mode(windows, inputs, findings)
+
+    denom = Path(args.denominator)
     if not denom.exists():
         findings.append(Finding("denominator_missing", f"not found: {denom}"))
         return Verdict(GATE, FAIL, inputs, {}, findings), EXIT_FAIL
@@ -227,6 +307,60 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
             "stop_condition_without_reason", "empty_denominator")
         for f in findings
     )
+    return Verdict(GATE, PASS if ok else FAIL, inputs, counts, findings), (
+        EXIT_PASS if ok else EXIT_FAIL
+    )
+
+
+def _window_mode(
+    windows: List[Dict[str, object]],
+    inputs: Dict[str, object],
+    findings: List[Finding],
+) -> Tuple[Verdict, int]:
+    """Completeness for a surface with no denominator.
+
+    Coverage cannot be measured — there is no list to measure against. What CAN
+    be established is exhaustion: the collector kept asking until a window came
+    back empty. Without that terminal zero, the subject is not incomplete, it is
+    unassessable, and saying so out loud is the point. A gate that quietly does
+    not run reads as a clean gate.
+    """
+    if not windows:
+        findings.append(
+            Finding(
+                "completeness_unassessable",
+                "no denominator was given and no batch declares a window, so "
+                "there is nothing to measure coverage or exhaustion against. "
+                "Capture the subject's own index, or declare window_requested "
+                "and window_returned per batch",
+            )
+        )
+        counts = {"windows": 0, "failed": 1}
+        return Verdict(GATE, FAIL, inputs, counts, findings), EXIT_FAIL
+
+    exhausted = [w for w in windows if w["returned"] == 0]
+    if not exhausted:
+        largest = max(int(w["returned"]) for w in windows)
+        findings.append(
+            Finding(
+                "no_exhaustion_evidence",
+                f"{len(windows)} window(s) declared, none returning 0 items "
+                f"(largest return {largest}). A short window is not proof the "
+                "list ended — only a window that came back empty is. Probe once "
+                "more and record the result",
+            )
+        )
+
+    counts = {
+        "windows": len(windows),
+        "items_returned": sum(int(w["returned"]) for w in windows),
+        "rows": sum(int(w["rows"]) for w in windows),
+        "terminal_zero_windows": len(exhausted),
+        "failed": len([f for f in findings if f.code != "window_declaration_incomplete"])
+        if not exhausted
+        else len([f for f in findings]),
+    }
+    ok = bool(exhausted) and not findings
     return Verdict(GATE, PASS if ok else FAIL, inputs, counts, findings), (
         EXIT_PASS if ok else EXIT_FAIL
     )

@@ -1,6 +1,6 @@
 # kbqa — user manual
 
-**Version 6.3.0** · for operators and for maker agents
+**Version 6.4.0** · for operators and for maker agents
 
 Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -10,8 +10,8 @@ Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.3.0"
-python -m kbqa --version          # must print 6.3.0
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.4.0"
+python -m kbqa --version          # must print 6.4.0
 ```
 
 **Audit a corpus** — needs no captures, changes nothing, answers "what here can
@@ -94,7 +94,7 @@ python3 -m venv .venv
 For an estate or CI, install from the pinned tag rather than a branch:
 
 ```bash
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.3.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.4.0"
 ```
 
 **Always a tag, never a branch.** A branch would let the gates and the data they
@@ -825,7 +825,7 @@ and the data they judge change in the same push.
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.3.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.4.0"
 ```
 
 > `pip < 21.3` cannot read this project's metadata and installs an empty package
@@ -981,9 +981,9 @@ gate that did not run has found nothing, which is not the same as having found
 nothing wrong.
 
 **`sweep` says a file is `not-a-batch`, or the batch count dropped after
-upgrading to 6.3.0.**
+upgrading to 6.4.0.**
 That file matched the staging filename pattern but declares no batch
-frontmatter and holds no rows. Before 6.3.0 it was counted as a batch, so
+frontmatter and holds no rows. Before 6.4.0 it was counted as a batch, so
 totals were inflated and CI reported gate failures about it. If it really is a
 batch, give it frontmatter; if it is a document, rename it out of the pattern.
 
