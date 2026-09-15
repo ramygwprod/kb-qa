@@ -16,6 +16,23 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.3.0] — 2026-09-15
+
+### Fixed
+
+- **The denominator glob missed 18 files in 20.** `_denominator-*.md` requires a
+  hyphen; the corpus this package validates writes the bare `_denominator.md`
+  18 times out of 20. G4 runs only when a denominator is given, so for 18 of 19
+  subjects it quietly did not run — surfacing as a Coverage line rather than a
+  failure. Zero findings and zero visibility looked identical, which is the
+  failure mode this package exists to prevent.
+
+  The glob is now `_denominator*.md`, still narrow enough to exclude tombstones
+  (`.superseded-*`) and unrelated artifacts. D-009.
+
+  This is the fourth defect of one kind: a convention inferred from a
+  specification, applied as law, and wrong against the data. See DEVELOPMENT §7.
+
 ## [6.2.0] — 2026-09-13
 
 ### Added

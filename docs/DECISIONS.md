@@ -418,3 +418,41 @@ and such a row must be re-sourced against a captured page.
 **Reversal condition.** If a subject publishes material that is genuinely
 retrievable but not over HTTP, the rule needs a new scheme with a **capture
 mechanism attached**, never an exemption from grounding.
+
+
+## D-009 · Discovery patterns are inferred until a corpus contradicts them
+
+**Date:** 2026-09-15 · **Version:** 6.3.0
+
+`Conventions.denominator_glob` was `_denominator-*.md`, taken from the shape of
+the other Bronze artifacts (`_capture-<batch>.raw.txt`,
+`_robots-<host>-<date>.txt`) rather than from any observation. The collecting
+regime's own instruction is *"Write `_denominator.md`"* — no suffix.
+
+**Measured, 2026-09-15**, across one estate's live subjects:
+
+| filename | count |
+|---|---|
+| `_denominator.md` | 18 |
+| `_denominator-<surface>-<date>.md` | 1 |
+| `_denominator-<surface>.md` | 1 |
+
+The glob matched 2 of 20. Because G4 only runs when a denominator is supplied,
+18 of 19 subjects had **no coverage check at all**, and the report said so in
+the Coverage section — accurately, quietly, and in the place a reader skims.
+
+**Ruling.** The glob is `_denominator*.md`. It still excludes
+`_denominator.md.superseded-<date>` tombstones and files without the leading
+underscore.
+
+**Why this keeps happening.** This is the fourth defect of the same shape: a
+pattern invented from a specification or a single sample, then applied as law —
+after the id pattern rejecting `_`, the id pattern requiring two segments, and
+the staging discovery matching on filename alone (D-006). The lesson is not
+"widen the patterns". It is that a convention this package asserts about someone
+else's files is a hypothesis until a corpus confirms it, and the cost of a wrong
+one is silence rather than an error.
+
+**Reversal condition.** If a corpus emerges where `_denominator*.md` matches a
+file that is not a denominator, discovery must move to content — a declared key
+inside the file — rather than to a narrower name.
