@@ -384,3 +384,82 @@ def test_a_batch_without_provenance_but_with_rows_still_counts(estate):
     f.write_text('{"id": "a.b", "source_url": "https://x.test/a"}\n', encoding="utf-8")
 
     assert audit_batch(f, root)["tier"] != NOT_A_BATCH
+
+
+# --------------------------------------------------------------------------
+# Gold with no Silver beneath it
+# --------------------------------------------------------------------------
+
+TREE = (
+    "---\nvendor: Orphan\nproof: 2 rows\n---\n\n"
+    '{"id": "orphan.a", "vendor_term": "A", "what_it_does": "Does a.", '
+    '"source_url": "https://docs.orphan.test/a", '
+    '"source_quote": "A does a thing.", "access_date": "2026-08-23", '
+    '"evidence_grade": "official-doc", "confidence": "high", '
+    '"mechanism": "Native", "outcome": "yes", "depth_level": "feature"}\n'
+    '{"id": "orphan.b", "vendor_term": "B", "what_it_does": "Does b.", '
+    '"source_url": "https://docs.orphan.test/b", '
+    '"source_quote": "B does another thing.", "access_date": "2026-08-23", '
+    '"evidence_grade": "official-doc", "confidence": "high", '
+    '"mechanism": "Native", "outcome": "yes", "depth_level": "feature"}\n'
+)
+
+
+def test_a_subject_with_only_a_tree_is_counted_and_named(estate, capsys):
+    """An audit that omits the subjects it never looked at is the failure.
+
+    Rows living only in a merged tree passed through no capture, so they sit in
+    none of the three tiers — and the percentages are computed without them.
+    Reporting 15% verifiable while silently excluding most of the corpus is
+    silence rendering as coverage.
+    """
+    root = estate(Acme="good")
+    orphan = root / "Competitors" / "Orphan"
+    orphan.mkdir(parents=True)
+    (orphan / "feature-tree.md").write_text(TREE, encoding="utf-8")
+
+    code = cli.main(["sweep", "--root", str(root)])
+    assert code == 0
+    out = capsys.readouterr().out
+
+    assert "NO BATCH" in out, "stdout never mentions the subject with no batch"
+
+    machine = json.loads((root / "_qa-estate-audit.json").read_text())
+    assert "Orphan" in machine["trees_without_batches"]
+    assert machine["trees_without_batches"]["Orphan"] == 2
+
+    report = (root / "_qa-estate-audit.md").read_text()
+    assert "no batch behind it" in report
+    assert "Orphan" in report
+
+
+def test_a_subject_with_both_a_tree_and_batches_is_not_flagged(estate):
+    """The flag is for Gold with no Silver, not for a normal finished subject."""
+    root = estate(Acme="good")
+    (root / "Competitors" / "Acme" / "feature-tree.md").write_text(TREE, encoding="utf-8")
+
+    cli.main(["sweep", "--root", str(root)])
+    machine = json.loads((root / "_qa-estate-audit.json").read_text())
+    assert "Acme" not in machine["trees_without_batches"]
+
+
+def test_tree_rows_are_never_folded_into_the_tier_percentages(estate):
+    """Two different questions, never blended — the same rule the tiers follow.
+
+    Asserted by adding the orphan and checking the tier figures do not move,
+    rather than by comparing totals: a fixture whose row count coincides with
+    the tree's would make that comparison pass for the wrong reason.
+    """
+    root = estate(Acme="good")
+
+    cli.main(["sweep", "--root", str(root)])
+    before = json.loads((root / "_qa-estate-audit.json").read_text())["totals"]
+
+    orphan = root / "Competitors" / "Orphan"
+    orphan.mkdir(parents=True)
+    (orphan / "feature-tree.md").write_text(TREE, encoding="utf-8")
+
+    cli.main(["sweep", "--root", str(root)])
+    after = json.loads((root / "_qa-estate-audit.json").read_text())
+    assert after["totals"] == before, "tree rows moved a tier figure"
+    assert after["trees_without_batches"] == {"Orphan": 2}
