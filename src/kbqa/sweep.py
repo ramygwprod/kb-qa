@@ -248,6 +248,28 @@ def build(
 
     scanned = [audit_batch(s, root, depth) for s in stagings]
 
+    # Gold with no Silver beneath it.
+    #
+    # The tiers above describe BATCHES. A subject whose rows live only in a
+    # merged tree has no batch, so it appears in no tier — and an audit that
+    # reports 15% verifiable while silently omitting the subjects it never
+    # looked at is the failure this package exists to name. Counted separately
+    # because it is a different question, and reported because the alternative
+    # is silence that reads as coverage.
+    trees = [
+        g for g in sorted(root.glob("**/feature-tree*.md"))
+        if not any(fnmatch.fnmatch(str(g.relative_to(root)), pat) for pat in exclude)
+    ]
+    tree_subjects: Dict[str, int] = {}
+    for g in trees:
+        subj = vendor_of(g, root, depth)
+        rows_in_tree = 0
+        try:
+            rows_in_tree = len([r for r in parse_staging(g).rows if r.obj is not None])
+        except Exception:  # noqa: BLE001 — an unreadable tree is still a tree
+            pass
+        tree_subjects[subj] = tree_subjects.get(subj, 0) + rows_in_tree
+
     # Named and counted, never silently dropped — the same rule as --exclude.
     not_batches = [b for b in scanned if b["tier"] == NOT_A_BATCH]
     batches = [b for b in scanned if b["tier"] != NOT_A_BATCH]
@@ -255,6 +277,11 @@ def build(
     by_vendor: Dict[str, List[dict]] = defaultdict(list)
     for b in batches:
         by_vendor[b["vendor"]].append(b)
+
+    batch_subjects = {b["vendor"] for b in batches}
+    ungrounded_subjects = {
+        s: n for s, n in sorted(tree_subjects.items()) if s not in batch_subjects
+    }
 
     verifiable = [b for b in batches if b["tier"] == VERIFIABLE]
     unassessable = [b for b in batches if b["tier"] == UNASSESSABLE]
@@ -312,6 +339,26 @@ def build(
         a(f"| {vendor} | {len(bs)} | {v} | {sum(b['rows'] for b in bs)} | "
           f"{conf}/{len(bs)} | {viol} |")
     a("")
+
+    if ungrounded_subjects:
+        a("## Subjects with a tree and no batch behind it")
+        a("")
+        a(f"{len(ungrounded_subjects)} subject(s) hold "
+          f"{sum(ungrounded_subjects.values())} row(s) in a merged tree with **no "
+          "staging file anywhere**, so they appear in none of the tiers above.")
+        a("")
+        a("This is not the same as unverifiable. An unverifiable batch has a "
+          "staging file citing pages — a trail something could re-fetch against. "
+          "Rows that exist only in a tree never passed through a capture at all, "
+          "and the percentages above are computed without them.")
+        a("")
+        a("| subject | rows in tree |")
+        a("|---|---|")
+        for s, n in sorted(ungrounded_subjects.items(), key=lambda kv: -kv[1])[:40]:
+            a(f"| `{s}` | {n} |")
+        if len(ungrounded_subjects) > 40:
+            a(f"| … and {len(ungrounded_subjects) - 40} more | |")
+        a("")
 
     if not_batches:
         a("## Matched the name, but are not batches")
@@ -422,6 +469,8 @@ def build(
         },
         "batches": batches,
         "excluded": excluded,
+        "trees_without_batches": ungrounded_subjects,
+        "tree_subjects": len(tree_subjects),
         "not_batches": [b["path"] for b in not_batches],
         "fields": fields,
     }
@@ -486,6 +535,13 @@ def run(argv: List[str]) -> int:
     # Printed, not only written. A file matched by the discovery glob that is
     # not a batch is a discovery defect, and an operator who reads the terminal
     # and not the report would otherwise never learn the totals excluded it.
+    if machine.get("trees_without_batches"):
+        tw = machine["trees_without_batches"]
+        print(
+            f"  NO BATCH     ={len(tw):>4} subject(s) / {sum(tw.values()):>6} rows "
+            "hold a tree with no staging file anywhere — not counted in any tier "
+            "above, named in the report"
+        )
     if machine.get("not_batches"):
         n = len(machine["not_batches"])
         print(

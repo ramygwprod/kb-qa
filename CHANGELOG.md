@@ -16,6 +16,28 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.6.0] — 2026-09-16
+
+### Added
+
+- **`sweep` reports subjects that have a tree and no batch behind it.** The
+  three tiers describe *batches*. A subject whose rows live only in a merged
+  `feature-tree.md` has no staging file, so it appeared in no tier — and the
+  audit reported "15% verifiable" over a corpus while silently omitting most of
+  the subjects in it.
+
+  Measured on the estate that prompted this: **63 directories hold a tree, 11
+  hold a staging file, 2 hold a capture.** The percentages were computed across
+  the 11.
+
+  This is not the same as `unverifiable-no-capture`. An unverifiable batch has a
+  staging file citing pages — a trail something could re-fetch against. Rows
+  existing only in a tree never passed through a capture at all.
+
+  Counted separately and never folded into the tier figures, because they answer
+  a different question; named in the report and on the terminal summary, because
+  the alternative is silence that reads as coverage.
+
 ## [6.5.0] — 2026-09-16
 
 ### Added

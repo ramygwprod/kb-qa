@@ -547,3 +547,47 @@ produced D-006 and D-009. What is checked is that whatever was used is recorded.
 erroring instead at the end of the list — `error` at a known offset would need
 promoting to a second terminal form. It is not one today: an errored window is
 unattempted, not finished.
+
+
+## D-012 · An audit names what it did not look at
+
+**Date:** 2026-09-16 · **Version:** 6.6.0
+
+`sweep` discovers batches by staging file and sorts them into three tiers. It
+never looked at `feature-tree.md`. On the estate it was built to audit that
+meant:
+
+| artifact | directories holding one |
+|---|---|
+| `feature-tree*.md` | 63 |
+| `_collect-*-staging.md` | 11 |
+| `_capture-*.raw.txt` | 2 |
+
+The audit reported 178 batches, 12,728 rows and "15% verifiable" — all true of
+the 11, and silent about the other 52 subjects. A reader would take those
+percentages as describing the corpus.
+
+**Ruling.** A subject holding a tree with no staging file anywhere is counted,
+named in the report, and printed in the terminal summary as `NO BATCH`. It is
+kept out of the tier figures: the tiers answer *how checkable is this batch*,
+and a subject with no batch is not a badly-checkable batch — it is a different
+question, and blending them would produce a number meaning neither.
+
+**Why it is worse than `unverifiable-no-capture`, despite sounding similar.** An
+unverifiable batch has a staging file whose rows cite pages; the trail exists
+and a re-fetch can restore it. Rows that exist only in a merged tree never
+passed through a capture, and `G6` checks such a tree's `proof:` count against
+its own contents — self-consistency, not grounding.
+
+**The pattern, stated for the fifth time.** D-006 (discovery by filename),
+D-009 (a glob matching 2 files in 20), D-010 (`completeness_unassessable`),
+D-011 (a short return read as the end of a list), and now this. Every one is the
+same defect: **something this package could not see rendered identically to
+something it had checked and found clean.** The rule is not "add more checks" —
+it is that any scope this package draws around itself must be stated in its own
+output.
+
+**Reversal condition.** If an estate legitimately keeps trees and batches in
+separate directory structures, subject attribution by path depth would flag
+every subject. Attribution would then need to move to a declared key inside the
+tree rather than to its location.
