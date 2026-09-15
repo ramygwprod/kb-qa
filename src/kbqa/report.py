@@ -53,7 +53,8 @@ GAP_CODES = {
     "zero_rows", "nothing_checked", "robots_unreachable",
     "batch_unchecked", "capture_has_no_page_blocks",
     "completeness_unassessable", "no_exhaustion_evidence",
-    "window_declaration_incomplete",
+    "window_declaration_incomplete", "window_end_undeclared",
+    "collection_parked", "window_chain_gap", "window_ended_in_error",
 }
 
 
@@ -393,6 +394,43 @@ REMEDIES: Dict[str, Remedy] = {
         "rows, or correct the declaration if it over-counted — but establish "
         "which before changing either. Lowering `window_returned` to match the "
         "rows makes the finding disappear without recovering the items.",
+    ),
+    "collection_parked": Remedy(
+        PLANNER,
+        "Not a defect. A large index cannot be taken in one pass, and a "
+        "collector that stopped on its budget did the right thing — the "
+        "alternative is a run killed mid-surface whose partial output looks "
+        "complete. The subject is simply not finished: schedule the next window "
+        "from the offset in the message. Do NOT mark the subject done, and do "
+        "not treat the parked window as the end of the list.",
+    ),
+    "window_end_undeclared": Remedy(
+        FIXABLE,
+        "A window that does not say why it ended cannot be interpreted. Twelve "
+        "returned against twenty asked means either the source had twelve or "
+        "the collector stopped at twelve — opposite situations needing opposite "
+        "responses. Record window_end as `exhausted`, `budget` or `error`, from "
+        "what actually happened.",
+    ),
+    "window_end_unknown_value": Remedy(
+        FIXABLE,
+        "window_end must be `exhausted` (the source ran out), `budget` (the "
+        "collector stopped deliberately) or `error` (the attempt failed). A "
+        "fourth value is not a fourth outcome; pick the one that describes what "
+        "happened.",
+    ),
+    "window_chain_gap": Remedy(
+        PLANNER,
+        "Consecutive windows skip a range, so those items were never requested "
+        "— absent from the corpus without ever having been looked at. Collect "
+        "the missing range as its own window. Do not renumber the offsets to "
+        "make the chain contiguous; that hides the gap rather than closing it.",
+    ),
+    "window_ended_in_error": Remedy(
+        PLANNER,
+        "The window failed partway, so the range beyond it is unattempted "
+        "rather than absent. Re-run that window. An errored window is never "
+        "evidence that the list ended.",
     ),
     "window_declaration_incomplete": Remedy(
         FIXABLE,

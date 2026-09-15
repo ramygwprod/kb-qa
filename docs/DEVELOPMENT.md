@@ -1,6 +1,6 @@
 # kbqa — developer guide
 
-**Version 6.4.0** · for anyone extending or maintaining the package
+**Version 6.5.0** · for anyone extending or maintaining the package
 
 For *using* the tool, see [MANUAL.md](MANUAL.md). This document covers
 architecture, how to extend it, what must not break, and how to release.

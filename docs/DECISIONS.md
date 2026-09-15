@@ -505,3 +505,45 @@ Silence and success must never render identically.
 to obtain — an endpoint that errors rather than returning empty — the terminal
 condition needs a second recordable form (a recorded error at offset N), not an
 exemption from evidencing exhaustion.
+
+
+## D-011 · A window declares why it ended, because a count cannot
+
+**Date:** 2026-09-16 · **Version:** 6.5.0 · **Supersedes part of D-010**
+
+D-010 treated a zero-return as the evidence of exhaustion. Correct as far as it
+went, and too weak for the case that motivated it.
+
+A collector working a five-thousand-item index must stop **before** it is
+killed, not when the list ends. So the ordinary healthy outcome is a window that
+returns everything it asked for and then stops anyway. And a window returning 12
+of 20 requested carries no information about which happened:
+
+- the source had 12 and the list is finished, or
+- the collector took 12 and stopped while still healthy, or
+- the fetch failed partway and reported what it had.
+
+Three situations, three different next actions, one number.
+
+**Ruling.** A window declares `window_end`: `exhausted`, `budget`, or `error`.
+A subject is complete only when some window reports `exhausted` — never on a
+budget stop, however clean the sequence looks. `exhausted` may be written only
+after asking again and receiving nothing; inferring it from a short return is
+the specific failure this field exists to prevent.
+
+**Parked is a legitimate state.** A subject whose last window stopped on budget
+is incomplete, and reported as such with an offset to resume from — not as a
+failure of collection. The collector that stops while healthy is doing better
+than the one that dies trying to finish, and the report says so, because a
+finding that reads as blame for correct behaviour teaches the collector to hide
+it.
+
+**On window size.** The package has no opinion, and should not: the binding
+constraint is bytes captured, not items seen, and it varies by subject. A fixed
+number in a contract would be exactly the kind of invented constant that
+produced D-006 and D-009. What is checked is that whatever was used is recorded.
+
+**Reversal condition.** If a surface cannot produce an empty response —
+erroring instead at the end of the list — `error` at a known offset would need
+promoting to a second terminal form. It is not one today: an errored window is
+unattempted, not finished.

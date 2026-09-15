@@ -20,8 +20,8 @@ python3 -m kbqa --version && python3 -m kbqa --manifest | head -1
 Expected for the pinned release:
 
 ```
-6.4.0
-manifest_sha256 cfa051118ca3378de86b95d52db5d22455170fa106bd835dafddc51b9c975478
+6.5.0
+manifest_sha256 d9d7db2a38e72272bd9636a13332caf93a517ea66d24757c037622cb70a46447
 ```
 
 **If the version or the manifest differs, stop and report it.** A verdict from

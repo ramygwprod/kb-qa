@@ -577,7 +577,7 @@ def test_batch_metadata_in_the_rows_block_is_not_a_malformed_row(fx):
 # G4 window mode — exhaustion for surfaces with no published index
 # --------------------------------------------------------------------------
 
-def _windowed(tmp_path, name, requested, returned, n_rows, **extra):
+def _windowed(tmp_path, name, requested, returned, n_rows, end="budget", **extra):
     """A staging file declaring one window of a paginated surface."""
     import json as _json
 
@@ -602,6 +602,8 @@ def _windowed(tmp_path, name, requested, returned, n_rows, **extra):
         fm.append(f"window_requested: {requested}")
     if returned is not None:
         fm.append(f"window_returned: {returned}")
+    if end is not None:
+        fm.append(f"window_end: {end}")
     for k, v in extra.items():
         fm.append(f"{k}: {v}")
     f = tmp_path / f"_collect-{name}-staging.md"
@@ -609,22 +611,36 @@ def _windowed(tmp_path, name, requested, returned, n_rows, **extra):
     return str(f)
 
 
-def test_windows_without_a_terminal_zero_fail(tmp_path):
+def test_windows_that_never_reach_the_end_do_not_pass(tmp_path):
     """A short window is not proof the list ended.
 
-    Twenty asked, fifteen returned, stop. That is equally consistent with a run
-    that gave up. Only a window that came back empty distinguishes exhaustion
-    from abandonment, and the distinction is the whole point of the mode.
+    Twenty asked, fifteen returned, stop. That is equally consistent with a
+    collector that stopped on budget. The subject is not complete, and the gate
+    must not report it as such however tidy the windows look.
     """
     from kbqa.gates import g4_completeness
 
-    w1 = _windowed(tmp_path, "w1", 20, 20, 20)
-    w2 = _windowed(tmp_path, "w2", 20, 15, 15)
+    w1 = _windowed(tmp_path, "w1", 20, 20, 20, end="budget")
+    w2 = _windowed(tmp_path, "w2", 20, 15, 15, end="budget")
     v, code = g4_completeness.run(["--rows", w1, w2])
 
     assert code == 1
     assert v.verdict == "FAIL"
+    assert v.counts["reached_end_of_list"] == 0
+    assert any(f.code == "collection_parked" for f in v.findings)
+
+
+def test_windows_with_no_declared_end_give_no_exhaustion_evidence(tmp_path):
+    """Undeclared ends leave the gate nothing to reason from — and it says so."""
+    from kbqa.gates import g4_completeness
+
+    w1 = _windowed(tmp_path, "w1", 20, 20, 20, end=None)
+    w2 = _windowed(tmp_path, "w2", 20, 15, 15, end=None)
+    v, code = g4_completeness.run(["--rows", w1, w2])
+
+    assert code == 1
     assert any(f.code == "no_exhaustion_evidence" for f in v.findings)
+    assert any(f.code == "window_end_undeclared" for f in v.findings)
 
 
 def test_a_terminal_zero_window_passes(tmp_path):
@@ -632,12 +648,12 @@ def test_a_terminal_zero_window_passes(tmp_path):
 
     w1 = _windowed(tmp_path, "w1", 20, 20, 20)
     w2 = _windowed(tmp_path, "w2", 20, 15, 15)
-    w3 = _windowed(tmp_path, "w3", 20, 0, 0)
+    w3 = _windowed(tmp_path, "w3", 20, 0, 0, end="exhausted")
     v, code = g4_completeness.run(["--rows", w1, w2, w3])
 
     assert code == 0
     assert v.verdict == "PASS"
-    assert v.counts["terminal_zero_windows"] == 1
+    assert v.counts["reached_end_of_list"] == 1
     assert v.counts["items_returned"] == 35
 
 
@@ -650,7 +666,7 @@ def test_fewer_rows_than_items_returned_is_caught(tmp_path):
     from kbqa.gates import g4_completeness
 
     w = _windowed(tmp_path, "w1", 20, 20, 8)
-    z = _windowed(tmp_path, "w2", 20, 0, 0)
+    z = _windowed(tmp_path, "w2", 20, 0, 0, end="exhausted")
     v, code = g4_completeness.run(["--rows", w, z])
 
     assert code == 1
@@ -662,7 +678,7 @@ def test_more_rows_than_items_returned_is_fine(tmp_path):
     from kbqa.gates import g4_completeness
 
     w = _windowed(tmp_path, "w1", 20, 5, 12)
-    z = _windowed(tmp_path, "w2", 20, 0, 0)
+    z = _windowed(tmp_path, "w2", 20, 0, 0, end="exhausted")
     v, code = g4_completeness.run(["--rows", w, z])
 
     assert not any(f.code == "window_underwritten" for f in v.findings)
@@ -702,3 +718,86 @@ def test_a_denominator_still_takes_precedence(fx):
     assert code == 0
     assert "existence_index_items" in v.counts
     assert "terminal_zero_windows" not in v.counts
+
+
+def test_a_budget_stop_is_parked_not_abandoned(tmp_path):
+    """A 5,000-item index cannot be taken in one pass.
+
+    A collector that stops before it is killed has done the right thing. The
+    subject is incomplete — a true and useful statement — and the finding says
+    where to resume rather than blaming the collector.
+    """
+    from kbqa.gates import g4_completeness
+
+    w1 = _windowed(tmp_path, "w1", 20, 20, 20, end="budget", window_offset=0)
+    w2 = _windowed(tmp_path, "w2", 20, 20, 20, end="budget", window_offset=20)
+    v, code = g4_completeness.run(["--rows", w1, w2])
+
+    assert code == 1
+    parked = [f for f in v.findings if f.code == "collection_parked"]
+    assert parked, [f.code for f in v.findings]
+    assert "offset 40" in parked[0].message
+    assert v.counts["parked_on_budget"] == 2
+
+
+def test_a_short_return_no_longer_passes_as_the_end(tmp_path):
+    """The ambiguity this whole mechanism exists to remove.
+
+    Twelve of twenty asked means the source had twelve, OR the collector took
+    twelve and stopped. Declaring `budget` says which, and it is not the end.
+    """
+    from kbqa.gates import g4_completeness
+
+    w = _windowed(tmp_path, "w1", 20, 12, 12, end="budget")
+    v, code = g4_completeness.run(["--rows", w])
+
+    assert code == 1
+    assert any(f.code == "collection_parked" for f in v.findings)
+    assert not any(f.code == "no_exhaustion_evidence" for f in v.findings)
+
+
+def test_a_window_declaring_no_end_is_caught(tmp_path):
+    from kbqa.gates import g4_completeness
+
+    w = _windowed(tmp_path, "w1", 20, 12, 12, end=None)
+    v, code = g4_completeness.run(["--rows", w])
+
+    assert code == 1
+    assert any(f.code == "window_end_undeclared" for f in v.findings)
+
+
+def test_a_skipped_range_is_caught(tmp_path):
+    """Offsets 0-19 then 80: items 20-79 were never asked for."""
+    from kbqa.gates import g4_completeness
+
+    w1 = _windowed(tmp_path, "w1", 20, 20, 20, end="budget", window_offset=0)
+    w2 = _windowed(tmp_path, "w2", 20, 5, 5, end="exhausted", window_offset=80)
+    v, code = g4_completeness.run(["--rows", w1, w2])
+
+    assert code == 1
+    gaps = [f for f in v.findings if f.code == "window_chain_gap"]
+    assert gaps
+    assert "20" in gaps[0].message and "79" in gaps[0].message
+
+
+def test_a_contiguous_chain_ending_in_exhaustion_passes(tmp_path):
+    from kbqa.gates import g4_completeness
+
+    w1 = _windowed(tmp_path, "w1", 20, 20, 20, end="budget", window_offset=0)
+    w2 = _windowed(tmp_path, "w2", 20, 20, 20, end="budget", window_offset=20)
+    w3 = _windowed(tmp_path, "w3", 20, 7, 7, end="exhausted", window_offset=40)
+    v, code = g4_completeness.run(["--rows", w1, w2, w3])
+
+    assert code == 0, [f.code for f in v.findings]
+    assert v.counts["items_returned"] == 47
+
+
+def test_an_errored_window_is_unattempted_not_absent(tmp_path):
+    from kbqa.gates import g4_completeness
+
+    w1 = _windowed(tmp_path, "w1", 20, 8, 8, end="error", window_offset=0)
+    w2 = _windowed(tmp_path, "w2", 20, 0, 0, end="exhausted", window_offset=8)
+    v, code = g4_completeness.run(["--rows", w1, w2])
+
+    assert code == 1
+    assert any(f.code == "window_ended_in_error" for f in v.findings)

@@ -16,6 +16,45 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.5.0] — 2026-09-16
+
+### Added
+
+- **`window_end` — why a window stopped, which a count cannot say.** 6.4.0 read
+  a terminal zero as the end of the list. That is too weak for the case it was
+  built for: a collector working a 5,000-item index must stop *before* it is
+  killed, and a window returning 12 of 20 asked means either the source had 12
+  or the collector took 12 and stopped. Opposite situations, opposite responses,
+  identical in the data.
+
+  Windows now declare `exhausted` · `budget` · `error`. A subject is complete
+  only on `exhausted`, and **never on a budget stop however tidy the numbers
+  look**.
+
+- **`collection_parked` — incomplete-and-safe as a first-class state.** A window
+  that stopped on budget is not a defect; it is the correct outcome for a large
+  surface, and better than a run killed mid-list whose partial capture looks
+  complete. The finding carries the offset to resume from and says plainly that
+  the collector did the right thing.
+
+- **`window_chain_gap`** — where offsets exist, consecutive windows that skip a
+  range are items nobody ever requested: absent without having been looked at.
+  The remedy says to collect the missing range, not to renumber the offsets.
+
+- **`window_ended_in_error`** — the range beyond a failed window is unattempted,
+  not absent. An errored window is never evidence the list ended.
+
+- `window_offset` is optional, since a mega-menu has no stable positions. Gap
+  detection runs only where offsets are declared.
+
+### Changed
+
+- `agents/fetcher.md` now instructs a budget stop rather than a fixed count:
+  there is no correct window size, the binding limit is capture size rather than
+  item count, and a window that completes beats a larger one that dies. It also
+  states the rule the field exists for — **never write `exhausted` unless you
+  asked again and got nothing.**
+
 ## [6.4.0] — 2026-09-16
 
 ### Added

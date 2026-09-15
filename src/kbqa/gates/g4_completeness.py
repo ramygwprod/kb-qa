@@ -153,6 +153,7 @@ def read_windows(
     item can legitimately yield several rows, so rows >= returned is normal and
     rows < returned is the truncation signal.
     """
+    WINDOW_ENDS = ("exhausted", "budget", "error")
     windows: List[Dict[str, object]] = []
     for r in rows_files:
         p = Path(r)
@@ -190,9 +191,41 @@ def read_windows(
                     where=str(p),
                 )
             )
-        windows.append(
-            {"file": str(p), "requested": req, "returned": ret, "rows": rows_here}
-        )
+        # WHY a window ended is not derivable from how much it returned.
+        # Twelve of twenty asked means the source had twelve, OR the collector
+        # took twelve and stopped before it was killed. Those need opposite
+        # responses — one ends the subject, the other says resume here — so the
+        # collector declares which, and the gate never guesses.
+        end = fm.get("window_end")
+        if end is None:
+            findings.append(
+                Finding(
+                    "window_end_undeclared",
+                    f"{p.name} declares a window but not why it ended. "
+                    f"window_end must be one of {', '.join(WINDOW_ENDS)}: a "
+                    "short return is not self-explaining",
+                    where=str(p),
+                )
+            )
+        elif str(end) not in WINDOW_ENDS:
+            findings.append(
+                Finding(
+                    "window_end_unknown_value",
+                    f"{p.name} declares window_end={end!r}; expected one of "
+                    f"{', '.join(WINDOW_ENDS)}",
+                    where=str(p),
+                )
+            )
+            end = None
+
+        windows.append({
+            "file": str(p),
+            "requested": req,
+            "returned": ret,
+            "rows": rows_here,
+            "end": str(end) if end is not None else None,
+            "offset": _int_or_none(fm.get("window_offset")),
+        })
     return windows
 
 
@@ -320,10 +353,15 @@ def _window_mode(
     """Completeness for a surface with no denominator.
 
     Coverage cannot be measured — there is no list to measure against. What CAN
-    be established is exhaustion: the collector kept asking until a window came
-    back empty. Without that terminal zero, the subject is not incomplete, it is
-    unassessable, and saying so out loud is the point. A gate that quietly does
-    not run reads as a clean gate.
+    be established is exhaustion: the collector kept asking until the source ran
+    out. Without that, the subject is not incomplete, it is unassessable, and
+    saying so out loud is the point. A gate that quietly does not run reads as a
+    clean gate.
+
+    A subject parked on a budget stop is a THIRD state, and a legitimate one: a
+    5,000-item index cannot be taken in one pass, and a collector that stops
+    before it is killed has done the right thing. It is reported with where to
+    resume, not as a failure of collection.
     """
     if not windows:
         findings.append(
@@ -331,34 +369,91 @@ def _window_mode(
                 "completeness_unassessable",
                 "no denominator was given and no batch declares a window, so "
                 "there is nothing to measure coverage or exhaustion against. "
-                "Capture the subject's own index, or declare window_requested "
-                "and window_returned per batch",
+                "Capture the subject's own index, or declare window_requested, "
+                "window_returned and window_end per batch",
             )
         )
-        counts = {"windows": 0, "failed": 1}
-        return Verdict(GATE, FAIL, inputs, counts, findings), EXIT_FAIL
+        return (
+            Verdict(GATE, FAIL, inputs, {"windows": 0, "failed": 1}, findings),
+            EXIT_FAIL,
+        )
 
-    exhausted = [w for w in windows if w["returned"] == 0]
+    ordered = sorted(
+        windows,
+        key=lambda w: (w["offset"] is None, w["offset"] if w["offset"] is not None else 0),
+    )
+
+    # Offsets are optional — a mega-menu has no stable index — but where they
+    # exist, a chain that skips is a range nobody ever asked for.
+    have_offsets = [w for w in ordered if w["offset"] is not None]
+    if len(have_offsets) > 1:
+        for prev, nxt in zip(have_offsets, have_offsets[1:]):
+            expected = int(prev["offset"]) + int(prev["returned"])
+            actual = int(nxt["offset"])
+            if actual > expected:
+                findings.append(
+                    Finding(
+                        "window_chain_gap",
+                        f"items {expected}–{actual - 1} were never requested: "
+                        f"{Path(str(prev['file'])).name} covered "
+                        f"{prev['offset']}–{expected - 1}, and the next window "
+                        f"starts at {actual}",
+                        where=str(nxt["file"]),
+                    )
+                )
+
+    exhausted = [w for w in ordered if w["end"] == "exhausted" or w["returned"] == 0]
+    parked = [w for w in ordered if w["end"] == "budget"]
+    errored = [w for w in ordered if w["end"] == "error"]
+
     if not exhausted:
-        largest = max(int(w["returned"]) for w in windows)
+        if parked:
+            last = parked[-1]
+            resume = (
+                f"offset {int(last['offset']) + int(last['returned'])}"
+                if last["offset"] is not None
+                else f"after the {int(last['returned'])} item(s) in "
+                f"{Path(str(last['file'])).name}"
+            )
+            findings.append(
+                Finding(
+                    "collection_parked",
+                    f"{len(parked)} window(s) stopped on budget and none reached "
+                    f"the end of the list. This is a correct place to stop, not a "
+                    f"defect — the subject is simply incomplete. Resume at {resume}",
+                    where=str(last["file"]),
+                )
+            )
+        else:
+            findings.append(
+                Finding(
+                    "no_exhaustion_evidence",
+                    f"{len(ordered)} window(s) declared, none reaching the end of "
+                    "the list. A short return is not proof the list ended — it is "
+                    "equally consistent with a collector that stopped. Declare "
+                    "window_end, and probe once more if it was a budget stop",
+                )
+            )
+
+    for w in errored:
         findings.append(
             Finding(
-                "no_exhaustion_evidence",
-                f"{len(windows)} window(s) declared, none returning 0 items "
-                f"(largest return {largest}). A short window is not proof the "
-                "list ended — only a window that came back empty is. Probe once "
-                "more and record the result",
+                "window_ended_in_error",
+                f"{Path(str(w['file'])).name} ended in error after "
+                f"{w['returned']} item(s); the range beyond it is unattempted, "
+                "not absent",
+                where=str(w["file"]),
             )
         )
 
     counts = {
-        "windows": len(windows),
-        "items_returned": sum(int(w["returned"]) for w in windows),
-        "rows": sum(int(w["rows"]) for w in windows),
-        "terminal_zero_windows": len(exhausted),
-        "failed": len([f for f in findings if f.code != "window_declaration_incomplete"])
-        if not exhausted
-        else len([f for f in findings]),
+        "windows": len(ordered),
+        "items_returned": sum(int(w["returned"]) for w in ordered),
+        "rows": sum(int(w["rows"]) for w in ordered),
+        "reached_end_of_list": len(exhausted),
+        "parked_on_budget": len(parked),
+        "ended_in_error": len(errored),
+        "failed": len(findings),
     }
     ok = bool(exhausted) and not findings
     return Verdict(GATE, PASS if ok else FAIL, inputs, counts, findings), (
