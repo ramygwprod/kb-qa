@@ -204,3 +204,18 @@ def test_a_collector_granted_a_forbidden_tool_is_caught(collect_text, tool):
         r"^(allowed-tools:.*)$", r"\1, " + tool, collect_text, count=1, flags=re.MULTILINE
     )
     assert granted_tools(mutated) & COLLECT_FORBIDDEN
+
+
+def test_both_snippets_carry_a_checkout_placeholder():
+    """`**/kb-qa/**` only matches a directory literally named kb-qa.
+
+    A working copy can be called anything. Without a path the operator
+    substitutes, a session can edit the gates through the checkout while every
+    other route to them is closed — the one hole that makes the rest decorative.
+    """
+    for snippet in (SNIPPET, COLLECT_SNIPPET):
+        deny = " ".join(json.loads(snippet.read_text())["permissions"]["deny"])
+        assert "CHECKOUT" in deny, (
+            f"{snippet.parent.name} has no checkout placeholder, so a kb-qa "
+            "working copy under any other name is writable"
+        )

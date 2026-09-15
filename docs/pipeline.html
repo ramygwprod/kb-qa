@@ -1,0 +1,434 @@
+<title>Evidence Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+
+<style>
+  :root {
+    --paper:#f4f6f3; --surface:#fbfcfa; --surface-2:#ecefea;
+    --ink:#171b19; --ink-2:#414845; --ink-3:#6b7470;
+    --rule:#d3dad3; --rule-2:#e4e8e2;
+    --petrol:#0c5b60; --petrol-soft:#e0eded;
+    --moss:#3d6b3c; --rust:#9b3a28; --sand:#7d651f;
+    --bronze:#8a6a3f; --silver:#566670; --gold:#836d26;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#0f1412; --surface:#161c19; --surface-2:#1c2420;
+      --ink:#e9eee9; --ink-2:#a9b4ae; --ink-3:#7d8a83;
+      --rule:#28312c; --rule-2:#1f2823;
+      --petrol:#63bcbf; --petrol-soft:#10302f;
+      --moss:#82ba79; --rust:#e08770; --sand:#d3b45f;
+      --bronze:#c69c61; --silver:#a2b2bc; --gold:#dac065;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#0f1412; --surface:#161c19; --surface-2:#1c2420;
+    --ink:#e9eee9; --ink-2:#a9b4ae; --ink-3:#7d8a83;
+    --rule:#28312c; --rule-2:#1f2823;
+    --petrol:#63bcbf; --petrol-soft:#10302f;
+    --moss:#82ba79; --rust:#e08770; --sand:#d3b45f;
+    --bronze:#c69c61; --silver:#a2b2bc; --gold:#dac065;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 56px 28px 96px; }
+
+  h1, h2, h3 {
+    font-family: Archivo, "Helvetica Neue", Arial, sans-serif;
+    text-wrap: balance;
+    margin: 0;
+  }
+  h1 { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+  h2 { font-size: 23px; font-weight: 600; letter-spacing: -0.01em; }
+  h3 { font-size: 15px; font-weight: 600; }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  p { margin: 0; max-width: 68ch; }
+  .lede { font-size: 19px; color: var(--ink-2); max-width: 64ch; }
+
+  code, .mono {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.86em;
+  }
+  code { color: var(--petrol); }
+
+  header.head {
+    display: flex; flex-direction: column; gap: 14px;
+    padding-bottom: 28px; border-bottom: 2px solid var(--ink);
+  }
+
+  .regimes { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+  .regime {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px; letter-spacing: 0.04em;
+    border: 1px solid var(--rule); border-radius: 3px;
+    padding: 5px 10px; color: var(--ink-2); background: var(--surface);
+  }
+  .regime b { color: var(--petrol); font-weight: 500; }
+
+  section { margin-top: 52px; display: flex; flex-direction: column; gap: 18px; }
+
+  figure { margin: 0; display: flex; flex-direction: column; gap: 12px; }
+  .scroll { overflow-x: auto; }
+  figure svg { display: block; width: 100%; min-width: 720px; height: auto; color: var(--ink); }
+  figcaption { font-size: 14.5px; color: var(--ink-2); max-width: 70ch; }
+
+  /* SVG element styling, driven by the same tokens as the page */
+  .nd { fill: var(--surface); stroke: var(--rule); stroke-width: 1.2; }
+  .nd-stop { fill: none; stroke: var(--rust); stroke-width: 1.2; stroke-dasharray: 4 3; }
+  .nd-key { fill: var(--petrol-soft); stroke: var(--petrol); stroke-width: 1.4; }
+  .t { font-family: Archivo, sans-serif; font-size: 12.5px; fill: var(--ink); }
+  .t-sm { font-family: "IBM Plex Mono", monospace; font-size: 9.5px; fill: var(--ink-3); letter-spacing: 0.05em; }
+  .t-lane { font-family: "IBM Plex Mono", monospace; font-size: 10px; fill: var(--ink-3); letter-spacing: 0.12em; }
+  .t-edge { font-family: "IBM Plex Mono", monospace; font-size: 9.5px; fill: var(--ink-2); }
+  .t-stop { fill: var(--rust); }
+  .edge { stroke: var(--ink-2); stroke-width: 1.3; fill: none; }
+  .edge-stop { stroke: var(--rust); stroke-width: 1.3; fill: none; }
+  .edge-back { stroke: var(--petrol); stroke-width: 1.4; fill: none; stroke-dasharray: 5 4; }
+  .bound { stroke: var(--petrol); stroke-width: 1.4; stroke-dasharray: 3 5; }
+  .tag-bronze { fill: var(--bronze); }
+  .tag-silver { fill: var(--silver); }
+
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--rule-2); vertical-align: top; }
+  th {
+    font-family: "IBM Plex Mono", monospace; font-size: 10.5px;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3);
+    border-bottom: 1px solid var(--rule);
+  }
+  td:first-child { white-space: nowrap; }
+  .gate { font-family: "IBM Plex Mono", monospace; font-weight: 500; color: var(--petrol); }
+
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1px; background: var(--rule-2); border: 1px solid var(--rule-2); }
+  .cell { background: var(--surface); padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+  .cell p { font-size: 14.5px; color: var(--ink-2); }
+  .tools { font-family: "IBM Plex Mono", monospace; font-size: 12px; display: flex; flex-wrap: wrap; gap: 5px; }
+  .has { color: var(--moss); }
+  .hasnt { color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--rust); }
+
+  .tiers { display: flex; flex-direction: column; }
+  .tier { display: grid; grid-template-columns: 8px 1fr; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--rule-2); align-items: stretch; }
+  .tier .bar { border-radius: 2px; }
+  .tier div:last-child { display: flex; flex-direction: column; gap: 4px; }
+  .tier .name { font-family: "IBM Plex Mono", monospace; font-size: 13px; }
+  .tier p { font-size: 14.5px; color: var(--ink-2); }
+
+  .limits { border-left: 2px solid var(--rust); padding-left: 20px; display: flex; flex-direction: column; gap: 16px; }
+  .limits h3 { color: var(--rust); }
+  .limits p { font-size: 15.5px; color: var(--ink-2); }
+
+  footer { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--rule); font-size: 13.5px; color: var(--ink-3); }
+
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+  a { color: var(--petrol); }
+  a:focus-visible, :focus-visible { outline: 2px solid var(--petrol); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+
+  <header class="head">
+    <div class="eyebrow">Market intelligence estate · collection &amp; verification</div>
+    <h1>Evidence Pipeline</h1>
+    <p class="lede">Every collected claim traces to a verbatim quote in a page capture stored before the claim was written — or it fails a gate. This is how that holds, end to end.</p>
+    <div class="regimes">
+      <span class="regime"><b>r1a-vendor-catalogue</b> &nbsp;owns collection · steps 0–4</span>
+      <span class="regime"><b>kbqa v6.2.0</b> &nbsp;owns verification · G0–G6</span>
+      <span class="regime"><b>agents/</b> &nbsp;make the role split structural</span>
+    </div>
+  </header>
+
+  <section>
+    <div class="eyebrow">The flow</div>
+    <h2>One batch, four roles, one boundary</h2>
+    <p>A batch is a fixed, named list of URLs on one surface. It moves left to right through four roles. The only thing that crosses the boundary is a human carrying a report — there is no automated path from a verdict back to the agent that produced the rows.</p>
+
+    <figure>
+      <div class="scroll">
+        <svg viewBox="0 0 980 620" role="img" aria-label="Pipeline flow: a human planner names the subject; the fetcher checks robots.txt, captures pages and the vendor index to Bronze, and returns a receipt; the row-writer reads only that capture and writes staging rows to Silver; a human carries the batch across an isolation boundary to the checker, which runs gates G1 to G4 and produces classified findings that return to the planner.">
+          <defs>
+            <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 1 L 9 5 L 0 9 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <!-- lane headers -->
+          <text class="t-lane" x="115" y="22" text-anchor="middle">PLANNER · HUMAN</text>
+          <text class="t-lane" x="345" y="22" text-anchor="middle">FETCHER · SUBAGENT</text>
+          <text class="t-lane" x="585" y="22" text-anchor="middle">ROW-WRITER · SUBAGENT</text>
+          <text class="t-lane" x="845" y="22" text-anchor="middle">CHECKER · HUMAN</text>
+
+          <!-- isolation boundary -->
+          <line class="bound" x1="712" y1="40" x2="712" y2="600"/>
+          <text class="t-lane" x="712" y="614" text-anchor="middle" fill="var(--petrol)">BOUNDARY</text>
+
+          <!-- A1 -->
+          <rect class="nd" x="30" y="60" width="170" height="46" rx="5"/>
+          <text class="t" x="115" y="82" text-anchor="middle">Name subject</text>
+          <text class="t" x="115" y="97" text-anchor="middle">+ one surface</text>
+
+          <!-- B1 G0 -->
+          <rect class="nd nd-key" x="260" y="60" width="170" height="46" rx="5"/>
+          <text class="t" x="345" y="81" text-anchor="middle">G0 · robots.txt</text>
+          <text class="t-sm" x="345" y="96" text-anchor="middle">BEFORE ANY FETCH</text>
+
+          <!-- stop -->
+          <rect class="nd-stop" x="470" y="62" width="180" height="42" rx="5"/>
+          <text class="t t-stop" x="560" y="80" text-anchor="middle">Vendor declined</text>
+          <text class="t-sm t-stop" x="560" y="94" text-anchor="middle">RECORD · NO RETRY</text>
+
+          <!-- B2 capture -->
+          <rect class="nd" x="260" y="196" width="170" height="46" rx="5"/>
+          <text class="t" x="345" y="217" text-anchor="middle">Capture pages</text>
+          <text class="t-sm tag-bronze" x="345" y="232" text-anchor="middle">BRONZE · VERBATIM</text>
+
+          <!-- B3 denominator -->
+          <rect class="nd" x="260" y="264" width="170" height="46" rx="5"/>
+          <text class="t" x="345" y="285" text-anchor="middle">Vendor's own index</text>
+          <text class="t-sm tag-bronze" x="345" y="300" text-anchor="middle">BRONZE · DENOMINATOR</text>
+
+          <!-- B4 receipt -->
+          <rect class="nd nd-key" x="260" y="332" width="170" height="56" rx="5"/>
+          <text class="t" x="345" y="352" text-anchor="middle">Receipt</text>
+          <text class="t-sm" x="345" y="367" text-anchor="middle">SHA256 · PAGES</text>
+          <text class="t-sm" x="345" y="380" text-anchor="middle">PER-PAGE COUNTS</text>
+
+          <!-- C1 -->
+          <rect class="nd" x="490" y="332" width="190" height="56" rx="5"/>
+          <text class="t" x="585" y="355" text-anchor="middle">Reads the capture file</text>
+          <text class="t-sm" x="585" y="371" text-anchor="middle">NO NETWORK TOOL AT ALL</text>
+
+          <!-- C2 -->
+          <rect class="nd" x="490" y="416" width="190" height="46" rx="5"/>
+          <text class="t" x="585" y="437" text-anchor="middle">Staging rows</text>
+          <text class="t-sm tag-silver" x="585" y="452" text-anchor="middle">SILVER · QUOTE PER CLAIM</text>
+
+          <!-- D1 -->
+          <rect class="nd nd-key" x="740" y="416" width="210" height="56" rx="5"/>
+          <text class="t" x="845" y="439" text-anchor="middle">kbqa report</text>
+          <text class="t-sm" x="845" y="455" text-anchor="middle">G1 · G2 · G3 · G4</text>
+
+          <!-- D2 -->
+          <rect class="nd" x="740" y="500" width="210" height="46" rx="5"/>
+          <text class="t" x="845" y="521" text-anchor="middle">Verdict + findings</text>
+          <text class="t-sm" x="845" y="536" text-anchor="middle">EACH ONE CLASSIFIED</text>
+
+          <!-- edges -->
+          <g color="var(--ink-2)">
+            <line class="edge" x1="200" y1="83" x2="252" y2="83" marker-end="url(#ar)"/>
+            <line class="edge" x1="345" y1="106" x2="345" y2="188" marker-end="url(#ar)"/>
+            <line class="edge" x1="345" y1="242" x2="345" y2="256" marker-end="url(#ar)"/>
+            <line class="edge" x1="345" y1="310" x2="345" y2="324" marker-end="url(#ar)"/>
+            <line class="edge" x1="430" y1="360" x2="482" y2="360" marker-end="url(#ar)"/>
+            <line class="edge" x1="585" y1="388" x2="585" y2="408" marker-end="url(#ar)"/>
+            <line class="edge" x1="680" y1="439" x2="732" y2="439" marker-end="url(#ar)"/>
+            <line class="edge" x1="845" y1="472" x2="845" y2="492" marker-end="url(#ar)"/>
+          </g>
+          <g color="var(--rust)">
+            <line class="edge-stop" x1="430" y1="83" x2="462" y2="83" marker-end="url(#ar)"/>
+          </g>
+          <g color="var(--petrol)">
+            <polyline class="edge-back" points="845,546 845,582 115,582 115,112" marker-end="url(#ar)"/>
+          </g>
+
+          <!-- edge labels -->
+          <text class="t-edge" x="352" y="152">exit 0</text>
+          <text class="t-edge t-stop" x="446" y="76" text-anchor="middle">exit 2</text>
+          <text class="t-edge" x="456" y="352" text-anchor="middle">receipt</text>
+          <text class="t-edge" x="706" y="430" text-anchor="middle">human carries</text>
+          <text class="t-edge" x="480" y="574" text-anchor="middle" fill="var(--petrol)">structural &amp; planner findings → replan, never back to the row-writer</text>
+        </svg>
+      </div>
+      <figcaption>The fetcher and the row-writer are separate agents because a quote matching a capture the same agent wrote proves only that one author agreed with itself. The dashed return path is the anti-gaming edge: failures route to whoever plans the batch, never to whoever wrote the rows.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="eyebrow">Why the split holds</div>
+    <h2>Separation by capability, not by instruction</h2>
+    <p>A markdown file that says <em>delegate to the fetcher</em> is a request, and a request is skipped under pressure with nothing noticing. Each role is instead defined by the tools its session does not have.</p>
+
+    <div class="cols">
+      <div class="cell">
+        <h3>kbqa-collect</h3>
+        <div class="tools"><span class="has">Task</span><span class="has">Agent</span><span class="has">Read</span><span class="hasnt">WebFetch</span><span class="hasnt">Write</span><span class="hasnt">Bash</span></div>
+        <p>Orchestrates and nothing else. It cannot fetch a page, create a file, or run a command — so delegation is the only available action, not the recommended one.</p>
+      </div>
+      <div class="cell">
+        <h3>fetcher</h3>
+        <div class="tools"><span class="has">WebFetch</span><span class="has">Write</span><span class="has">Read</span><span class="has">Bash</span></div>
+        <p>Holds the network. Writes the capture and the denominator, computes the capture's hash, and returns a receipt. Never interprets, never emits a row.</p>
+      </div>
+      <div class="cell">
+        <h3>row-writer</h3>
+        <div class="tools"><span class="has">Read</span><span class="has">Write</span><span class="has">Bash</span><span class="hasnt">WebFetch</span></div>
+        <p>Holds no network tool, so the capture on disk is its only possible source. Invention is not forbidden here — it is unreachable.</p>
+      </div>
+      <div class="cell">
+        <h3>kbqa-check</h3>
+        <div class="tools"><span class="has">Bash</span><span class="has">Read</span><span class="hasnt">Write</span><span class="hasnt">Edit</span></div>
+        <p>Runs the gates and reads verdicts. Cannot modify a gate, a capture, or a row — so it cannot make a failing batch pass.</p>
+      </div>
+    </div>
+    <p style="font-size:15px;color:var(--ink-3)">The hash travels in the receipt rather than being recomputed by the row-writer. A hash produced and verified on the same side proves only that a file hashes to its own hash.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">The gates</div>
+    <h2>Seven checks, each answering one question</h2>
+    <table>
+      <thead>
+        <tr><th>Gate</th><th>Asks</th><th>On failure</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="gate">G0</td><td>May we fetch this host at all?</td><td><strong>Exit 2 — declined.</strong> Stop. No retry, no alternate fetcher, no rendering service</td></tr>
+        <tr><td class="gate">G1</td><td>Did this capture exist, unmodified, <em>before</em> these rows?</td><td>Missing capture, hash mismatch, unbalanced markers, undeclared pages</td></tr>
+        <tr><td class="gate">G2</td><td>Do the rows satisfy the contract?</td><td>Schema violation, duplicate id, zero rows, parser disagreement</td></tr>
+        <tr><td class="gate">G3</td><td>Is each quote verbatim <em>on the page it cites</em>?</td><td>Quote absent, quote from the wrong page, url not in capture</td></tr>
+        <tr><td class="gate">G4</td><td>Is every index item covered, or explicitly stopped?</td><td>Uncovered item; a stop-condition with no stated observation</td></tr>
+        <tr><td class="gate">G5</td><td>Do any rows look like bundled terms?</td><td>Advisory only — <strong>always exits 0</strong></td></tr>
+        <tr><td class="gate">G6</td><td>Do verdicts, manifests and the merged tree agree?</td><td>Stale verdict, unchecked batch, role collapse, manifest mismatch</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:15px;color:var(--ink-3)">Exit 2 means declined and nothing else. A usage error exits 1, never 2 — a typo must never be readable as a permission decision.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">Routing</div>
+    <h2>A finding says what may legitimately change</h2>
+    <p>A maker handed <em>“G3 failed, 14 rows”</em> will edit fourteen quotes until the gate goes green — which is the defect this pipeline exists to catch, not a repair of it. So every finding carries a class, and the class names its destination.</p>
+
+    <figure>
+      <div class="scroll">
+        <svg viewBox="0 0 900 236" role="img" aria-label="Findings fan out into three classes: structural findings go to a re-fetch, planner findings go to scope and fetch-list work, and only fixable findings return to the row-writer.">
+          <defs>
+            <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 1 L 9 5 L 0 9 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <rect class="nd nd-key" x="20" y="88" width="150" height="52" rx="5"/>
+          <text class="t" x="95" y="110" text-anchor="middle">Every finding</text>
+          <text class="t-sm" x="95" y="126" text-anchor="middle">IS CLASSIFIED</text>
+
+          <rect class="nd" x="270" y="16" width="170" height="46" rx="5"/>
+          <text class="t" x="355" y="37" text-anchor="middle">structural</text>
+          <text class="t-sm" x="355" y="52" text-anchor="middle">GAP IN BRONZE</text>
+
+          <rect class="nd" x="270" y="91" width="170" height="46" rx="5"/>
+          <text class="t" x="355" y="112" text-anchor="middle">planner</text>
+          <text class="t-sm" x="355" y="127" text-anchor="middle">SCOPE QUESTION</text>
+
+          <rect class="nd" x="270" y="166" width="170" height="46" rx="5"/>
+          <text class="t" x="355" y="187" text-anchor="middle">fixable</text>
+          <text class="t-sm" x="355" y="202" text-anchor="middle">ROWS VS EVIDENCE</text>
+
+          <rect class="nd" x="540" y="16" width="340" height="46" rx="5"/>
+          <text class="t" x="560" y="37">Re-fetch. No edit to the rows can make</text>
+          <text class="t" x="560" y="53">this true — a missing capture is not a row defect</text>
+
+          <rect class="nd" x="540" y="91" width="340" height="46" rx="5"/>
+          <text class="t" x="560" y="112">Back to the planner. An uncovered index item,</text>
+          <text class="t" x="560" y="128">a cited page nobody fetched</text>
+
+          <rect class="nd" x="540" y="166" width="340" height="46" rx="5"/>
+          <text class="t" x="560" y="187">The only class that returns to the row-writer —</text>
+          <text class="t" x="560" y="203">and with the finding, never the gate name</text>
+
+          <g color="var(--ink-2)">
+            <path class="edge" d="M 170 106 C 220 106 220 39 262 39" marker-end="url(#ar2)"/>
+            <line class="edge" x1="170" y1="114" x2="262" y2="114" marker-end="url(#ar2)"/>
+            <path class="edge" d="M 170 122 C 220 122 220 189 262 189" marker-end="url(#ar2)"/>
+            <line class="edge" x1="440" y1="39" x2="532" y2="39" marker-end="url(#ar2)"/>
+            <line class="edge" x1="440" y1="114" x2="532" y2="114" marker-end="url(#ar2)"/>
+            <line class="edge" x1="440" y1="189" x2="532" y2="189" marker-end="url(#ar2)"/>
+          </g>
+        </svg>
+      </div>
+      <figcaption>Cutting across the three classes, each finding is also a <strong>gap</strong> (something absent, which has to be produced or its absence recorded as a decision) or an <strong>issue</strong> (something present and wrong, correctable in place). Treating a gap as an issue is how “fix the failures” becomes “edit rows until green”.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="eyebrow">Corpus state</div>
+    <h2>Three tiers, and the one that is not a tier</h2>
+    <p>A corpus is in good order when each batch sits in the tier it ought to, not when every batch is verifiable. The failure state is not knowing which is which.</p>
+    <div class="tiers">
+      <div class="tier">
+        <div class="bar" style="background:var(--moss)"></div>
+        <div>
+          <span class="name">verifiable</span>
+          <p>The capture splits into page blocks and every quote is checkable. <strong>6 batches · 2,034 rows</strong> at last sweep.</p>
+        </div>
+      </div>
+      <div class="tier">
+        <div class="bar" style="background:var(--sand)"></div>
+        <div>
+          <span class="name">unassessable-no-page-markers</span>
+          <p>The text was stored but has no page boundaries, so no page owns any of it. Not the same as ungrounded — recoverable by re-fetch. <strong>3 batches · 424 rows</strong>.</p>
+        </div>
+      </div>
+      <div class="tier">
+        <div class="bar" style="background:var(--rust)"></div>
+        <div>
+          <span class="name">unverifiable-no-capture</span>
+          <p>Page text was never stored. No gate can ever ground these; only re-collection can. <strong>174 batches · 10,335 rows</strong> — the bulk of the backlog.</p>
+        </div>
+      </div>
+      <div class="tier">
+        <div class="bar" style="background:var(--ink-3)"></div>
+        <div>
+          <span class="name">not-a-batch</span>
+          <p>Matched the staging filename pattern while declaring no batch frontmatter and holding no rows — a note, a ruling, a session log. Excluded from every figure and named, because a file that vanishes from a total is indistinguishable from one that was never there.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Honest limits</div>
+    <h2>What the machinery does not reach</h2>
+    <div class="limits">
+      <div>
+        <h3>G3 does not check that a quote supports its claim</h3>
+        <p>It verifies the quote is real and on the cited page. A row whose description says far more than its quote warrants passes every gate. This is the largest gap and the one quote-shopping exploits.</p>
+      </div>
+      <div>
+        <h3>The capture is what the fetch tool returned</h3>
+        <p>Not necessarily what the server sent. A tool that converts or summarises yields quotes that match the capture while differing from what a reader sees on the page. Verify once per fetch mechanism, by hand.</p>
+      </div>
+      <div>
+        <h3>Coverage is measured against the denominator we captured</h3>
+        <p>If the index itself was selective, nothing notices. This is why the fetcher captures the vendor's own list before scope is decided.</p>
+      </div>
+      <div>
+        <h3>Gold has no producer</h3>
+        <p>G6 validates <code>feature-tree.md</code>'s declared proof count, but nothing in the pipeline writes that file. Hand-written, the count is self-attested and the check is vacuous.</p>
+      </div>
+      <div>
+        <h3>Enforcement stops at level 3½</h3>
+        <p>Gates run from a pinned tag on infrastructure the collector cannot reach — but a private repo on a free plan cannot require a passing status check. Tampering is visible and inconvenient, not impossible. That works only while a human reads the verdicts.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    kbqa v6.2.0 · 226 tests · decisions D-001 through D-008 recorded with evidence and reversal conditions. Collection discipline: r1a-vendor-catalogue, rounds R1a → R1b → R2 → R3.
+  </footer>
+
+</div>

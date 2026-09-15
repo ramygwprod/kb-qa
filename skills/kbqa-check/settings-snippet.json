@@ -7,6 +7,8 @@
       "Write(**/dist-packages/kbqa/**)",
       "Edit(**/kb-qa/**)",
       "Write(**/kb-qa/**)",
+      "Edit(/ABSOLUTE/PATH/TO/YOUR/kb-qa/CHECKOUT/**)",
+      "Write(/ABSOLUTE/PATH/TO/YOUR/kb-qa/CHECKOUT/**)",
       "Edit(.git/hooks/**)",
       "Write(.git/hooks/**)",
       "Edit(.github/workflows/**)",

@@ -57,6 +57,20 @@ Permission denies are session-wide, so pick per session:
   `kbqa-collect/settings-snippet.json`
 - one used for checking merges `kbqa-check/settings-snippet.json`
 
+**Substitute the checkout placeholder.** Both snippets carry
+
+```
+Edit(/ABSOLUTE/PATH/TO/YOUR/kb-qa/CHECKOUT/**)
+Write(/ABSOLUTE/PATH/TO/YOUR/kb-qa/CHECKOUT/**)
+```
+
+Replace it with the real path of your local kb-qa working copy. The generic
+`**/kb-qa/**` rules beside it only match a directory literally named `kb-qa`,
+and a checkout can be called anything — so without this substitution a session
+can edit the gates through your working copy while every other route is closed.
+A placeholder left unsubstituted denies a path that does not exist, which is
+harmless and useless.
+
 Both deny the same bypass classes — writes into an installed `kbqa`, `pip` in
 any form, `.git/hooks`, `.github/workflows`, and `--no-verify` — plus the
 settings file itself, so the boundary cannot rewrite itself. The collecting

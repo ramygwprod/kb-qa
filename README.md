@@ -13,6 +13,9 @@ is, findings reference, troubleshooting, and the **Do/Don't boundary** (§11)
 that says what a maker agent may and may not do when a gate fails.
 🔧 **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** — developer guide:
 architecture, adding a domain, invariants, known traps, release process.
+🗺️ **[docs/pipeline.html](docs/pipeline.html)** — the pipeline drawn: four
+roles, the isolation boundary, the seven gates, and where the guarantees stop.
+Open it in a browser; no build step.
 📋 **[CHANGELOG.md](CHANGELOG.md)** · 🧾 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 — contract changes with the evidence behind them.
 
