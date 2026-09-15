@@ -62,6 +62,53 @@ subject's list, not a list of what you intend to fetch. Capture it before
 deciding scope, and do not prune it to match what you fetched: an index item
 nobody collected is a finding for the planner, and removing it hides that.
 
+## 3b · Large surfaces — stop on a budget, not on completion
+
+An index of five thousand items will not be captured in one pass, and a run
+killed partway leaves a capture that looks like any other. So do not try to
+finish the list. **Take a window, stop while you are still healthy, and say
+where you stopped.**
+
+There is no correct window size. The limit that matters is how much you have
+captured, not how many items you have seen — twenty terse reference pages and
+twenty long guides are different jobs. Watch the capture file grow and stop when
+it approaches the size your setup handles comfortably. A window that completes
+is always better than a larger one that dies.
+
+Each window is **its own batch** — its own capture, its own staging file, its
+own verdict. A window that is killed costs one window, and everything before it
+is already safe on disk.
+
+Record, in the receipt and in the batch:
+
+```
+window_offset: 40          # where in the list this window began, if the surface has stable positions
+window_requested: 20
+window_returned: 20        # items the SOURCE returned, not rows anyone writes
+window_end: budget         # exhausted | budget | error
+```
+
+`window_end` is the field that matters, because a count cannot explain itself:
+
+| value | means | what happens next |
+|---|---|---|
+| `exhausted` | the source ran out — asking again returns nothing | the subject is complete |
+| `budget` | **you** stopped while healthy, and more remains | resume at the next offset |
+| `error` | the attempt failed partway | the range beyond is unattempted, not absent |
+
+Twelve returned against twenty asked is not self-explaining: it means either the
+source had twelve, or you took twelve and stopped. Those need opposite responses.
+**Never write `exhausted` unless you asked again and got nothing.** A confident
+guess that the list has ended is the one thing this field exists to prevent.
+
+Stopping on budget is not a failure and is never something to hide. It is the
+correct outcome for a large surface, and a subject parked with an offset is in a
+better state than one whose collector died trying to finish.
+
+If the surface publishes an index, capture it as the denominator anyway. The
+index is the subject's own statement of what exists; a window count is only your
+statement of what you received.
+
 ## 4 · The receipt — what you hand over
 
 Return, and write nothing else:

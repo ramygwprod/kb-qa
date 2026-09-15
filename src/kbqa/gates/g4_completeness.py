@@ -123,21 +123,134 @@ def parse_stops(path: Path) -> Tuple[Dict[str, str], List[str]]:
     return stops, errors
 
 
+def _int_or_none(v) -> Optional[int]:
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return v
+    if isinstance(v, str) and v.strip().lstrip("-").isdigit():
+        return int(v.strip())
+    return None
+
+
+def read_windows(
+    rows_files: List[str], findings: List[Finding]
+) -> List[Dict[str, object]]:
+    """Per-batch window declarations, for surfaces with no published index.
+
+    A paginated surface with no index offers nothing to measure coverage
+    against. The only evidence the list ended is that asking for the next
+    window returned nothing — so a run that received 15 and stopped is
+    indistinguishable from one that received 15 because 15 was all there was,
+    unless the zero-return is recorded.
+
+    Declared in the staging frontmatter:
+
+        window_requested: 20
+        window_returned: 15
+
+    `window_returned` counts ITEMS the source returned, not rows written. One
+    item can legitimately yield several rows, so rows >= returned is normal and
+    rows < returned is the truncation signal.
+    """
+    WINDOW_ENDS = ("exhausted", "budget", "error")
+    windows: List[Dict[str, object]] = []
+    for r in rows_files:
+        p = Path(r)
+        if not p.exists():
+            continue
+        parsed = parse_staging(p)
+        fm = parsed.frontmatter_raw or {}
+        req = _int_or_none(fm.get("window_requested"))
+        ret = _int_or_none(fm.get("window_returned"))
+        if req is None and ret is None:
+            continue
+
+        rows_here = len([x for x in parsed.rows if x.obj is not None])
+        if req is None or ret is None:
+            findings.append(
+                Finding(
+                    "window_declaration_incomplete",
+                    f"{p.name} declares only one half of its window "
+                    f"(window_requested={fm.get('window_requested')!r}, "
+                    f"window_returned={fm.get('window_returned')!r}); both are "
+                    "needed to tell exhaustion from abandonment",
+                    where=str(p),
+                )
+            )
+            continue
+
+        # Non-tautological: the collector declares how many items came back,
+        # the checker counts rows independently. Neither side computes both.
+        if rows_here < ret:
+            findings.append(
+                Finding(
+                    "window_underwritten",
+                    f"{p.name} declares {ret} item(s) returned but holds "
+                    f"{rows_here} row(s); items came back that no row records",
+                    where=str(p),
+                )
+            )
+        # WHY a window ended is not derivable from how much it returned.
+        # Twelve of twenty asked means the source had twelve, OR the collector
+        # took twelve and stopped before it was killed. Those need opposite
+        # responses — one ends the subject, the other says resume here — so the
+        # collector declares which, and the gate never guesses.
+        end = fm.get("window_end")
+        if end is None:
+            findings.append(
+                Finding(
+                    "window_end_undeclared",
+                    f"{p.name} declares a window but not why it ended. "
+                    f"window_end must be one of {', '.join(WINDOW_ENDS)}: a "
+                    "short return is not self-explaining",
+                    where=str(p),
+                )
+            )
+        elif str(end) not in WINDOW_ENDS:
+            findings.append(
+                Finding(
+                    "window_end_unknown_value",
+                    f"{p.name} declares window_end={end!r}; expected one of "
+                    f"{', '.join(WINDOW_ENDS)}",
+                    where=str(p),
+                )
+            )
+            end = None
+
+        windows.append({
+            "file": str(p),
+            "requested": req,
+            "returned": ret,
+            "rows": rows_here,
+            "end": str(end) if end is not None else None,
+            "offset": _int_or_none(fm.get("window_offset")),
+        })
+    return windows
+
+
 def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
     ap = argparse.ArgumentParser(prog="kbqa g4")
-    ap.add_argument("--denominator", required=True)
+    ap.add_argument("--denominator", default=None)
     ap.add_argument("--rows", required=True, nargs="+")
     ap.add_argument("--stops", default=None)
     args = ap.parse_args(argv)
 
-    denom = Path(args.denominator)
     findings: List[Finding] = []
-    inputs = {"denominator": input_ref(denom)}
+    inputs: Dict[str, object] = {}
+    if args.denominator:
+        inputs["denominator"] = input_ref(Path(args.denominator))
     for i, r in enumerate(args.rows):
         inputs[f"rows[{i}]"] = input_ref(Path(r))
     if args.stops:
         inputs["stops"] = input_ref(Path(args.stops))
 
+    windows = read_windows(args.rows, findings)
+
+    if args.denominator is None:
+        return _window_mode(windows, inputs, findings)
+
+    denom = Path(args.denominator)
     if not denom.exists():
         findings.append(Finding("denominator_missing", f"not found: {denom}"))
         return Verdict(GATE, FAIL, inputs, {}, findings), EXIT_FAIL
@@ -227,6 +340,122 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
             "stop_condition_without_reason", "empty_denominator")
         for f in findings
     )
+    return Verdict(GATE, PASS if ok else FAIL, inputs, counts, findings), (
+        EXIT_PASS if ok else EXIT_FAIL
+    )
+
+
+def _window_mode(
+    windows: List[Dict[str, object]],
+    inputs: Dict[str, object],
+    findings: List[Finding],
+) -> Tuple[Verdict, int]:
+    """Completeness for a surface with no denominator.
+
+    Coverage cannot be measured — there is no list to measure against. What CAN
+    be established is exhaustion: the collector kept asking until the source ran
+    out. Without that, the subject is not incomplete, it is unassessable, and
+    saying so out loud is the point. A gate that quietly does not run reads as a
+    clean gate.
+
+    A subject parked on a budget stop is a THIRD state, and a legitimate one: a
+    5,000-item index cannot be taken in one pass, and a collector that stops
+    before it is killed has done the right thing. It is reported with where to
+    resume, not as a failure of collection.
+    """
+    if not windows:
+        findings.append(
+            Finding(
+                "completeness_unassessable",
+                "no denominator was given and no batch declares a window, so "
+                "there is nothing to measure coverage or exhaustion against. "
+                "Capture the subject's own index, or declare window_requested, "
+                "window_returned and window_end per batch",
+            )
+        )
+        return (
+            Verdict(GATE, FAIL, inputs, {"windows": 0, "failed": 1}, findings),
+            EXIT_FAIL,
+        )
+
+    ordered = sorted(
+        windows,
+        key=lambda w: (w["offset"] is None, w["offset"] if w["offset"] is not None else 0),
+    )
+
+    # Offsets are optional — a mega-menu has no stable index — but where they
+    # exist, a chain that skips is a range nobody ever asked for.
+    have_offsets = [w for w in ordered if w["offset"] is not None]
+    if len(have_offsets) > 1:
+        for prev, nxt in zip(have_offsets, have_offsets[1:]):
+            expected = int(prev["offset"]) + int(prev["returned"])
+            actual = int(nxt["offset"])
+            if actual > expected:
+                findings.append(
+                    Finding(
+                        "window_chain_gap",
+                        f"items {expected}–{actual - 1} were never requested: "
+                        f"{Path(str(prev['file'])).name} covered "
+                        f"{prev['offset']}–{expected - 1}, and the next window "
+                        f"starts at {actual}",
+                        where=str(nxt["file"]),
+                    )
+                )
+
+    exhausted = [w for w in ordered if w["end"] == "exhausted" or w["returned"] == 0]
+    parked = [w for w in ordered if w["end"] == "budget"]
+    errored = [w for w in ordered if w["end"] == "error"]
+
+    if not exhausted:
+        if parked:
+            last = parked[-1]
+            resume = (
+                f"offset {int(last['offset']) + int(last['returned'])}"
+                if last["offset"] is not None
+                else f"after the {int(last['returned'])} item(s) in "
+                f"{Path(str(last['file'])).name}"
+            )
+            findings.append(
+                Finding(
+                    "collection_parked",
+                    f"{len(parked)} window(s) stopped on budget and none reached "
+                    f"the end of the list. This is a correct place to stop, not a "
+                    f"defect — the subject is simply incomplete. Resume at {resume}",
+                    where=str(last["file"]),
+                )
+            )
+        else:
+            findings.append(
+                Finding(
+                    "no_exhaustion_evidence",
+                    f"{len(ordered)} window(s) declared, none reaching the end of "
+                    "the list. A short return is not proof the list ended — it is "
+                    "equally consistent with a collector that stopped. Declare "
+                    "window_end, and probe once more if it was a budget stop",
+                )
+            )
+
+    for w in errored:
+        findings.append(
+            Finding(
+                "window_ended_in_error",
+                f"{Path(str(w['file'])).name} ended in error after "
+                f"{w['returned']} item(s); the range beyond it is unattempted, "
+                "not absent",
+                where=str(w["file"]),
+            )
+        )
+
+    counts = {
+        "windows": len(ordered),
+        "items_returned": sum(int(w["returned"]) for w in ordered),
+        "rows": sum(int(w["rows"]) for w in ordered),
+        "reached_end_of_list": len(exhausted),
+        "parked_on_budget": len(parked),
+        "ended_in_error": len(errored),
+        "failed": len(findings),
+    }
+    ok = bool(exhausted) and not findings
     return Verdict(GATE, PASS if ok else FAIL, inputs, counts, findings), (
         EXIT_PASS if ok else EXIT_FAIL
     )

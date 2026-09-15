@@ -16,6 +16,100 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.5.0] — 2026-09-16
+
+### Added
+
+- **`window_end` — why a window stopped, which a count cannot say.** 6.4.0 read
+  a terminal zero as the end of the list. That is too weak for the case it was
+  built for: a collector working a 5,000-item index must stop *before* it is
+  killed, and a window returning 12 of 20 asked means either the source had 12
+  or the collector took 12 and stopped. Opposite situations, opposite responses,
+  identical in the data.
+
+  Windows now declare `exhausted` · `budget` · `error`. A subject is complete
+  only on `exhausted`, and **never on a budget stop however tidy the numbers
+  look**.
+
+- **`collection_parked` — incomplete-and-safe as a first-class state.** A window
+  that stopped on budget is not a defect; it is the correct outcome for a large
+  surface, and better than a run killed mid-list whose partial capture looks
+  complete. The finding carries the offset to resume from and says plainly that
+  the collector did the right thing.
+
+- **`window_chain_gap`** — where offsets exist, consecutive windows that skip a
+  range are items nobody ever requested: absent without having been looked at.
+  The remedy says to collect the missing range, not to renumber the offsets.
+
+- **`window_ended_in_error`** — the range beyond a failed window is unattempted,
+  not absent. An errored window is never evidence the list ended.
+
+- `window_offset` is optional, since a mega-menu has no stable positions. Gap
+  detection runs only where offsets are declared.
+
+### Changed
+
+- `agents/fetcher.md` now instructs a budget stop rather than a fixed count:
+  there is no correct window size, the binding limit is capture size rather than
+  item count, and a window that completes beats a larger one that dies. It also
+  states the rule the field exists for — **never write `exhausted` unless you
+  asked again and got nothing.**
+
+## [6.4.0] — 2026-09-16
+
+### Added
+
+- **G4 window mode — exhaustion evidence where no index exists.** A paginated
+  surface that publishes no index offers nothing to measure coverage against,
+  and G4 simply did not run. A gate that does not run reads as a clean gate.
+
+  Batches may now declare, in frontmatter:
+
+  ```yaml
+  window_requested: 20
+  window_returned: 15
+  ```
+
+  Run `g4 --rows <f>...` with no `--denominator` and the gate asks a different
+  question: did the collector keep going until a window came back empty? A
+  window returning fewer items than it asked for is **not** proof the list
+  ended — it is equally consistent with a run that stopped early, or one killed
+  mid-surface. Only a terminal zero distinguishes exhaustion from abandonment.
+
+  New findings: `no_exhaustion_evidence` (windows declared, none returned 0),
+  `completeness_unassessable` (neither a denominator nor windows — previously
+  silent), `window_underwritten`, `window_declaration_incomplete`.
+
+- **`window_underwritten` is the truncation check.** `window_returned` counts
+  items the source returned; the gate counts rows independently and flags a
+  batch holding fewer rows than items it says came back. Neither side computes
+  both numbers, so the comparison is evidence rather than arithmetic. Rows
+  exceeding returned is normal — one index item can yield several rows — so the
+  check is deliberately one-directional.
+
+### Changed
+
+- `--denominator` is now optional on `g4`. A captured index remains the
+  preferred answer and takes precedence when given; windows are the fallback
+  for surfaces that publish no list.
+
+## [6.3.0] — 2026-09-15
+
+### Fixed
+
+- **The denominator glob missed 18 files in 20.** `_denominator-*.md` requires a
+  hyphen; the corpus this package validates writes the bare `_denominator.md`
+  18 times out of 20. G4 runs only when a denominator is given, so for 18 of 19
+  subjects it quietly did not run — surfacing as a Coverage line rather than a
+  failure. Zero findings and zero visibility looked identical, which is the
+  failure mode this package exists to prevent.
+
+  The glob is now `_denominator*.md`, still narrow enough to exclude tombstones
+  (`.superseded-*`) and unrelated artifacts. D-009.
+
+  This is the fourth defect of one kind: a convention inferred from a
+  specification, applied as law, and wrong against the data. See DEVELOPMENT §7.
+
 ## [6.2.0] — 2026-09-13
 
 ### Added

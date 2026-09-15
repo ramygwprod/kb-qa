@@ -418,3 +418,132 @@ and such a row must be re-sourced against a captured page.
 **Reversal condition.** If a subject publishes material that is genuinely
 retrievable but not over HTTP, the rule needs a new scheme with a **capture
 mechanism attached**, never an exemption from grounding.
+
+
+## D-009 · Discovery patterns are inferred until a corpus contradicts them
+
+**Date:** 2026-09-15 · **Version:** 6.3.0
+
+`Conventions.denominator_glob` was `_denominator-*.md`, taken from the shape of
+the other Bronze artifacts (`_capture-<batch>.raw.txt`,
+`_robots-<host>-<date>.txt`) rather than from any observation. The collecting
+regime's own instruction is *"Write `_denominator.md`"* — no suffix.
+
+**Measured, 2026-09-15**, across one estate's live subjects:
+
+| filename | count |
+|---|---|
+| `_denominator.md` | 18 |
+| `_denominator-<surface>-<date>.md` | 1 |
+| `_denominator-<surface>.md` | 1 |
+
+The glob matched 2 of 20. Because G4 only runs when a denominator is supplied,
+18 of 19 subjects had **no coverage check at all**, and the report said so in
+the Coverage section — accurately, quietly, and in the place a reader skims.
+
+**Ruling.** The glob is `_denominator*.md`. It still excludes
+`_denominator.md.superseded-<date>` tombstones and files without the leading
+underscore.
+
+**Why this keeps happening.** This is the fourth defect of the same shape: a
+pattern invented from a specification or a single sample, then applied as law —
+after the id pattern rejecting `_`, the id pattern requiring two segments, and
+the staging discovery matching on filename alone (D-006). The lesson is not
+"widen the patterns". It is that a convention this package asserts about someone
+else's files is a hypothesis until a corpus confirms it, and the cost of a wrong
+one is silence rather than an error.
+
+**Reversal condition.** If a corpus emerges where `_denominator*.md` matches a
+file that is not a denominator, discovery must move to content — a declared key
+inside the file — rather than to a narrower name.
+
+
+## D-010 · Exhaustion must be evidenced, not inferred from a short return
+
+**Date:** 2026-09-16 · **Version:** 6.4.0
+
+Large surfaces — an alphabetical feature list running to hundreds of items —
+cannot be collected in one pass; the run is killed partway and what it finished
+is unknowable from the output. The answer is windows: ask for twenty, save what
+comes back, ask for the next twenty, and stop when a window returns nothing.
+
+That protocol has a property worth checking. **A window returning fewer items
+than requested is not proof the list ended.** Fifteen returned against twenty
+asked is equally consistent with:
+
+- the list genuinely ending at fifteen,
+- a run that stopped early because the task was long,
+- a fetch that failed partway and reported what it had.
+
+Only a subsequent window returning **zero** separates the first from the others,
+and only if it is recorded. An unrecorded probe is a memory, not evidence.
+
+**Ruling.** Where a subject has a captured denominator, G4 measures coverage
+against it as before — that remains the preferred answer, because an index is a
+statement by the subject about what exists, and a window count is a statement by
+us about what we received. Where no index is published, a batch may declare
+`window_requested` and `window_returned`, and the subject is complete only when
+some window returned 0.
+
+**The cross-check.** `window_returned` counts items the source returned; the
+gate counts rows in the batch itself. Fewer rows than items returned means items
+came back that no row records — the signature of a truncated write. Neither side
+computes both numbers, which is what keeps this from being arithmetic about
+itself (the tautology principle, D-003).
+
+The check is one-directional on purpose: rows exceeding items returned is
+normal, since one index item can yield several rows.
+
+**Also changed:** a G4 run with neither a denominator nor windows now FAILs with
+`completeness_unassessable` instead of not running. Previously it surfaced as a
+Coverage line — accurate, quiet, and in the place a reader skims. That is the
+same failure shape as D-009, and it is worth stating as a rule: **when this
+package cannot assess something, it says so loudly rather than staying silent.**
+Silence and success must never render identically.
+
+**Reversal condition.** If a surface emerges where a zero-return is impossible
+to obtain — an endpoint that errors rather than returning empty — the terminal
+condition needs a second recordable form (a recorded error at offset N), not an
+exemption from evidencing exhaustion.
+
+
+## D-011 · A window declares why it ended, because a count cannot
+
+**Date:** 2026-09-16 · **Version:** 6.5.0 · **Supersedes part of D-010**
+
+D-010 treated a zero-return as the evidence of exhaustion. Correct as far as it
+went, and too weak for the case that motivated it.
+
+A collector working a five-thousand-item index must stop **before** it is
+killed, not when the list ends. So the ordinary healthy outcome is a window that
+returns everything it asked for and then stops anyway. And a window returning 12
+of 20 requested carries no information about which happened:
+
+- the source had 12 and the list is finished, or
+- the collector took 12 and stopped while still healthy, or
+- the fetch failed partway and reported what it had.
+
+Three situations, three different next actions, one number.
+
+**Ruling.** A window declares `window_end`: `exhausted`, `budget`, or `error`.
+A subject is complete only when some window reports `exhausted` — never on a
+budget stop, however clean the sequence looks. `exhausted` may be written only
+after asking again and receiving nothing; inferring it from a short return is
+the specific failure this field exists to prevent.
+
+**Parked is a legitimate state.** A subject whose last window stopped on budget
+is incomplete, and reported as such with an offset to resume from — not as a
+failure of collection. The collector that stops while healthy is doing better
+than the one that dies trying to finish, and the report says so, because a
+finding that reads as blame for correct behaviour teaches the collector to hide
+it.
+
+**On window size.** The package has no opinion, and should not: the binding
+constraint is bytes captured, not items seen, and it varies by subject. A fixed
+number in a contract would be exactly the kind of invented constant that
+produced D-006 and D-009. What is checked is that whatever was used is recorded.
+
+**Reversal condition.** If a surface cannot produce an empty response —
+erroring instead at the end of the list — `error` at a known offset would need
+promoting to a second terminal form. It is not one today: an errored window is
+unattempted, not finished.

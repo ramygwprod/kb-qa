@@ -29,7 +29,12 @@ class Conventions:
     capture_template: str = "_capture-{batch}.raw.txt"
     capture_glob: str = "_capture-*.raw.txt"
 
-    denominator_glob: str = "_denominator-*.md"
+    # `_denominator*.md`, not `_denominator-*.md`. The hyphenated form was
+    # inferred from the specification; the corpus it validates writes the bare
+    # `_denominator.md` 18 times out of 20. The narrower glob matched 2 files,
+    # so G4 quietly did not run for 18 of 19 subjects — and a gate that did not
+    # run reads as a Coverage line, not as a failure. (docs/DECISIONS.md D-009)
+    denominator_glob: str = "_denominator*.md"
     robots_glob: str = "_robots-*.txt"
     stops_name: str = "_stop-conditions.md"
     gold_name: str = "feature-tree.md"

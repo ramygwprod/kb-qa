@@ -35,7 +35,8 @@ gates:
   g1 --staging <f> --capture <f>               capture integrity
   g2 --staging <f>                             conformance
   g3 --staging <f> --capture <f>               grounding
-  g4 --denominator <f> --rows <f>... [--stops <f>]   completeness
+  g4 [--denominator <f>] --rows <f>... [--stops <f>]  completeness
+       no --denominator: window mode, needs a terminal zero-return
   g5 --rows <f>...                             bundles (advisory, always exit 0)
   g6 --root <project>                          integrity
 

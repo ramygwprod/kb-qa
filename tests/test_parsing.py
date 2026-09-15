@@ -128,3 +128,41 @@ def test_fenced_jsonl_line_numbers_point_at_the_row(tmp_path):
 def test_empty_fence_is_not_a_row(tmp_path):
     p = parse_staging(_write(tmp_path, "```json\n```\n"))
     assert not _ok(p)
+
+
+# --------------------------------------------------------------------------
+# D-009 — the denominator glob, corrected against a real corpus
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("name", [
+    "_denominator.md",                      # 18 of 20 in the real estate
+    "_denominator-llmstxt-2026-08-23.md",   # 1 of 20
+    "_denominator-docs.md",                 # 1 of 20
+])
+def test_denominator_glob_matches_the_forms_that_exist(name):
+    """`_denominator-*.md` was inferred from a spec and matched 2 files in 20.
+
+    G4 runs only when a denominator is given, so the 18 bare `_denominator.md`
+    files meant G4 quietly did not run for 18 of 19 subjects — reported as a
+    Coverage line rather than a failure. Zero findings and zero visibility
+    looking identical is the failure this package exists to prevent.
+    """
+    import fnmatch
+
+    from kbqa.conventions import DEFAULT
+
+    assert fnmatch.fnmatch(name, DEFAULT.denominator_glob)
+
+
+@pytest.mark.parametrize("name", [
+    "_denominator.md.superseded-2026-08-01",  # a tombstone is not a denominator
+    "denominator.md",                          # no leading underscore
+    "_capture-x.raw.txt",                      # a different artifact entirely
+])
+def test_denominator_glob_stays_narrow_enough(name):
+    """Widening a glob until it matches everything is not a fix."""
+    import fnmatch
+
+    from kbqa.conventions import DEFAULT
+
+    assert not fnmatch.fnmatch(name, DEFAULT.denominator_glob)

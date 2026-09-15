@@ -22,6 +22,10 @@ pages:
   - <url>                    # one per BEGIN marker in the capture, verbatim
   - <url>
 fetched_by_this_agent: false
+window_offset: <from the receipt, if the surface has stable positions>
+window_requested: <from the receipt>
+window_returned: <from the receipt — items the SOURCE returned>
+window_end: <from the receipt — exhausted | budget | error. Never your inference>
 access_date: <YYYY-MM-DD the pages were fetched>
 status: <the estate's own status>
 note: <optional>

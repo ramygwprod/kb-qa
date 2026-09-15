@@ -52,6 +52,9 @@ GAP_CODES = {
     "index_item_without_row", "stop_condition_without_reason",
     "zero_rows", "nothing_checked", "robots_unreachable",
     "batch_unchecked", "capture_has_no_page_blocks",
+    "completeness_unassessable", "no_exhaustion_evidence",
+    "window_declaration_incomplete", "window_end_undeclared",
+    "collection_parked", "window_chain_gap", "window_ended_in_error",
 }
 
 
@@ -366,6 +369,74 @@ REMEDIES: Dict[str, Remedy] = {
         "An index item has no row citing it. Plan a batch covering it, or "
         "record a stop-condition with a stated reason. Do not lower the "
         "denominator to close the gap.",
+    ),
+    "completeness_unassessable": Remedy(
+        PLANNER,
+        "Nothing establishes how much of this subject exists, so nothing can "
+        "say how much of it we hold. Capture the subject's own index as a "
+        "denominator — that is the preferred fix. Where the surface publishes "
+        "no index, declare `window_requested` and `window_returned` per batch "
+        "so exhaustion can be evidenced instead. Leaving both absent does not "
+        "make the subject complete; it makes completeness unknown.",
+    ),
+    "no_exhaustion_evidence": Remedy(
+        PLANNER,
+        "Windows were declared but none came back empty. A window returning "
+        "fewer items than it asked for is not proof the list ended — it is "
+        "equally consistent with a run that stopped early. Probe one more "
+        "window and record the result, even when you are confident it will be "
+        "zero. Do NOT infer the end from a short return.",
+    ),
+    "window_underwritten": Remedy(
+        FIXABLE,
+        "The batch declares more items returned than it holds rows. Items came "
+        "back from the source that no row records. Either write the missing "
+        "rows, or correct the declaration if it over-counted — but establish "
+        "which before changing either. Lowering `window_returned` to match the "
+        "rows makes the finding disappear without recovering the items.",
+    ),
+    "collection_parked": Remedy(
+        PLANNER,
+        "Not a defect. A large index cannot be taken in one pass, and a "
+        "collector that stopped on its budget did the right thing — the "
+        "alternative is a run killed mid-surface whose partial output looks "
+        "complete. The subject is simply not finished: schedule the next window "
+        "from the offset in the message. Do NOT mark the subject done, and do "
+        "not treat the parked window as the end of the list.",
+    ),
+    "window_end_undeclared": Remedy(
+        FIXABLE,
+        "A window that does not say why it ended cannot be interpreted. Twelve "
+        "returned against twenty asked means either the source had twelve or "
+        "the collector stopped at twelve — opposite situations needing opposite "
+        "responses. Record window_end as `exhausted`, `budget` or `error`, from "
+        "what actually happened.",
+    ),
+    "window_end_unknown_value": Remedy(
+        FIXABLE,
+        "window_end must be `exhausted` (the source ran out), `budget` (the "
+        "collector stopped deliberately) or `error` (the attempt failed). A "
+        "fourth value is not a fourth outcome; pick the one that describes what "
+        "happened.",
+    ),
+    "window_chain_gap": Remedy(
+        PLANNER,
+        "Consecutive windows skip a range, so those items were never requested "
+        "— absent from the corpus without ever having been looked at. Collect "
+        "the missing range as its own window. Do not renumber the offsets to "
+        "make the chain contiguous; that hides the gap rather than closing it.",
+    ),
+    "window_ended_in_error": Remedy(
+        PLANNER,
+        "The window failed partway, so the range beyond it is unattempted "
+        "rather than absent. Re-run that window. An errored window is never "
+        "evidence that the list ended.",
+    ),
+    "window_declaration_incomplete": Remedy(
+        FIXABLE,
+        "Half a window declaration cannot distinguish exhaustion from "
+        "abandonment. Record both `window_requested` and `window_returned`, "
+        "from what the source actually returned — not from what was written.",
     ),
 }
 
