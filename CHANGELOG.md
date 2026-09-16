@@ -16,6 +16,34 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.8.0] — 2026-09-16
+
+### Added
+
+- **`unfetchable_source` — a named finding for a citation nobody can retrieve.**
+  D-008 made a non-`http(s)` `source_url` fail G2. Correct, and it surfaced as
+  one more `schema_violation` among many.
+
+  Measured in one estate: **644 rows across 23 subjects**, every one a `doc:`
+  reference. As anonymous schema violations those read as 644 malformed rows and
+  nobody acts. Named, they are one class with one remedy, and the remedy says
+  what is actually true — the row was already failing, just further downstream
+  and less legibly, because G3 looks for the cited URL as a page block and an
+  unfetchable reference by construction is never one.
+
+### Changed
+
+- `kbqa-check` Step 0 no longer halts on any manifest mismatch. It separates a
+  **stale pin** (mismatch after a successful reinstall from the pinned tag —
+  report and proceed) from **unestablished provenance** (mismatch when the
+  reinstall could not run — stop). The old behaviour halted after every release
+  until a hand-copy caught up, training a false alarm into the one check that
+  detects a swapped validator.
+
+  It also warns `STALE SKILL` when its own pinned tag is behind the newest
+  release, because a stale pin silently *downgrades* the validator on reinstall
+  and the manifest then matches — a green check on a superseded release.
+
 ## [6.7.0] — 2026-09-16
 
 ### Changed

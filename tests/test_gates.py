@@ -801,3 +801,52 @@ def test_an_errored_window_is_unattempted_not_absent(tmp_path):
 
     assert code == 1
     assert any(f.code == "window_ended_in_error" for f in v.findings)
+
+
+def test_an_unfetchable_source_is_named_not_buried(tmp_path):
+    """644 rows across 23 subjects in one estate cite `doc:` references.
+
+    As a generic schema_violation those read as 644 malformed rows. Named, they
+    are one class with one remedy — and the difference decides whether anyone
+    acts on them.
+    """
+    import json as _json
+
+    from kbqa.gates import g2_conformance
+
+    f = tmp_path / "_collect-x-staging.md"
+    row = {
+        "id": "acme.a", "vendor_term": "A", "what_it_does": "Does a.",
+        "source_url": "doc:internal-brief",
+        "source_quote": "A does a thing.", "access_date": "2026-08-23",
+        "evidence_grade": "official-doc", "confidence": "high",
+        "mechanism": "Native", "outcome": "yes", "depth_level": "feature",
+    }
+    f.write_text("---\nbatch: x\n---\n\n" + _json.dumps(row) + "\n", encoding="utf-8")
+
+    v, code = g2_conformance.run(["--staging", str(f)])
+    assert code == 1
+    codes = [x.code for x in v.findings]
+    assert "unfetchable_source" in codes, codes
+    assert "schema_violation" not in codes
+
+
+def test_other_contract_breaches_are_still_schema_violations(tmp_path):
+    """Narrowing one code must not swallow the rest."""
+    import json as _json
+
+    from kbqa.gates import g2_conformance
+
+    f = tmp_path / "_collect-y-staging.md"
+    row = {
+        "id": "acme.b", "vendor_term": "B", "what_it_does": "Does b.",
+        "source_url": "https://docs.acme.test/b",
+        "source_quote": "B does a thing.", "access_date": "2026-08-23",
+        "evidence_grade": "blog", "confidence": "high",
+        "mechanism": "Native", "outcome": "yes", "depth_level": "feature",
+    }
+    f.write_text("---\nbatch: y\n---\n\n" + _json.dumps(row) + "\n", encoding="utf-8")
+
+    v, code = g2_conformance.run(["--staging", str(f)])
+    assert code == 1
+    assert "schema_violation" in [x.code for x in v.findings]
