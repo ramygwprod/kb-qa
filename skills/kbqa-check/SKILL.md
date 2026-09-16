@@ -12,28 +12,48 @@ You are the **checker**. Run the gates over every batch in that folder, read
 what they say, and tell the operator what happens next. You do not repair data,
 and you do not touch the tool.
 
-## 0 · Reinstall, then verify — in that order
+## 0 · Establish which validator you are about to trust
 
 ```bash
-python3 -m pip install --force-reinstall --quiet "git+https://github.com/ramygwprod/kb-qa.git@v6.7.0" \
-  && python3 -m kbqa --version && python3 -m kbqa --manifest | head -1
+PINNED=v6.7.0
+LATEST=$(git ls-remote --tags https://github.com/ramygwprod/kb-qa.git 2>/dev/null \
+         | grep -o 'v[0-9][0-9.]*$' | sort -V | tail -1)
+[ -n "$LATEST" ] && [ "$LATEST" != "$PINNED" ] \
+  && echo "STALE SKILL: this copy pins $PINNED but $LATEST exists"
+python3 -m pip install --force-reinstall --quiet \
+  "git+https://github.com/ramygwprod/kb-qa.git@$PINNED" \
+  && echo "reinstalled from $PINNED"
+python3 -m kbqa --version && python3 -m kbqa --manifest | head -1
 ```
 
-Expected:
+Expected for this copy's pin:
 
 ```
 6.7.0
 manifest_sha256 bfc28664a7261f711d0b308de172e4b7498df65d666d3232c2cad1a4237f7bfc4
 ```
 
-Reinstalling first is deliberate: the authoritative copy lives on GitHub, so a
-tampered local package has a lifetime of one session. **Do not protect a derived
-artifact — re-derive it.** If `pip` is denied in this session, skip the install,
-verify, and say in your report that you checked what was already installed.
+Reinstalling first is deliberate. The authoritative copy is on GitHub, so a
+tampered local package has a lifetime of one session — **do not protect a
+derived artifact, re-derive it.**
 
-**If the version or manifest still differs, stop and report both values.** A
-verdict from unknown gate code is not a verdict. Do not investigate by reading
-or editing the package.
+Four outcomes, and they are not the same:
+
+| what you see | what it means | what to do |
+|---|---|---|
+| version and manifest match | the validator is the approved one | proceed |
+| `STALE SKILL` | a newer release exists; this copy was not refreshed | **proceed**, and report that you checked against `$PINNED` rather than the newest release. Tell the operator to refresh the skill |
+| manifest differs, but the reinstall succeeded | the skill's pinned SHA is out of date relative to its own tag | report both values and proceed — the code came from the tag seconds ago |
+| manifest differs and the reinstall **could not run** | provenance is unestablished | **stop.** A verdict from unknown gate code is not a verdict |
+
+Only the last is a halt. An earlier version of this skill stopped on any
+mismatch, which meant it halted after every release until someone hand-copied
+it — training a false alarm into the one check that detects a swapped
+validator. A check that cries wolf on routine events stops being read.
+
+Never install `$LATEST` instead of `$PINNED` to clear the warning. That would
+run gate code whose manifest this copy cannot vouch for, which is the opposite
+of the point.
 
 ## 1 · The boundary
 
