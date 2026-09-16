@@ -1,6 +1,6 @@
 # kbqa — user manual
 
-**Version 6.10.0** · for operators and for maker agents
+**Version 6.10.1** · for operators and for maker agents
 
 Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -10,8 +10,8 @@ Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.10.0"
-python -m kbqa --version          # must print 6.10.0
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.10.1"
+python -m kbqa --version          # must print 6.10.1
 ```
 
 **Audit a corpus** — needs no captures, changes nothing, answers "what here can
@@ -94,7 +94,7 @@ python3 -m venv .venv
 For an estate or CI, install from the pinned tag rather than a branch:
 
 ```bash
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.10.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.10.1"
 ```
 
 **Always a tag, never a branch.** A branch would let the gates and the data they
@@ -679,11 +679,14 @@ judged, or its verdict cites nothing.
 | `report --vendor-dir <d> --batch <b> [--denominator <f>] [--stops <f>] [--log <f>]` | staging, capture, denominator, stops | `_qa/<b>.report.md`, `_qa/<b>.report.json`, one verdict per gate, one log line |
 | `sweep --root <c> [--field-values] [--exclude <glob>] [--vendor-depth N] [--out <f>]` | every staging and capture under root | `_qa-estate-audit.md` and `.json` at the root |
 
-### Diagnostics and metadata — never write
+### Diagnostics, interpretation guards and metadata — never write rows
 
 | action | purpose |
 |---|---|
 | `probe --staging <f> [--capture <f>]` | file **shape** without content: field names, types, lengths, marker syntax, and whether the parser agrees. Tested to disclose nothing |
+| `freeze --root <d> --out <f>` | fingerprint the fields that are the **subject's own words** — which fields is a profile decision |
+| `freeze --root <d> --check <f>` | did interpreting the data change it? A changed or missing row fails; a new row is reported and does not |
+| `mappings --file <f> [--root <d>]` | are the mapping statements well-formed? Keyed on `id`, never on the term |
 | `--manifest` | SHA-256 of every module — what a verdict's `manifest_sha256` is checked against |
 | `--profiles` | list available profiles |
 | `--version` · `--help` | metadata |
@@ -721,7 +724,7 @@ Two ways a script gets this wrong:
 
 ## 7 · Findings reference
 
-46 codes. Every one carries a remedy, enforced by `tests/test_report.py` — a
+57 codes. Every one carries a remedy, enforced by `tests/test_report.py` — a
 report that falls back to "see the message" for its most important findings is
 not a report.
 
@@ -738,6 +741,8 @@ not a report.
 | `capture_has_no_page_blocks` | structural | gap | Text stored, no page boundaries. Rows are **unassessable, not ungrounded** — re-fetch with markers |
 | `capture_missing` | structural | gap | Nothing to check against. Re-collect or record as unverifiable |
 | `capture_not_before_staging` | structural | issue | Rows cannot have been written from this capture |
+| `collection_parked` | planner | gap | Stopped safely with more to collect. Correct — resume at the offset |
+| `completeness_unassessable` | planner | gap | No denominator and no windows — coverage is unknown, not complete |
 | `denominator_missing` | structural | gap | Coverage unmeasurable |
 | `duplicate_id` | fixable | issue | Two rows share an id; establish which is which |
 | `duplicate_page_block` | structural | issue | A URL captured twice; re-fetch cleanly |
@@ -747,6 +752,7 @@ not a report.
 | `manifest_mismatch` | structural | issue | **Tamper-evidence firing.** Verdicts came from other code |
 | `marker_unbalanced` | structural | issue | Capture is corrupt; re-fetch, do not hand-repair |
 | `no_declared_pages` | fixable | gap | Add the `pages:` list |
+| `no_exhaustion_evidence` | planner | gap | No window reached the end of the list; a short return is not the end |
 | `no_source_quote` | fixable | gap | Add a verbatim quote, or drop the row |
 | `no_source_url` | fixable | gap | Cite the page the quote is on |
 | `nothing_checked` | structural | gap | An empty check is not a pass |
@@ -769,9 +775,16 @@ not a report.
 | `stop_condition_without_reason` | fixable | gap | "We stopped" is not a reason |
 | `stops_file_missing` | structural | gap | Wrong path, or no stops recorded — not the same thing |
 | `term_at_multiple_urls` | planner | issue | Advisory. An R2 naming question; resolve nothing by guessing |
+| `unfetchable_source` | fixable | gap | Citation nobody can retrieve; capture the document and cite its URL |
 | `url_not_in_capture` | planner | issue | Page never fetched, or the URL is invented |
 | `verdict_stale` | fixable | issue | Checked, then edited. Re-run the gates |
 | `verdict_unreadable` | structural | issue | Re-run the gate; do not assume it was green |
+| `window_chain_gap` | planner | gap | Offsets skip a range — items never requested. Collect it; do not renumber |
+| `window_declaration_incomplete` | fixable | gap | Half a window declaration cannot tell exhaustion from abandonment |
+| `window_end_undeclared` | fixable | gap | A count cannot say why it stopped; declare exhausted/budget/error |
+| `window_end_unknown_value` | fixable | issue | A fourth value is not a fourth outcome |
+| `window_ended_in_error` | planner | gap | The range beyond is unattempted, not absent. An error is never the end |
+| `window_underwritten` | fixable | issue | More items returned than rows written; items nobody recorded |
 | `zero_rows` | structural | gap | A parser seeing nothing and a file holding nothing look identical |
 
 ---
@@ -825,7 +838,7 @@ and the data they judge change in the same push.
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.10.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.10.1"
 ```
 
 > `pip < 21.3` cannot read this project's metadata and installs an empty package
@@ -981,9 +994,9 @@ gate that did not run has found nothing, which is not the same as having found
 nothing wrong.
 
 **`sweep` says a file is `not-a-batch`, or the batch count dropped after
-upgrading to 6.10.0.**
+upgrading to 6.10.1.**
 That file matched the staging filename pattern but declares no batch
-frontmatter and holds no rows. Before 6.10.0 it was counted as a batch, so
+frontmatter and holds no rows. Before 6.10.1 it was counted as a batch, so
 totals were inflated and CI reported gate failures about it. If it really is a
 batch, give it frontmatter; if it is a document, rename it out of the pattern.
 

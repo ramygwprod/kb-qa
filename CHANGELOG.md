@@ -16,6 +16,24 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.10.1] — 2026-09-16
+
+### Fixed
+
+- **The manual had drifted from the tool.** Ten finding codes shipped with
+  remedies and no entry in §7, and `freeze` and `mappings` shipped without
+  reaching §6, the module map, or the README. Nothing noticed, because a manual
+  that omits something reads exactly like a manual that is complete.
+
+  Closed, and `tests/test_docs_track_the_code.py` now fails the build when a
+  finding code, a dispatched command, or a top-level module is missing from the
+  docs — including when the stated code count drifts, since a count that is
+  wrong reads as verified.
+
+  It was found by the operator asking, not by the package. That is the same
+  shape as D-006, D-009, D-010, D-012 — something invisible rendering as
+  something clean — committed this time against its own documentation.
+
 ## [6.10.0] — 2026-09-16
 
 ### Added

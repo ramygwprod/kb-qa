@@ -1,0 +1,71 @@
+"""The manual must describe the tool that exists, not the one it described once.
+
+Ten finding codes and two whole commands shipped without reaching the manual.
+Nothing noticed, because a manual that omits something reads exactly like a
+manual that is complete — the same shape as every defect recorded in
+DECISIONS.md, committed against this package's own documentation.
+
+An operator reads §6 to learn what they can run and §7 to learn what a finding
+means. A code with no entry sends them to "see the message"; a command with no
+entry does not exist as far as anyone reading is concerned.
+"""
+
+import re
+from pathlib import Path
+
+import pytest
+
+from kbqa.report import REMEDIES
+
+ROOT = Path(__file__).resolve().parent.parent
+MANUAL = (ROOT / "docs" / "MANUAL.md").read_text(encoding="utf-8")
+DEVELOPMENT = (ROOT / "docs" / "DEVELOPMENT.md").read_text(encoding="utf-8")
+CLI = (ROOT / "src" / "kbqa" / "cli.py").read_text(encoding="utf-8")
+
+
+def documented_codes(text: str):
+    return set(re.findall(r"`([a-z][a-z0-9_]+)`", text))
+
+
+@pytest.mark.parametrize("code", sorted(REMEDIES))
+def test_every_finding_code_is_in_the_manual(code):
+    assert f"`{code}`" in MANUAL, (
+        f"{code!r} has a remedy but no entry in MANUAL §7. A reader who meets it "
+        "in a report has nowhere to look it up."
+    )
+
+
+def test_the_manual_states_the_real_code_count():
+    """A stated count that drifts is worse than none — it reads as verified."""
+    m = re.search(r"(\d+) codes\. Every one carries a remedy", MANUAL)
+    assert m, "MANUAL §7 no longer states how many codes there are"
+    assert int(m.group(1)) == len(REMEDIES), (
+        f"MANUAL says {m.group(1)} codes; there are {len(REMEDIES)}"
+    )
+
+
+def dispatched_commands():
+    """Subcommands the CLI answers to, read from its dispatch rather than a list."""
+    return set(re.findall(r'argv\[0\] == "([a-z][a-z0-9_-]*)"', CLI))
+
+
+@pytest.mark.parametrize("command", sorted(dispatched_commands()))
+def test_every_command_is_in_the_manual(command):
+    assert re.search(rf"`{re.escape(command)}\b", MANUAL), (
+        f"`{command}` is dispatched by the CLI and appears nowhere in the manual. "
+        "A command nobody can find is a command nobody runs."
+    )
+
+
+@pytest.mark.parametrize("module", ["freeze", "mappings", "probe", "report", "sweep", "parsing"])
+def test_every_top_level_module_is_in_the_module_map(module):
+    assert f"`{module}.py`" in DEVELOPMENT, (
+        f"{module}.py is missing from DEVELOPMENT's module map, so the next "
+        "person extending this package will not know it exists."
+    )
+
+
+def test_these_guards_can_actually_fail():
+    """A drift check that has never failed has not been tested."""
+    assert "`definitely_not_a_real_code`" not in MANUAL
+    assert not re.search(r"`definitely_not_a_command\b", MANUAL)

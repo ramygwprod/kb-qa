@@ -633,3 +633,45 @@ and the corpus should follow, that is a re-collection producing new rows with a
 new `access_date`, not an edit to frozen ones. If that becomes common enough to
 be burdensome, the answer is a superseding-row mechanism — never relaxing the
 freeze.
+
+
+## D-014 · A mapping is keyed on `id`, never on the term
+
+**Date:** 2026-09-16 · **Version:** 6.10.0
+
+`docs/MAPPING-CONTRACT.md` first proposed keying mapping statements on
+`vendor_term`: map a term once, cover every row using it. The collection regime
+overturned it on measurement.
+
+| | |
+|---|---|
+| `(subject, term)` pairs carrying more than one row | 9,238, covering **22,517 rows** |
+| terms appearing in more than one subject | 434, one spanning **43 subjects** |
+| distinct ids in the merged tree layer | **12,804 of 12,804** |
+
+Rows sharing a term are not thereby the same concept. Bundles repeat a term on
+purpose, and **this package already said so**: `g5_bundles` exists to report a
+term appearing at more than one URL and refuses to resolve it — *"a repeated
+name is an R2 question for a human. A `usecase_of` guessed from string
+similarity is indistinguishable later from a sourced one, so this gate never
+writes one."* The proposal was to do by schema exactly what that gate declines
+to do by inference, over 81% of a corpus, silently.
+
+**Ruling.** Mapping statements key on `id`. Grouping by term remains how a human
+reviews efficiently; it is not how identity is recorded.
+
+**And status is not a relation.** *Examined and genuinely unmatched* is the
+absence of a semantic link plus a review state — `unexamined`,
+`examined-no-match`, `mapped`. Encoding it as a sixth SKOS relation would make a
+non-relation into a relation, which is why SKOS omits it. It also retires the
+`NOVEL` conflation without touching `canonical`: remaining work is the count of
+`unexamined`, which falls monotonically, so a stalled pass stops resembling a
+finished one.
+
+**The lesson worth keeping** is not about keys. An efficiency argument reached
+past an identifier that was already unique and already correct. When this
+package proposes something its own gates refuse to do, the gates are the ones
+that have thought about it longer.
+
+**Reversal condition.** If a corpus emerges whose ids are not unique in the
+merged layer, identity must move to a new explicit key — never to a name.
