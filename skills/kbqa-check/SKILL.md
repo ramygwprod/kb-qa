@@ -4,30 +4,36 @@ description: Run the kbqa validation gates over a collected batch or a whole est
 allowed-tools: Bash, Read
 ---
 
-# Checking a batch with kbqa
+# Checking a subject with kbqa
 
-You are the **checker**. Your job is to run the gates, read what they say, and
-say what happens next. You do not repair data, and you do not touch the tool.
+**Invoked as:** `/kbqa-check <subject folder path>`
 
-## 0 · Verify the validator before trusting anything it says
+You are the **checker**. Run the gates over every batch in that folder, read
+what they say, and tell the operator what happens next. You do not repair data,
+and you do not touch the tool.
 
-Always, as the first command of a checking session:
+## 0 · Reinstall, then verify — in that order
 
 ```bash
-python3 -m kbqa --version && python3 -m kbqa --manifest | head -1
+python3 -m pip install --force-reinstall --quiet "git+https://github.com/ramygwprod/kb-qa.git@v6.7.0" \
+  && python3 -m kbqa --version && python3 -m kbqa --manifest | head -1
 ```
 
-Expected for the pinned release:
+Expected:
 
 ```
-6.6.0
-manifest_sha256 35b049e219211e9c1c3d017f6b3cb90904afc78feb9f1a008acbab04feec6d79
+6.7.0
+manifest_sha256 bfc28664a7261f711d0b308de172e4b7498df65d666d3232c2cad1a4237f7bfc4
 ```
 
-**If the version or the manifest differs, stop and report it.** A verdict from
-unknown gate code is not a verdict. Do not investigate by reading or editing the
-package — report the two values you got and let a human establish which version
-is approved.
+Reinstalling first is deliberate: the authoritative copy lives on GitHub, so a
+tampered local package has a lifetime of one session. **Do not protect a derived
+artifact — re-derive it.** If `pip` is denied in this session, skip the install,
+verify, and say in your report that you checked what was already installed.
+
+**If the version or manifest still differs, stop and report both values.** A
+verdict from unknown gate code is not a verdict. Do not investigate by reading
+or editing the package.
 
 ## 1 · The boundary
 
@@ -36,27 +42,59 @@ is approved.
 | **You may read** | captures, staging files, denominators, stop-conditions, `_qa/` verdicts and reports |
 | **You may write** | nothing directly. `kbqa` writes `_qa/` and the log when you pass recording flags |
 | **You may never touch** | anything under the kbqa install path — `gates/`, `models.py`, `profiles/`, `conventions.py`, `report.py`, tests, fixtures |
-| **You may never run** | `pip install`, `pip uninstall`, `pip install -e`, or any command that changes which kbqa is installed |
 
 A gate is satisfied by the data, never by changing what the gate says. If you
 believe a gate is wrong, say so and cite the module and its SHA from the
 finding — that is a legitimate dispute. Editing it is not.
 
-## 2 · Check one batch
+## 2 · Check every batch in the folder
+
+A subject is collected in windows, so it has many batches. Check all of them:
 
 ```bash
-python3 -m kbqa report --vendor-dir <subject-dir> --batch <name> \
-  --denominator <subject-dir>/_denominator-*.md \
-  --stops <subject-dir>/_stop-conditions.md \
-  --log _qa-log.jsonl
+D="<subject folder path>"
+DEN=$(find "$D" -maxdepth 1 -name '_denominator*.md' | sort | head -1)
+STOPS="$D/_stop-conditions.md"
+[ -n "$DEN" ]   && DARG="--denominator $DEN" || { DARG=""; echo "NOTE: no denominator — G4 will not run"; }
+[ -f "$STOPS" ] && SARG="--stops $STOPS"     || SARG=""
+find "$D" -maxdepth 1 -name '_collect-*-staging.md' | sort | while read -r s; do
+  b=$(basename "$s"); b=${b#_collect-}; b=${b%-staging.md}
+  echo "=== $b"
+  python3 -m kbqa report --vendor-dir "$D" --batch "$b" $DARG $SARG --log _qa-log.jsonl
+done
 ```
 
-Runs G1–G3 (and G4 when a denominator is given), writes each verdict to `_qa/`,
-and renders `_qa/<batch>.report.md` plus a `.report.json`.
+Each pass runs G1–G3 (and G4 with a denominator), writes verdicts to `_qa/`, and
+renders `_qa/<batch>.report.md` plus a `.report.json`.
 
-Read the report's **Coverage** section first. It names the gates that did not
+`find` rather than a glob, and the flags built conditionally, both for reasons
+worth keeping. A bare `_denominator*.md` glob expands to several filenames when
+a subject has more than one, and the extra arguments are rejected — so the loop
+would fail on exactly the subjects with the most collection behind them. And an
+unmatched glob is a fatal error in zsh, which would read as the check failing
+rather than as a folder with nothing in it. When there is no denominator at all the run still
+proceeds, and **the NOTE goes in your report**: G4 did not run, so the subject's
+coverage is unmeasured rather than complete.
+
+Then check the windows form an unbroken chain that reached the end of the list:
+
+```bash
+python3 -m kbqa g4 --rows "$D"/_collect-*-staging.md
+```
+
+`collection_parked` means the collector stopped safely with more to collect —
+correct behaviour, and the subject is simply unfinished. `no_exhaustion_evidence`
+means nothing establishes the list ever ended.
+
+**If the loop printed nothing, no batch was checked.** An empty folder and a
+folder full of clean batches produce the same silent output, so say explicitly
+that zero batches were found rather than reporting the subject clean. A sweep
+matching no files looks exactly like a clean estate — that confusion has
+produced real defects in this pipeline more than once.
+
+**Read each report's Coverage section first.** It names the gates that did not
 run. A gate that did not run has found nothing, which is not the same as having
-found nothing wrong — never report the batch as clean without checking it.
+found nothing wrong — never report a batch as clean without checking it.
 
 To check one thing in isolation, without writing anything:
 
@@ -64,13 +102,12 @@ To check one thing in isolation, without writing anything:
 python3 -m kbqa g1 --staging <f> --capture <f>     # capture integrity
 python3 -m kbqa g2 --staging <f>                   # conformance
 python3 -m kbqa g3 --staging <f> --capture <f>     # grounding
-python3 -m kbqa g4 --denominator <f> --rows <f>... --stops <f>
 ```
 
 Bare gate runs are side-effect-free. Exit 0 = PASS, 1 = FAIL. **Exit 2 means
 DECLINED and appears only from `g0`** — a usage error exits 1, never 2.
 
-## 3 · Check the estate
+## 3 · Check the estate## 3 · Check the estate
 
 ```bash
 python3 -m kbqa g6 --root .        # verdicts, manifests, merged trees agree
@@ -99,6 +136,18 @@ the specific finding, not the gate name.
 
 A finding is resolved when it stops appearing on a re-run — not when it has been
 explained.
+
+## 4b · What to tell the operator
+
+They are the loop between maker and checker, so give them what they need to act
+without opening a file:
+
+- per batch: CLEAR or BLOCKED, and the finding count by class
+- the **structural** and **planner** findings, which go back to planning
+- the **fixable** findings, the only ones a row-writer should ever receive
+- whether the subject reached the end of its list, or is parked at an offset
+- **every gate that did not run, and why** — state this even when everything
+  else is clean
 
 ## 5 · Never
 
