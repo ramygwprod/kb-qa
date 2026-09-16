@@ -30,7 +30,11 @@ not a property of one concept in one of them.
 
 ## The shape — ruled
 
-One statement per line, appended, never rewritten in place:
+One statement per line, appended, never rewritten in place. The namespace is
+**estate-wide** — a category spans subjects, so coverage has one answer, not 64
+— while the files are **sharded one per subject**, because one writer per file
+is a standing constraint and a single estate-wide file is one nobody reads.
+`kbqa mappings --file <f> [<f> …]` takes them all and reports one number.
 
 ```json
 {
@@ -65,6 +69,22 @@ gate refuses to do by inference.
 
 **Group by term to review; record per id.** The efficiency is in how a human
 reads the work, not in what gets written down.
+
+### Anchored to the merged layer
+
+Ids are unique in the merged trees. They are **not** unique once staging is
+unioned back in, and in 126 `(subject, id)` pairs the rows disagree on the
+subject's own words depending on which layer you read — 49 differing on
+`vendor_term`, 119 on `source_url`. That is the ambiguity keying on `id` was
+chosen to avoid, arriving through the back door.
+
+So a mapping statement attaches to a **merged** row. Staging is consulted for
+membership only, which is safe. An id that exists only in staging is
+`unexamined` until it merges, which is true regardless — and `kbqa mappings`
+says so rather than accepting the statement.
+
+The 126 are also a latent merge collision in their own right, reported by
+`kbqa mappings --root` whether or not any statement touches one.
 
 ### `status` is not a relation
 
@@ -147,6 +167,13 @@ edited; a mapping check would prove the record is well-formed. Whether
 `broadMatch` was the right relation is judgement, and it stays judgement — the
 same honest limit as G3, which proves a quote is real and cannot prove it
 supports the claim.
+
+**Quarantine is a property of the scheme, not of each record.** It is orthogonal
+to `mapping_status`, which is monotonic review progress: a quarantined mapping
+might be `unexamined` or fully `mapped`, and making quarantine a status would
+erase whichever review state it replaced — losing information at the moment of
+quarantining. Mark the scheme once in a register; every record carrying it
+inherits the mark, and un-quarantining is one line rather than 1,014 edits.
 
 **The pre-existing tags are not resolved by this**, only quarantined. Under this
 shape they become one dated mapping set attributable to whatever wrote them,

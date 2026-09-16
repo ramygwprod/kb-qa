@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 from .parsing import parse_staging
+from .profile import active
 from .profile import conventions as _conventions
 
 RELATIONS = ("exactMatch", "closeMatch", "broadMatch", "narrowMatch", "relatedMatch")
@@ -40,18 +41,66 @@ EXIT_OK = 0
 EXIT_FAIL = 1
 
 
-def corpus_ids(root: Path) -> Set[str]:
+class Corpus:
+    """Where an id lives, and whether it means one thing.
+
+    Ids were chosen as the mapping key because the merged layer holds 12,804
+    rows with 12,804 distinct ids. Unioning staging back in reintroduces the
+    ambiguity that choice avoided: measured on one estate, 126 `(subject, id)`
+    pairs carry rows that disagree on the subject's own words depending on which
+    layer you read — 49 differing on `vendor_term`, 119 on `source_url`.
+
+    So the merged layer is the anchor. Staging is consulted for membership only,
+    which is safe, and a statement about an id that has not merged yet is
+    premature rather than wrong.
+    """
+
+    def __init__(self) -> None:
+        self.tree_ids: Set[str] = set()
+        self.staging_ids: Set[str] = set()
+        self.ambiguous: Dict[str, Set[str]] = {}
+
+    @property
+    def all_ids(self) -> Set[str]:
+        return self.tree_ids | self.staging_ids
+
+
+def read_corpus(root: Path) -> Corpus:
     conv = _conventions()
-    ids: Set[str] = set()
-    for path in sorted(root.glob(conv.staging_glob)) + sorted(root.glob("**/feature-tree*.md")):
-        try:
-            parsed = parse_staging(path)
-        except Exception:  # noqa: BLE001 — an unreadable file is not a mapping defect
-            continue
-        for rp in parsed.rows:
-            if rp.obj and rp.obj.get("id"):
-                ids.add(str(rp.obj["id"]))
-    return ids
+    fields = active().verbatim_fields
+    corpus = Corpus()
+    seen: Dict[str, Dict[str, object]] = {}
+
+    def scan(paths, into: Set[str]) -> None:
+        for path in paths:
+            try:
+                parsed = parse_staging(path)
+            except Exception:  # noqa: BLE001 — an unreadable file is not a mapping defect
+                continue
+            for rp in parsed.rows:
+                if not rp.obj or not rp.obj.get("id"):
+                    continue
+                rid = str(rp.obj["id"])
+                into.add(rid)
+                shape = {f: rp.obj.get(f) for f in fields if f != "id"}
+                if rid in seen:
+                    differing = {
+                        f for f, v in shape.items()
+                        if f in seen[rid] and seen[rid][f] != v
+                    }
+                    if differing:
+                        corpus.ambiguous.setdefault(rid, set()).update(differing)
+                else:
+                    seen[rid] = shape
+
+    scan(sorted(root.glob("**/feature-tree*.md")), corpus.tree_ids)
+    scan(sorted(root.glob(conv.staging_glob)), corpus.staging_ids)
+    return corpus
+
+
+def corpus_ids(root: Path) -> Set[str]:
+    """Back-compatible membership set. Prefer `read_corpus` for anchoring."""
+    return read_corpus(root).all_ids
 
 
 def read_statements(path: Path) -> Tuple[List[dict], List[str]]:
@@ -73,7 +122,7 @@ def read_statements(path: Path) -> Tuple[List[dict], List[str]]:
     return statements, errors
 
 
-def check(statements: List[dict], known_ids: Set[str]) -> Tuple[List[str], Dict[str, int]]:
+def check(statements: List[dict], corpus: Optional[Corpus] = None) -> Tuple[List[str], Dict[str, int]]:
     problems: List[str] = []
     by_id_scheme: Dict[Tuple[str, str], List[dict]] = defaultdict(list)
     status_counts: Counter = Counter()
@@ -88,11 +137,27 @@ def check(statements: List[dict], known_ids: Set[str]) -> Tuple[List[str], Dict[
         rid, status = str(s["id"]), str(s["status"])
         status_counts[status] += 1
 
-        if known_ids and rid not in known_ids:
-            # A mapping about a row nobody holds is a statement about nothing —
-            # and the likeliest cause is a typo that would otherwise sit there
-            # looking like coverage.
-            problems.append(f"line {n}: id {rid!r} is in no row in the corpus")
+        if corpus is not None and corpus.all_ids:
+            if rid not in corpus.all_ids:
+                # A mapping about a row nobody holds is a statement about
+                # nothing, and the likeliest cause is a typo that would
+                # otherwise sit there looking like coverage.
+                problems.append(f"line {n}: id {rid!r} is in no row in the corpus")
+            elif rid in corpus.ambiguous:
+                # The reason this key was chosen, arriving anyway.
+                fields = ", ".join(sorted(corpus.ambiguous[rid]))
+                problems.append(
+                    f"line {n}: id {rid!r} names different things depending on "
+                    f"which layer you read ({fields} disagree). A mapping on an "
+                    "ambiguous id records a decision about an unknown subject — "
+                    "resolve the collision first"
+                )
+            elif rid not in corpus.tree_ids:
+                problems.append(
+                    f"line {n}: id {rid!r} exists only in staging and has not "
+                    "merged. A mapping attaches to a merged row; until then the "
+                    "id is unexamined, which is true anyway"
+                )
 
         if status not in STATUSES:
             problems.append(
@@ -141,7 +206,8 @@ def check(statements: List[dict], known_ids: Set[str]) -> Tuple[List[str], Dict[
     counts = {
         "statements": len(statements),
         "rows_with_a_statement": len({str(s["id"]) for s in statements if s.get("id")}),
-        "corpus_rows": len(known_ids),
+        "corpus_rows": len(corpus.tree_ids) if corpus else 0,
+        "ambiguous_ids": len(corpus.ambiguous) if corpus else 0,
         **{f"status_{k}": v for k, v in sorted(status_counts.items())},
         "problems": len(problems),
     }
@@ -150,36 +216,60 @@ def check(statements: List[dict], known_ids: Set[str]) -> Tuple[List[str], Dict[
 
 def run(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(prog="kbqa mappings")
-    ap.add_argument("--file", required=True, help="mapping statements, one JSON object per line")
+    ap.add_argument(
+        "--file", required=True, nargs="+",
+        help="mapping statement files, one JSON object per line. Several are "
+             "expected: the namespace is estate-wide, sharded one file per "
+             "subject, because one writer per file is a standing constraint and "
+             "a single estate-wide file is one nobody reads",
+    )
     ap.add_argument("--root", default=None, help="estate root, to confirm every id exists")
     args = ap.parse_args(argv)
 
-    path = Path(args.file)
-    if not path.exists():
-        print(f"mappings: not found: {path}")
+    paths = [Path(f) for f in args.file]
+    missing = [p for p in paths if not p.exists()]
+    if missing:
+        for p in missing:
+            print(f"mappings: not found: {p}")
         return EXIT_FAIL
 
-    statements, parse_errors = read_statements(path)
-    known: Set[str] = set()
+    statements: List[dict] = []
+    parse_errors: List[str] = []
+    for p in paths:
+        st, errs = read_statements(p)
+        for s in st:
+            s["_file"] = p.name
+        statements.extend(st)
+        parse_errors.extend(f"{p.name}: {e}" for e in errs)
+
+    corpus: Optional[Corpus] = None
     if args.root:
         root = Path(args.root)
         if not root.is_dir():
             print(f"mappings: not a directory: {root}")
             return EXIT_FAIL
-        known = corpus_ids(root)
-        if not known:
+        corpus = read_corpus(root)
+        if not corpus.all_ids:
             print(f"mappings: no rows found under {root}")
             print("  Every id would then look unknown, which is noise rather than a finding.")
             return EXIT_FAIL
 
-    problems, counts = check(statements, known)
+    problems, counts = check(statements, corpus)
     problems = parse_errors + problems
 
-    print(f"mapping statements: {counts['statements']}")
+    print(f"mapping statements: {counts['statements']} from {len(paths)} file(s)")
     if args.root:
         covered, total = counts["rows_with_a_statement"], counts["corpus_rows"]
         pct = (100 * covered // total) if total else 0
-        print(f"  rows with a statement: {covered} of {total} ({pct}%)")
+        print(f"  merged rows with a statement: {covered} of {total} ({pct}%)")
+        if counts.get("ambiguous_ids"):
+            # Named whether or not any mapping touches one: an id meaning two
+            # things is a latent merge collision, and the merge step is the one
+            # part of this pipeline with no code to audit.
+            print(
+                f"  ambiguous ids in the corpus: {counts['ambiguous_ids']} "
+                "(the same id names different things in different layers)"
+            )
     for k, v in sorted(counts.items()):
         if k.startswith("status_"):
             print(f"  {k[len('status_'):]:<18} {v}")

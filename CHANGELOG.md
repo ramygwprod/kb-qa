@@ -16,6 +16,33 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.12.0] — 2026-09-17
+
+### Changed
+
+- **Mapping statements anchor to the merged layer.** Ids are unique in the
+  trees — 12,804 of 12,804 — but **not** once staging is unioned back in:
+  126 `(subject, id)` pairs carry rows that disagree on the subject's own words
+  depending on which layer you read, 49 differing on `vendor_term` and 119 on
+  `source_url`. That is precisely the ambiguity keying on `id` was chosen to
+  avoid, arriving through the back door.
+
+  A statement now attaches to a merged row. Staging is consulted for membership
+  only. An id that exists only in staging is reported as premature rather than
+  accepted, and an id that means two things is refused outright.
+
+- **`--file` accepts several files.** The namespace is estate-wide, because a
+  category spans subjects and coverage has one answer rather than 64; the files
+  are sharded one per subject, because one writer per file is a standing
+  constraint and a single estate-wide file is one nobody reads.
+
+### Added
+
+- **Ambiguous ids are reported whether or not a mapping touches one.** The same
+  id naming different things in different layers is a latent merge collision —
+  and the merge step is the one part of this pipeline with no code to audit at
+  all, since Gold is assembled by hand.
+
 ## [6.11.0] — 2026-09-16
 
 ### Changed
