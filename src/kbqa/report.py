@@ -52,6 +52,7 @@ GAP_CODES = {
     "index_item_without_row", "stop_condition_without_reason",
     "zero_rows", "nothing_checked", "robots_unreachable",
     "batch_unchecked", "capture_has_no_page_blocks",
+    "unfetchable_source",
     "completeness_unassessable", "no_exhaustion_evidence",
     "window_declaration_incomplete", "window_end_undeclared",
     "collection_parked", "window_chain_gap", "window_ended_in_error",
@@ -394,6 +395,17 @@ REMEDIES: Dict[str, Remedy] = {
         "rows, or correct the declaration if it over-counted — but establish "
         "which before changing either. Lowering `window_returned` to match the "
         "rows makes the finding disappear without recovering the items.",
+    ),
+    "unfetchable_source": Remedy(
+        FIXABLE,
+        "The row cites a source nobody else can retrieve — a `doc:` reference, "
+        "a local path, a filename. It could never be grounded: G3 looks for the "
+        "cited URL as a page block in the capture, and an unfetchable reference "
+        "by construction is not one, so this row was already failing, just "
+        "further downstream and less legibly. Capture the document like any "
+        "other page and cite the URL it was served from. Where that is "
+        "impossible, the row is an assertion rather than evidence and belongs "
+        "out of the corpus or in a recorded decision — not re-labelled to pass.",
     ),
     "collection_parked": Remedy(
         PLANNER,

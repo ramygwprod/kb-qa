@@ -130,6 +130,28 @@ finding can cite the exact code rather than edit it. Alongside the markdown,
 `_qa/<batch>.report.json` carries the same plan for a maker agent that consumes
 it rather than reads it.
 
+## Freeze and mappings — the round with no gate behind it
+
+Mapping a subject's term to a standard category is where the pressure to tidy is
+highest, and `vendor_term` was checked against nothing.
+
+```bash
+python -m kbqa freeze --root <estate> --out _qa/verbatim.freeze.json
+# … mapping pass …
+python -m kbqa freeze --root <estate> --check _qa/verbatim.freeze.json
+python -m kbqa mappings --file <estate>/_mappings.jsonl --root <estate>
+```
+
+`freeze` fingerprints the fields that are the **subject's own words** — a
+profile decision, not a constant. Our reading (`canonical`, `confidence`,
+`mechanism`) stays revisable, or mapping would be impossible.
+
+`mappings` checks statements that live **outside** the rows and key on `id`.
+Keying on the term was the first proposal and folds 81% of a real corpus, since
+rows sharing a term are not thereby the same concept — which `g5` already
+reports and refuses to resolve. See
+[docs/MAPPING-CONTRACT.md](docs/MAPPING-CONTRACT.md).
+
 ## Probe — confirm the format without disclosing the data
 
 ```bash

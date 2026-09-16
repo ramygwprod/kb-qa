@@ -94,9 +94,21 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
         except ValidationError as exc:
             for err in exc.errors():
                 loc = ".".join(str(p) for p in err["loc"]) or "<row>"
-                findings.append(
-                    Finding("schema_violation", f"{loc}: {err['msg']}", where)
-                )
+                # An unfetchable citation is a distinct defect with a distinct
+                # remedy, not one more shape of "the row is malformed". Buried
+                # among schema violations it reads as sloppiness; named, it says
+                # exactly what is wrong and what re-sourcing it would take.
+                # Measured at 644 rows across 23 subjects in one estate — enough
+                # that the difference between one finding and 644 anonymous ones
+                # decides whether anybody acts on it.
+                if loc == "source_url" and "http" in err["msg"]:
+                    findings.append(
+                        Finding("unfetchable_source", f"{loc}: {err['msg']}", where)
+                    )
+                else:
+                    findings.append(
+                        Finding("schema_violation", f"{loc}: {err['msg']}", where)
+                    )
             continue
         validated += 1
         if row.id in seen_ids:

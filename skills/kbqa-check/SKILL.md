@@ -12,28 +12,48 @@ You are the **checker**. Run the gates over every batch in that folder, read
 what they say, and tell the operator what happens next. You do not repair data,
 and you do not touch the tool.
 
-## 0 · Reinstall, then verify — in that order
+## 0 · Establish which validator you are about to trust
 
 ```bash
-python3 -m pip install --force-reinstall --quiet "git+https://github.com/ramygwprod/kb-qa.git@v6.7.0" \
-  && python3 -m kbqa --version && python3 -m kbqa --manifest | head -1
+PINNED=v6.12.0
+LATEST=$(git ls-remote --tags https://github.com/ramygwprod/kb-qa.git 2>/dev/null \
+         | grep -o 'v[0-9][0-9.]*$' | sort -V | tail -1)
+[ -n "$LATEST" ] && [ "$LATEST" != "$PINNED" ] \
+  && echo "STALE SKILL: this copy pins $PINNED but $LATEST exists"
+python3 -m pip install --force-reinstall --quiet \
+  "git+https://github.com/ramygwprod/kb-qa.git@$PINNED" \
+  && echo "reinstalled from $PINNED"
+python3 -m kbqa --version && python3 -m kbqa --manifest | head -1
 ```
 
-Expected:
+Expected for this copy's pin:
 
 ```
-6.7.0
-manifest_sha256 bfc28664a7261f711d0b308de172e4b7498df65d666d3232c2cad1a4237f7bfc4
+6.12.0
+manifest_sha256 a29c8d29d175f8f678ab552a86bbe76900fd6d3bc32ad7dd3138579b5caeb01d4
 ```
 
-Reinstalling first is deliberate: the authoritative copy lives on GitHub, so a
-tampered local package has a lifetime of one session. **Do not protect a derived
-artifact — re-derive it.** If `pip` is denied in this session, skip the install,
-verify, and say in your report that you checked what was already installed.
+Reinstalling first is deliberate. The authoritative copy is on GitHub, so a
+tampered local package has a lifetime of one session — **do not protect a
+derived artifact, re-derive it.**
 
-**If the version or manifest still differs, stop and report both values.** A
-verdict from unknown gate code is not a verdict. Do not investigate by reading
-or editing the package.
+Four outcomes, and they are not the same:
+
+| what you see | what it means | what to do |
+|---|---|---|
+| version and manifest match | the validator is the approved one | proceed |
+| `STALE SKILL` | a newer release exists; this copy was not refreshed | **proceed**, and report that you checked against `$PINNED` rather than the newest release. Tell the operator to refresh the skill |
+| manifest differs, but the reinstall succeeded | the skill's pinned SHA is out of date relative to its own tag | report both values and proceed — the code came from the tag seconds ago |
+| manifest differs and the reinstall **could not run** | provenance is unestablished | **stop.** A verdict from unknown gate code is not a verdict |
+
+Only the last is a halt. An earlier version of this skill stopped on any
+mismatch, which meant it halted after every release until someone hand-copied
+it — training a false alarm into the one check that detects a swapped
+validator. A check that cries wolf on routine events stops being read.
+
+Never install `$LATEST` instead of `$PINNED` to clear the warning. That would
+run gate code whose manifest this copy cannot vouch for, which is the opposite
+of the point.
 
 ## 1 · The boundary
 
@@ -119,6 +139,38 @@ python3 -m kbqa sweep --root .     # which batches can be checked at all
 corpus is in good order when each batch is in the tier it ought to be — not when
 all of them are verifiable.
 
+## 3b · Guards for the mapping round
+
+Two commands that are not gates. They answer a question no gate asks: **did
+interpreting the data change it?**
+
+Before a mapping pass, and again after:
+
+```bash
+python3 -m kbqa freeze --root <estate> --out _qa/verbatim.freeze.json
+# … the mapping pass happens …
+python3 -m kbqa freeze --root <estate> --check _qa/verbatim.freeze.json
+```
+
+`freeze` fingerprints the fields that are the **subject's own words** — for a
+product catalogue, `id`, `source_url`, `source_quote`, `access_date`,
+`vendor_term`, `parent_path`. A changed or disappeared row fails. A new row is
+reported and does not, because collection legitimately adds rows.
+
+**A drifted row is restored from version control, never re-frozen.** Re-freezing
+records the edit as the new truth, which is the one thing the command exists to
+prevent. If you are asked to re-freeze after a drift report, say no and explain
+why.
+
+And where mapping statements exist:
+
+```bash
+python3 -m kbqa mappings --file <estate>/_mappings.jsonl --root <estate>
+```
+
+Statements live **outside** rows and key on `id`. `canonical` in a row is not a
+mapping and must not be treated as one — see §5.
+
 ## 4 · Routing a failure
 
 Every finding in the report carries a class. Route by it, and say which:
@@ -162,6 +214,9 @@ without opening a file:
   the row is wrong — drop it or re-source it
 - Regenerate or hand-edit a test fixture
 - Report only the gates that passed
+- Re-freeze after a drift report, or advise anyone else to
+- Treat a `canonical` value in a row as a mapping. Mappings live in their own
+  file; a value written into a row is an edit to the row
 
 ## 6 · What the gates cannot see
 

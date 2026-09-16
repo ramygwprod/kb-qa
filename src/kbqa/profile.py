@@ -29,7 +29,7 @@ model, so swapping the framework changes no gate logic.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Type
+from typing import Dict, Optional, Tuple, Type
 
 from pydantic import BaseModel
 
@@ -47,6 +47,21 @@ class Profile:
     row_model: Type[BaseModel]
     extensions: Dict[str, ExtensionField] = field(default_factory=dict)
     conventions: Conventions = DEFAULT_CONVENTIONS
+
+    #: Fields that are the SUBJECT's own words, never ours to change.
+    #:
+    #: The universal four are always verbatim: an id someone else may cite, the
+    #: page a claim came from, the quote itself, and when it was read. A profile
+    #: adds whatever else in its framework belongs to the subject rather than to
+    #: us — for a product catalogue, the vendor's term for a thing and where the
+    #: vendor puts it in their own tree.
+    #:
+    #: Everything NOT listed here is ours to revise: our grading, our
+    #: confidence, our mapping. That is the whole distinction the alias layer
+    #: rests on, and `kbqa freeze` is what turns it from a promise into a check.
+    verbatim_fields: Tuple[str, ...] = (
+        "id", "source_url", "source_quote", "access_date",
+    )
 
     def is_registered(self, field_name: str) -> bool:
         return field_name in self.extensions

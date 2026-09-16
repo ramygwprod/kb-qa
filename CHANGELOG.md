@@ -16,6 +16,171 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.12.0] — 2026-09-17
+
+### Changed
+
+- **Mapping statements anchor to the merged layer.** Ids are unique in the
+  trees — 12,804 of 12,804 — but **not** once staging is unioned back in:
+  126 `(subject, id)` pairs carry rows that disagree on the subject's own words
+  depending on which layer you read, 49 differing on `vendor_term` and 119 on
+  `source_url`. That is precisely the ambiguity keying on `id` was chosen to
+  avoid, arriving through the back door.
+
+  A statement now attaches to a merged row. Staging is consulted for membership
+  only. An id that exists only in staging is reported as premature rather than
+  accepted, and an id that means two things is refused outright.
+
+- **`--file` accepts several files.** The namespace is estate-wide, because a
+  category spans subjects and coverage has one answer rather than 64; the files
+  are sharded one per subject, because one writer per file is a standing
+  constraint and a single estate-wide file is one nobody reads.
+
+### Added
+
+- **Ambiguous ids are reported whether or not a mapping touches one.** The same
+  id naming different things in different layers is a latent merge collision —
+  and the merge step is the one part of this pipeline with no code to audit at
+  all, since Gold is assembled by hand.
+
+## [6.11.0] — 2026-09-16
+
+### Changed
+
+- **The skills and agent contracts caught up with the mapping round.** Same
+  audit as 6.10.1, one layer out: `freeze` and `mappings` existed and neither
+  skill mentioned them, and the row-writer had never been told anything about
+  `canonical` — the field the whole mapping ruling is about.
+
+  `kbqa-check` gains §3b: run `freeze` before and after a mapping pass, run
+  `mappings` where statements exist, and **refuse to re-freeze after a drift
+  report** — re-freezing records the edit as the new truth, which is the single
+  thing the command exists to prevent.
+
+  `agents/row-writer.md` gains §3b: leave `canonical` at its default `NOVEL` and
+  never write another value. A category is a mapping between vocabularies
+  decided by comparing subjects — no page states it, so nothing in a capture
+  could ground it, and a value written there is indistinguishable later from one
+  that was reasoned.
+
+## [6.10.1] — 2026-09-16
+
+### Fixed
+
+- **The manual had drifted from the tool.** Ten finding codes shipped with
+  remedies and no entry in §7, and `freeze` and `mappings` shipped without
+  reaching §6, the module map, or the README. Nothing noticed, because a manual
+  that omits something reads exactly like a manual that is complete.
+
+  Closed, and `tests/test_docs_track_the_code.py` now fails the build when a
+  finding code, a dispatched command, or a top-level module is missing from the
+  docs — including when the stated code count drifts, since a count that is
+  wrong reads as verified.
+
+  It was found by the operator asking, not by the package. That is the same
+  shape as D-006, D-009, D-010, D-012 — something invisible rendering as
+  something clean — committed this time against its own documentation.
+
+## [6.10.0] — 2026-09-16
+
+### Added
+
+- **`kbqa mappings --file <f> [--root <estate>]`** — checks that mapping
+  statements are well-formed. Built to the collection regime's ruling, which
+  overturned this package's own proposal on the point that mattered most.
+
+  **Keyed on `id`, not on `vendor_term`.** The proposal was to map a term once
+  and cover every row using it. Measured against a real corpus that folds 81% of
+  it: 9,238 `(subject, term)` pairs carry more than one row, covering 22,517
+  rows, and 434 terms span more than one subject — one across 43. Rows sharing a
+  term are not thereby the same concept, which `g5_bundles` already says and
+  refuses to resolve: *"a repeated name is an R2 question for a human."* Keying
+  on the name would have done by schema what that gate refuses to do by
+  inference. Group by term to review; record per id.
+
+  **`status` is not a relation.** *Examined and genuinely unmatched* is the
+  absence of a semantic link plus a review state, so it is
+  `unexamined` / `examined-no-match` / `mapped`, not a sixth SKOS relation.
+  That also retires the `NOVEL` conflation without touching `canonical`:
+  remaining work is the count of `unexamined`, which falls monotonically.
+
+  Because `broadMatch` covers the ordinary "unique but related" case,
+  `examined-no-match` requires a note — a rare claim asserted without a reason
+  is where *hard to classify* quietly becomes *unique*.
+
+### Changed
+
+- `docs/MAPPING-CONTRACT.md` records the ruling, the evidence behind the keying
+  reversal, and the finding that the estate's prior `canonical` values map
+  competitors into **our own product codes** — the same inversion as a
+  denominator taken from our expectations rather than the subject's index, one
+  layer up. Quarantine rather than delete: 15 of the 34 tags have no registry
+  anywhere, so deleting destroys their only trace.
+
+## [6.9.0] — 2026-09-16
+
+### Added
+
+- **`kbqa freeze` — prove that interpreting the data did not change it.**
+  Mapping a subject's term to a standard category is the one round with no gate
+  behind it, and the one with the most pressure to tidy: two terms that nearly
+  match map more cleanly if one is edited first. Nothing downstream notices,
+  because the row still parses, still conforms, and its quote still matches the
+  capture — the quote was never what got adjusted.
+
+  ```bash
+  kbqa freeze --root <estate> --out _qa/verbatim.freeze.json
+  # … mapping pass …
+  kbqa freeze --root <estate> --check _qa/verbatim.freeze.json
+  ```
+
+  A **changed** or **disappeared** row fails. An **appeared** row is reported and
+  does not, because collection legitimately adds rows.
+
+- **`Profile.verbatim_fields`** — which words belong to the subject is a profile
+  decision, not a constant. The universal four are always frozen (`id`,
+  `source_url`, `source_quote`, `access_date`); the catalogue profile adds
+  `vendor_term` and `parent_path`, the subject's own naming and their own
+  nesting. Our reading — `canonical`, `confidence`, `mechanism`, `outcome`,
+  `evidence_grade` — stays revisable, or mapping would be impossible.
+
+  Hardcoding the set would bake one programme's shape into the machinery. A
+  domain where the hierarchy is *our* analytical frame would freeze a different
+  set, and a test asserts the split holds.
+
+- **`docs/MAPPING-CONTRACT.md`** — a proposal, explicitly not a ruling: move
+  mappings off the row into their own appended file, keyed by term rather than
+  by row, with a SKOS relation and provenance per record. States what kbqa would
+  check and what it still could not.
+
+## [6.8.0] — 2026-09-16
+
+### Added
+
+- **`unfetchable_source` — a named finding for a citation nobody can retrieve.**
+  D-008 made a non-`http(s)` `source_url` fail G2. Correct, and it surfaced as
+  one more `schema_violation` among many.
+
+  Measured in one estate: **644 rows across 23 subjects**, every one a `doc:`
+  reference. As anonymous schema violations those read as 644 malformed rows and
+  nobody acts. Named, they are one class with one remedy, and the remedy says
+  what is actually true — the row was already failing, just further downstream
+  and less legibly, because G3 looks for the cited URL as a page block and an
+  unfetchable reference by construction is never one.
+
+### Changed
+
+- `kbqa-check` Step 0 no longer halts on any manifest mismatch. It separates a
+  **stale pin** (mismatch after a successful reinstall from the pinned tag —
+  report and proceed) from **unestablished provenance** (mismatch when the
+  reinstall could not run — stop). The old behaviour halted after every release
+  until a hand-copy caught up, training a false alarm into the one check that
+  detects a swapped validator.
+
+  It also warns `STALE SKILL` when its own pinned tag is behind the newest
+  release, because a stale pin silently *downgrades* the validator on reinstall
+  and the manifest then matches — a green check on a superseded release.
+
 ## [6.7.0] — 2026-09-16
 
 ### Changed

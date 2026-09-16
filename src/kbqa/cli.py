@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from . import __version__, probe, profile, report, sweep
+from . import __version__, freeze, mappings, probe, profile, report, sweep
 from .gates import g0_permission, g1_capture, g2_conformance
 from .gates import g3_grounding, g4_completeness, g5_bundles, g6_integrity
 from .manifest import MANIFEST, MANIFEST_SHA256
@@ -54,6 +54,9 @@ cycle:
 
 diagnostics:
   probe --staging <f> [--capture <f>]          report file SHAPE, not content
+  freeze --root <d> --out <f>                  fingerprint the subject's own words
+  freeze --root <d> --check <f>                did interpreting the data change it?
+  mappings --file <f> [--root <d>]             are the mapping statements well-formed?
 
 profile (applies to every command):
   --profile <name>     the analytical framework to validate against
@@ -156,6 +159,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     # Estate-wide audit. Records what can be checked; does not gate.
     if argv[0] == "sweep":
         return sweep.run(argv[1:])
+
+    # Records a fingerprint of the subject's own words, and compares later.
+    # Answers "did interpreting the data change it", which no gate asks.
+    if argv[0] == "freeze":
+        return freeze.run(argv[1:])
+
+    # Mapping statements: about rows, stored outside rows, keyed by id.
+    # Checks that the file is well-formed. Never that a mapping is right.
+    if argv[0] == "mappings":
+        return mappings.run(argv[1:])
 
     gate_name = argv[0]
     if gate_name not in GATES:

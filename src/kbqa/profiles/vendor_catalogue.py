@@ -230,4 +230,14 @@ PROFILE = register(Profile(
     row_model=Row,
     extensions=EXTENSIONS,
     conventions=DEFAULT_CONVENTIONS,
+    # The subject's own naming and their own nesting. `vendor_term` is what
+    # they call the thing; `parent_path` is where they put it. Both are
+    # evidence of how the subject organises itself, which is the difference
+    # this programme exists to preserve — so neither is ours to tidy while
+    # mapping. Everything else in the framework (grading, confidence,
+    # mechanism, outcome, canonical) is our reading and stays revisable.
+    verbatim_fields=(
+        "id", "source_url", "source_quote", "access_date",
+        "vendor_term", "parent_path",
+    ),
 ))

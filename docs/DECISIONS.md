@@ -591,3 +591,87 @@ output.
 separate directory structures, subject attribution by path depth would flag
 every subject. Attribution would then need to move to a declared key inside the
 tree rather than to its location.
+
+
+## D-013 · The subject's words are frozen; our reading is not
+
+**Date:** 2026-09-16 · **Version:** 6.9.0
+
+Every gate so far answers *is this claim grounded*. None answers *did we edit
+the evidence while interpreting it* — and the mapping round is where that
+pressure is highest. Two terms that nearly match map more cleanly if one is
+tidied first, and the edit is invisible downstream: the row parses, conforms,
+and its quote still matches the capture, because the quote is not what changed.
+
+**Ruling.** A profile declares `verbatim_fields` — the fields that are the
+subject's own words. `kbqa freeze` fingerprints them and compares across a pass.
+
+For the catalogue profile that is `id`, `source_url`, `source_quote`,
+`access_date`, `vendor_term`, `parent_path`. `vendor_term` is what the subject
+calls the thing; `parent_path` is where the subject puts it. Both are evidence
+of how the subject organises itself, which is the difference this programme
+exists to preserve.
+
+**What is deliberately NOT frozen**: `canonical`, `canonical_label`,
+`confidence`, `mechanism`, `outcome`, `evidence_grade`. Those are our reading.
+Freezing the whole row would block the round this exists to protect, and a
+guard that prevents the work is not a guard.
+
+**Why it is a profile field and not a constant.** A domain whose hierarchy is
+our analytical frame rather than the subject's would freeze a different set.
+Hardcoding it in `freeze.py` would bake one programme's shape into the
+machinery — the thing the three-layer contract exists to prevent.
+
+**Two limits, stated so the snapshot is not over-read.** It compares a corpus
+against its own earlier self: a term already wrong when frozen is certified only
+as untouched since. And a drifted row must be restored from version control,
+never re-frozen — re-freezing records the edit as the new truth, which is the
+single thing the command exists to prevent.
+
+**Reversal condition.** If a subject legitimately republishes under a new name
+and the corpus should follow, that is a re-collection producing new rows with a
+new `access_date`, not an edit to frozen ones. If that becomes common enough to
+be burdensome, the answer is a superseding-row mechanism — never relaxing the
+freeze.
+
+
+## D-014 · A mapping is keyed on `id`, never on the term
+
+**Date:** 2026-09-16 · **Version:** 6.10.0
+
+`docs/MAPPING-CONTRACT.md` first proposed keying mapping statements on
+`vendor_term`: map a term once, cover every row using it. The collection regime
+overturned it on measurement.
+
+| | |
+|---|---|
+| `(subject, term)` pairs carrying more than one row | 9,238, covering **22,517 rows** |
+| terms appearing in more than one subject | 434, one spanning **43 subjects** |
+| distinct ids in the merged tree layer | **12,804 of 12,804** |
+
+Rows sharing a term are not thereby the same concept. Bundles repeat a term on
+purpose, and **this package already said so**: `g5_bundles` exists to report a
+term appearing at more than one URL and refuses to resolve it — *"a repeated
+name is an R2 question for a human. A `usecase_of` guessed from string
+similarity is indistinguishable later from a sourced one, so this gate never
+writes one."* The proposal was to do by schema exactly what that gate declines
+to do by inference, over 81% of a corpus, silently.
+
+**Ruling.** Mapping statements key on `id`. Grouping by term remains how a human
+reviews efficiently; it is not how identity is recorded.
+
+**And status is not a relation.** *Examined and genuinely unmatched* is the
+absence of a semantic link plus a review state — `unexamined`,
+`examined-no-match`, `mapped`. Encoding it as a sixth SKOS relation would make a
+non-relation into a relation, which is why SKOS omits it. It also retires the
+`NOVEL` conflation without touching `canonical`: remaining work is the count of
+`unexamined`, which falls monotonically, so a stalled pass stops resembling a
+finished one.
+
+**The lesson worth keeping** is not about keys. An efficiency argument reached
+past an identifier that was already unique and already correct. When this
+package proposes something its own gates refuse to do, the gates are the ones
+that have thought about it longer.
+
+**Reversal condition.** If a corpus emerges whose ids are not unique in the
+merged layer, identity must move to a new explicit key — never to a name.

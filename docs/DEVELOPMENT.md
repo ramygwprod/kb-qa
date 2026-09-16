@@ -1,6 +1,6 @@
 # kbqa — developer guide
 
-**Version 6.7.0** · for anyone extending or maintaining the package
+**Version 6.12.0** · for anyone extending or maintaining the package
 
 For *using* the tool, see [MANUAL.md](MANUAL.md). This document covers
 architecture, how to extend it, what must not break, and how to release.
@@ -62,6 +62,8 @@ The test for which layer something belongs in:
 | `gates/g0…g6` | the checks. Read-only, write only a verdict |
 | `report.py` | remediation report for the maker |
 | `sweep.py` | corpus-wide audit |
+| `freeze.py` | fingerprints `Profile.verbatim_fields`; answers *did interpreting the data change it* |
+| `mappings.py` | checks mapping statements — about rows, stored outside rows, keyed by `id` |
 | `probe.py` | shape-only diagnostic |
 | `cli.py` | dispatch, `--profile`, recording flags |
 
