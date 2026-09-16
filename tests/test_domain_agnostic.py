@@ -327,3 +327,31 @@ def test_registries_do_not_leak_between_profiles(compliance_profile):
     profile_mod.activate("vendor-catalogue")
     assert "regulator_term" not in profile_mod.active().extensions
     assert "node_kind" in profile_mod.active().extensions
+
+
+def test_verbatim_fields_are_a_profile_decision_not_a_constant():
+    """Which words belong to the subject differs by domain.
+
+    A product catalogue's `parent_path` is the vendor's own nesting and must not
+    be touched. A domain where the hierarchy is OUR analytical frame would have
+    to freeze a different set — so hardcoding this in freeze.py would bake one
+    programme's shape into the machinery, which is what the three-layer contract
+    exists to prevent.
+    """
+    from kbqa.profile import Profile
+
+    core = Profile(
+        name="minimal-for-test",
+        description="core only",
+        row_model=CoreRow,
+    ).verbatim_fields
+    assert core == ("id", "source_url", "source_quote", "access_date")
+
+    from kbqa.profiles.vendor_catalogue import PROFILE as CATALOGUE
+
+    assert set(core).issubset(CATALOGUE.verbatim_fields)
+    assert "vendor_term" in CATALOGUE.verbatim_fields
+    assert "parent_path" in CATALOGUE.verbatim_fields
+    # Our reading of the evidence stays revisable, or mapping is impossible.
+    for ours in ("canonical", "confidence", "mechanism", "outcome", "evidence_grade"):
+        assert ours not in CATALOGUE.verbatim_fields

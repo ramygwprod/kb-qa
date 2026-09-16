@@ -16,6 +16,42 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.9.0] — 2026-09-16
+
+### Added
+
+- **`kbqa freeze` — prove that interpreting the data did not change it.**
+  Mapping a subject's term to a standard category is the one round with no gate
+  behind it, and the one with the most pressure to tidy: two terms that nearly
+  match map more cleanly if one is edited first. Nothing downstream notices,
+  because the row still parses, still conforms, and its quote still matches the
+  capture — the quote was never what got adjusted.
+
+  ```bash
+  kbqa freeze --root <estate> --out _qa/verbatim.freeze.json
+  # … mapping pass …
+  kbqa freeze --root <estate> --check _qa/verbatim.freeze.json
+  ```
+
+  A **changed** or **disappeared** row fails. An **appeared** row is reported and
+  does not, because collection legitimately adds rows.
+
+- **`Profile.verbatim_fields`** — which words belong to the subject is a profile
+  decision, not a constant. The universal four are always frozen (`id`,
+  `source_url`, `source_quote`, `access_date`); the catalogue profile adds
+  `vendor_term` and `parent_path`, the subject's own naming and their own
+  nesting. Our reading — `canonical`, `confidence`, `mechanism`, `outcome`,
+  `evidence_grade` — stays revisable, or mapping would be impossible.
+
+  Hardcoding the set would bake one programme's shape into the machinery. A
+  domain where the hierarchy is *our* analytical frame would freeze a different
+  set, and a test asserts the split holds.
+
+- **`docs/MAPPING-CONTRACT.md`** — a proposal, explicitly not a ruling: move
+  mappings off the row into their own appended file, keyed by term rather than
+  by row, with a SKOS relation and provenance per record. States what kbqa would
+  check and what it still could not.
+
 ## [6.8.0] — 2026-09-16
 
 ### Added

@@ -591,3 +591,45 @@ output.
 separate directory structures, subject attribution by path depth would flag
 every subject. Attribution would then need to move to a declared key inside the
 tree rather than to its location.
+
+
+## D-013 · The subject's words are frozen; our reading is not
+
+**Date:** 2026-09-16 · **Version:** 6.9.0
+
+Every gate so far answers *is this claim grounded*. None answers *did we edit
+the evidence while interpreting it* — and the mapping round is where that
+pressure is highest. Two terms that nearly match map more cleanly if one is
+tidied first, and the edit is invisible downstream: the row parses, conforms,
+and its quote still matches the capture, because the quote is not what changed.
+
+**Ruling.** A profile declares `verbatim_fields` — the fields that are the
+subject's own words. `kbqa freeze` fingerprints them and compares across a pass.
+
+For the catalogue profile that is `id`, `source_url`, `source_quote`,
+`access_date`, `vendor_term`, `parent_path`. `vendor_term` is what the subject
+calls the thing; `parent_path` is where the subject puts it. Both are evidence
+of how the subject organises itself, which is the difference this programme
+exists to preserve.
+
+**What is deliberately NOT frozen**: `canonical`, `canonical_label`,
+`confidence`, `mechanism`, `outcome`, `evidence_grade`. Those are our reading.
+Freezing the whole row would block the round this exists to protect, and a
+guard that prevents the work is not a guard.
+
+**Why it is a profile field and not a constant.** A domain whose hierarchy is
+our analytical frame rather than the subject's would freeze a different set.
+Hardcoding it in `freeze.py` would bake one programme's shape into the
+machinery — the thing the three-layer contract exists to prevent.
+
+**Two limits, stated so the snapshot is not over-read.** It compares a corpus
+against its own earlier self: a term already wrong when frozen is certified only
+as untouched since. And a drifted row must be restored from version control,
+never re-frozen — re-freezing records the edit as the new truth, which is the
+single thing the command exists to prevent.
+
+**Reversal condition.** If a subject legitimately republishes under a new name
+and the corpus should follow, that is a re-collection producing new rows with a
+new `access_date`, not an edit to frozen ones. If that becomes common enough to
+be burdensome, the answer is a superseding-row mechanism — never relaxing the
+freeze.
