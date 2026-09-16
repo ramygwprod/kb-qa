@@ -188,8 +188,29 @@ or simply use a scheme name nothing maps into going forward.
 
 ## What R2's standard must not be
 
-The prior scheme is the cautionary case. A standard built from **our** product
-map measures competitors against what we happen to sell. A standard built from
-the giants' own published vocabulary measures them against the market. Those
-produce different taxonomies, and only the second answers the question this
-programme exists to ask.
+Ruled 2026-09-16 by the programme owner: **the prior scheme carries a wrong
+information architecture and invented names. Nothing relies on it.**
+
+That makes the 1,014 tags more than a wrong denominator. A category name that
+was invented is the same defect as a quote that was invented, one layer up — and
+it is the first confirmed invention in this corpus. It did not come from a
+subject. It came from us.
+
+The direction of learning is the point and it runs one way:
+
+> **We study the giants to improve our products.**
+
+So our own product map is an *output* of the analysis, never an input to it.
+Mapping competitors into our module codes runs the arrow backwards: it measures
+the market against what we happen to sell, and a feature we have no code for
+becomes invisible rather than interesting. The whole value of the exercise is
+the features we would not have thought to look for.
+
+A standard built from the giants' own published vocabulary measures them against
+the market. Where our products sit in that standard is then a finding — possibly
+an uncomfortable one, which is the sort worth having.
+
+**Operationally:** keep the quarantined set as a trace, since 15 of its 34 tags
+exist nowhere else. Map nothing into it. Do not seed R2's standard from it, and
+do not use it to decide what a category should be called — the names are exactly
+what is in question.
