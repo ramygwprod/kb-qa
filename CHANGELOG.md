@@ -16,6 +16,42 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.10.0] — 2026-09-16
+
+### Added
+
+- **`kbqa mappings --file <f> [--root <estate>]`** — checks that mapping
+  statements are well-formed. Built to the collection regime's ruling, which
+  overturned this package's own proposal on the point that mattered most.
+
+  **Keyed on `id`, not on `vendor_term`.** The proposal was to map a term once
+  and cover every row using it. Measured against a real corpus that folds 81% of
+  it: 9,238 `(subject, term)` pairs carry more than one row, covering 22,517
+  rows, and 434 terms span more than one subject — one across 43. Rows sharing a
+  term are not thereby the same concept, which `g5_bundles` already says and
+  refuses to resolve: *"a repeated name is an R2 question for a human."* Keying
+  on the name would have done by schema what that gate refuses to do by
+  inference. Group by term to review; record per id.
+
+  **`status` is not a relation.** *Examined and genuinely unmatched* is the
+  absence of a semantic link plus a review state, so it is
+  `unexamined` / `examined-no-match` / `mapped`, not a sixth SKOS relation.
+  That also retires the `NOVEL` conflation without touching `canonical`:
+  remaining work is the count of `unexamined`, which falls monotonically.
+
+  Because `broadMatch` covers the ordinary "unique but related" case,
+  `examined-no-match` requires a note — a rare claim asserted without a reason
+  is where *hard to classify* quietly becomes *unique*.
+
+### Changed
+
+- `docs/MAPPING-CONTRACT.md` records the ruling, the evidence behind the keying
+  reversal, and the finding that the estate's prior `canonical` values map
+  competitors into **our own product codes** — the same inversion as a
+  denominator taken from our expectations rather than the subject's index, one
+  layer up. Quarantine rather than delete: 15 of the 34 tags have no registry
+  anywhere, so deleting destroys their only trace.
+
 ## [6.9.0] — 2026-09-16
 
 ### Added
