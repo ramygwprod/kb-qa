@@ -16,6 +16,42 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.7.0] — 2026-09-16
+
+### Changed
+
+- **The two skills now match how an operator actually drives them**:
+  `/kbqa-collect <Subject>` and `/kbqa-check <subject folder>`.
+
+  `kbqa-collect` previously said *one batch, then stop* — written before windows
+  existed, and wrong once they did: a subject is many windows, and stopping after
+  one leaves the operator to re-invoke per window. It now **loops windows until
+  the fetcher reports `exhausted`**, or parks with an offset. The orchestrator
+  can sustain that because page content lives in the subagents' contexts, not
+  its own; it holds only receipts and counts.
+
+  `kbqa-check` now checks **every batch in the named folder**, since collection
+  produces many. Its loop uses `find` rather than a glob, and builds the
+  `--denominator` / `--stops` flags conditionally: a bare `_denominator*.md`
+  glob expands to several filenames on subjects with more than one and the extra
+  arguments are rejected — failing on exactly the subjects with the most
+  collection behind them — and an unmatched glob is fatal in zsh, which reads as
+  the check failing rather than as an empty folder.
+
+- **`kbqa-collect` leads with what a finished subject looks like**, stated
+  positively, before any prohibition. The collector never reads the manual; it
+  reads the skill, which previously said only what not to do. A rule set with no
+  target teaches an agent to aim at "the gates stop complaining" instead of at
+  good work.
+
+- **`kbqa-check` reinstalls from the pinned tag before verifying the manifest.**
+  The authoritative copy is on GitHub, so a tampered local package has a
+  lifetime of one session. Do not protect a derived artifact — re-derive it.
+
+- Both skills now say that a run finding **zero batches must be reported as
+  zero**, never as clean. An empty folder and a folder of clean batches produce
+  identical silence.
+
 ## [6.6.0] — 2026-09-16
 
 ### Added
