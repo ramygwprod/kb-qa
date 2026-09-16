@@ -25,6 +25,7 @@ rather than rewritten as a stronger instruction.
 | can write | **no** — must delegate to `row-writer` | no |
 | can run commands | **no** | yes, to run the gates |
 | can read verdicts | **no** — denied | yes |
+| runs the mapping guards (`freeze`, `mappings`) | no | yes |
 
 `kbqa-collect` holds no `WebFetch`, no `Write` and no `Bash`. It physically
 cannot collect; it can only delegate to the `fetcher` and `row-writer`

@@ -16,6 +16,26 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.11.0] — 2026-09-16
+
+### Changed
+
+- **The skills and agent contracts caught up with the mapping round.** Same
+  audit as 6.10.1, one layer out: `freeze` and `mappings` existed and neither
+  skill mentioned them, and the row-writer had never been told anything about
+  `canonical` — the field the whole mapping ruling is about.
+
+  `kbqa-check` gains §3b: run `freeze` before and after a mapping pass, run
+  `mappings` where statements exist, and **refuse to re-freeze after a drift
+  report** — re-freezing records the edit as the new truth, which is the single
+  thing the command exists to prevent.
+
+  `agents/row-writer.md` gains §3b: leave `canonical` at its default `NOVEL` and
+  never write another value. A category is a mapping between vocabularies
+  decided by comparing subjects — no page states it, so nothing in a capture
+  could ground it, and a value written there is indistinguishable later from one
+  that was reasoned.
+
 ## [6.10.1] — 2026-09-16
 
 ### Fixed

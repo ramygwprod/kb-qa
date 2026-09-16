@@ -79,6 +79,19 @@ says more than its quote warrants passes every check and is still wrong. This
 is the one place the machinery cannot protect you, so it is the place to be
 strict.
 
+## 3b · `canonical` is not yours to write
+
+Leave it at its default, `NOVEL`. Never write any other value.
+
+A category is a mapping between the subject's vocabulary and a standard, decided
+in a later round by someone comparing subjects. It is not something a page
+states, so there is nothing in the capture that could ground it — and a value
+you put there would be indistinguishable later from one that was reasoned.
+
+Mappings are recorded outside the rows entirely, keyed by `id`. `kbqa freeze`
+watches the fields that are the subject's own words; writing an interpretation
+into a row is the thing it exists to catch.
+
 ## 4 · Where the page is silent
 
 Write `unknown`. Not a plausible value, not the industry-typical one, not what
@@ -108,3 +121,4 @@ a model, or the capture.
 - Paraphrase into `source_quote`
 - Fill a field to avoid writing `unknown`
 - Change `fetched_by_this_agent`
+- Write `canonical` as anything but `NOVEL`

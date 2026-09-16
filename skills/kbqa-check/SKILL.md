@@ -15,7 +15,7 @@ and you do not touch the tool.
 ## 0 · Establish which validator you are about to trust
 
 ```bash
-PINNED=v6.10.1
+PINNED=v6.11.0
 LATEST=$(git ls-remote --tags https://github.com/ramygwprod/kb-qa.git 2>/dev/null \
          | grep -o 'v[0-9][0-9.]*$' | sort -V | tail -1)
 [ -n "$LATEST" ] && [ "$LATEST" != "$PINNED" ] \
@@ -29,8 +29,8 @@ python3 -m kbqa --version && python3 -m kbqa --manifest | head -1
 Expected for this copy's pin:
 
 ```
-6.10.1
-manifest_sha256 d523edd207227b4d460bb7fd147a47d880840c4ae0516888d0585a09845581d84
+6.11.0
+manifest_sha256 5fb4b0e590118d29ec94c8af241626bde3fc542a070bcd979e04647f46be761d4
 ```
 
 Reinstalling first is deliberate. The authoritative copy is on GitHub, so a
@@ -139,6 +139,38 @@ python3 -m kbqa sweep --root .     # which batches can be checked at all
 corpus is in good order when each batch is in the tier it ought to be — not when
 all of them are verifiable.
 
+## 3b · Guards for the mapping round
+
+Two commands that are not gates. They answer a question no gate asks: **did
+interpreting the data change it?**
+
+Before a mapping pass, and again after:
+
+```bash
+python3 -m kbqa freeze --root <estate> --out _qa/verbatim.freeze.json
+# … the mapping pass happens …
+python3 -m kbqa freeze --root <estate> --check _qa/verbatim.freeze.json
+```
+
+`freeze` fingerprints the fields that are the **subject's own words** — for a
+product catalogue, `id`, `source_url`, `source_quote`, `access_date`,
+`vendor_term`, `parent_path`. A changed or disappeared row fails. A new row is
+reported and does not, because collection legitimately adds rows.
+
+**A drifted row is restored from version control, never re-frozen.** Re-freezing
+records the edit as the new truth, which is the one thing the command exists to
+prevent. If you are asked to re-freeze after a drift report, say no and explain
+why.
+
+And where mapping statements exist:
+
+```bash
+python3 -m kbqa mappings --file <estate>/_mappings.jsonl --root <estate>
+```
+
+Statements live **outside** rows and key on `id`. `canonical` in a row is not a
+mapping and must not be treated as one — see §5.
+
 ## 4 · Routing a failure
 
 Every finding in the report carries a class. Route by it, and say which:
@@ -182,6 +214,9 @@ without opening a file:
   the row is wrong — drop it or re-source it
 - Regenerate or hand-edit a test fixture
 - Report only the gates that passed
+- Re-freeze after a drift report, or advise anyone else to
+- Treat a `canonical` value in a row as a mapping. Mappings live in their own
+  file; a value written into a row is an edit to the row
 
 ## 6 · What the gates cannot see
 
