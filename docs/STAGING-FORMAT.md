@@ -11,17 +11,34 @@ against the real estate in v2 and v3.** Each correction is recorded here because
 the inferences were wrong in ways worth remembering — every one produced
 findings that were untrue of the data.
 
-## Three row serialisations, not one
+## Five row shapes, not one
 
-The estate contains all three, written by different collector eras. The parser
-reads each and records which it found in `row_format`; a silent fallback between
-formats is how a parser starts disagreeing with the file it claims to have read.
+The estate contains all of them, written by different collector eras. The parser
+reads each and records which container it found in `row_format`; a silent
+fallback between formats is how a parser starts disagreeing with the file it
+claims to have read.
 
-| format | shape | naive cross-check |
+| `row_format` | shape | naive cross-check |
 |---|---|---|
 | `jsonl` | one object per line at column 0 | `^{"id"` |
 | `fenced-array` | a pretty-printed JSON array inside a ```` ```json ```` fence | `^\s*"id":` |
 | `fenced-jsonl` | one object per line **inside** a fence | `^{"id"` |
+
+Within any of those, two **writing styles** are read, in a fence or out of one:
+
+| style | shape | what used to happen |
+|---|---|---|
+| trailing comma | `{"id": …},` — an array written one object per line | `json.loads` read the object, met the comma, and reported *"Extra data"*. 905 real rows |
+| multi-line object | `{` alone, then the fields, then `}` | the opening brace parsed alone failed with *"Expecting property name"* at column 2. 57 real rows |
+
+Rows are accumulated by **brace depth** rather than by line, tracking strings and
+escapes so a brace inside a quote does not end an object, and a single trailing
+comma is stripped before decoding.
+
+The reader for a block is chosen **before** parsing, by majority vote: where most
+objects close on their own line it stays line-at-a-time, so one corrupt row costs
+one row. Accumulating unconditionally would let a single unclosed object swallow
+every good row after it.
 
 The specification describes only the first. **The second and third are what the
 collector actually writes**, and the third cost 181 real rows: the fence body is
