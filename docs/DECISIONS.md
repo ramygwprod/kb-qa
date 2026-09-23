@@ -714,3 +714,38 @@ because the dependency was in English rather than in code.
 values only for the fields most at risk of tidying — `vendor_term`,
 `parent_path` — and fingerprints for the rest. Never drop values entirely while
 the estate has no history.
+
+
+## D-016 · Read the JSON people write, not the JSON a spec described
+
+**Date:** 2026-09-23 · **Version:** 6.14.0
+
+962 rows across five batches were unreadable. Both causes were shapes this
+parser rejected and every JSON tool accepts:
+
+- **905 rows** in arrays written one object per line. `{…},` — the decoder
+  parses the object, meets the comma, and reports *"Extra data"*.
+- **57 rows** in pretty-printed objects spread over several lines. The opening
+  `{` sits alone, and fails with *"Expecting property name"* at column 2.
+
+**Ruling.** Rows are accumulated by brace depth, tracking strings and escapes,
+and a single trailing comma is stripped. The shape is decided before parsing by
+majority vote, because accumulation alone destroys a resilience the line reader
+had: one unclosed object swallows every row after it.
+
+**This is the fifth time.** The fenced-JSONL fence read 181 rows as zero; the id
+pattern rejected `_` across 857 rows, then rejected `-`; `depth_level` was typed
+as a string against integers; the denominator glob matched 2 files in 20. Every
+one was a convention invented from a specification or one sample and applied as
+law, and every one was found by running against real data rather than by a test.
+
+The rule this package keeps relearning: **a constraint on someone else's file
+format is a hypothesis until a corpus confirms it.** The tests here cannot catch
+these, because the fixtures are authored by the same hand that wrote the
+constraint — which is exactly why fixtures are authored rather than harvested,
+and exactly the limit of that choice.
+
+**Reversal condition.** If a corpus appears where a trailing comma is meaningful
+rather than an artifact of array formatting, stripping it would lose
+information — but no JSON grammar gives it meaning, so this is close to
+unreachable.

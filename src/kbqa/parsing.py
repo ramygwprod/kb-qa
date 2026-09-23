@@ -203,14 +203,62 @@ def _find_json_fences(lines: List[str]) -> List[Tuple[int, int]]:
     return spans
 
 
-def _parse_jsonl_lines(lines: List[str], start: int, stop: int) -> List[RowParse]:
-    """Parse a line range as one JSON object per line."""
+def _depth_after(text: str, depth: int, in_string: bool, escaped: bool):
+    """Brace depth after `text`, ignoring braces inside JSON strings."""
+    for ch in text:
+        if escaped:
+            escaped = False
+            continue
+        if ch == "\\" and in_string:
+            escaped = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+    return depth, in_string, escaped
+
+
+def _mostly_one_per_line(lines: List[str], start: int, stop: int) -> bool:
+    """Does a majority of the objects in this block close on their own line?
+
+    The shape has to be decided before parsing, not discovered during it.
+    Accumulating by brace depth reads pretty-printed objects correctly, but one
+    object left unclosed then swallows every good row after it — turning a
+    single corrupt row into a lost block. Reading line-at-a-time keeps a bad
+    row isolated, and cannot read a pretty-printed object at all.
+
+    A majority vote picks the right reader and keeps the resilience where it
+    belongs: in a one-per-line block a broken row costs one row; in a
+    pretty-printed block there are no self-contained lines to count.
+    """
+    openers = closed = 0
+    for n in range(start, stop):
+        line = lines[n - 1]
+        if not line.strip().startswith("{"):
+            continue
+        openers += 1
+        depth, _, _ = _depth_after(line, 0, False, False)
+        if depth == 0:
+            closed += 1
+    return openers > 0 and closed * 2 >= openers
+
+
+def _parse_one_per_line(lines: List[str], start: int, stop: int) -> List[RowParse]:
+    """One JSON object per line, tolerating the trailing comma of an array."""
     rows: List[RowParse] = []
     for n in range(start, stop):
         line = lines[n - 1]
         stripped = line.strip()
         if not stripped.startswith("{"):
             continue
+        if stripped.endswith(","):
+            stripped = stripped[:-1].rstrip()
         try:
             obj = json.loads(stripped)
         except json.JSONDecodeError as exc:
@@ -220,6 +268,79 @@ def _parse_jsonl_lines(lines: List[str], start: int, stop: int) -> List[RowParse
             rows.append(RowParse(n, line, None, "row is not a JSON object"))
             continue
         rows.append(RowParse(n, line, obj, None))
+    return rows
+
+
+def _parse_jsonl_lines(lines: List[str], start: int, stop: int) -> List[RowParse]:
+    """Parse a line range as JSON objects, one per line OR spread over several.
+
+    Two shapes in one real corpus defeated the naive line-at-a-time version, and
+    between them they accounted for 962 rows that no gate ever saw:
+
+      {"id": ...},          a JSON ARRAY written one object per line. The
+                            trailing comma makes each line "Extra data" to
+                            `json.loads`, which parses the object then finds the
+                            comma.
+
+      {                     a pretty-printed object spread over many lines.
+        "id": ...,          The first line is `{` alone, which fails with
+      }                     "Expecting property name" at column 2.
+
+    Neither is malformed data — both are ordinary ways of writing JSON that this
+    parser did not accept. So rows are accumulated by BRACE DEPTH rather than by
+    line, and a single trailing comma is stripped before decoding. A line-based
+    reader was a convention invented from one sample, which is the shape of
+    D-006, D-009 and most of DEVELOPMENT §7.
+
+    The line number reported is where the object STARTED, so a finding points at
+    something a reader can find.
+    """
+    if _mostly_one_per_line(lines, start, stop):
+        return _parse_one_per_line(lines, start, stop)
+
+    rows: List[RowParse] = []
+    buf: List[str] = []
+    first_line = 0
+    depth, in_string, escaped = 0, False, False
+
+    for n in range(start, stop):
+        line = lines[n - 1]
+        stripped = line.strip()
+
+        if depth == 0:
+            if not stripped.startswith("{"):
+                continue
+            first_line, buf = n, []
+
+        buf.append(line)
+        depth, in_string, escaped = _depth_after(line, depth, in_string, escaped)
+        if depth > 0:
+            continue  # object continues on the next line
+
+        text = "".join(buf).strip()
+        # A trailing comma is how a JSON array reads when written one object per
+        # line. Removing it decodes the object without pretending the comma was
+        # not there — the array's own brackets are handled by the fence reader.
+        if text.endswith(","):
+            text = text[:-1].rstrip()
+
+        raw = buf[0]
+        depth, in_string, escaped = 0, False, False
+        try:
+            obj = json.loads(text)
+        except json.JSONDecodeError as exc:
+            rows.append(RowParse(first_line, raw, None, f"invalid JSON: {exc.msg}"))
+            continue
+        if not isinstance(obj, dict):
+            rows.append(RowParse(first_line, raw, None, "row is not a JSON object"))
+            continue
+        rows.append(RowParse(first_line, raw, obj, None))
+
+    if depth != 0 and buf:
+        rows.append(
+            RowParse(first_line, buf[0], None,
+                     "invalid JSON: object never closed before the end of the block")
+        )
     return rows
 
 
@@ -322,23 +443,18 @@ def parse_staging(path: Path) -> StagingParse:
             rows = [RowParse(fences[0][0], "", None, e) for e in fence_errors]
         return StagingParse(fm, rows, naive_count, fm_err, fmt, pages, pages_src)
 
-    rows = []
-    naive_count = 0
-    for line_no, line in enumerate(lines, start=1):
-        if NAIVE_ROW_RE.match(line):
-            naive_count += 1
-        stripped = line.strip()
-        if not stripped.startswith("{"):
-            continue
-        try:
-            obj = json.loads(stripped)
-        except json.JSONDecodeError as exc:
-            rows.append(RowParse(line_no, line, None, f"invalid JSON: {exc}"))
-            continue
-        if not isinstance(obj, dict):
-            rows.append(RowParse(line_no, line, None, "row is not a JSON object"))
-            continue
-        rows.append(RowParse(line_no, line, obj, None))
+    # One reader for fenced and unfenced alike. These had drifted apart: the
+    # fenced path learned to read a pretty-printed object and an array written
+    # one per line, and this one had not — so the same file parsed or did not
+    # depending on whether somebody had wrapped it in a fence.
+    body_start = 1
+    if fm and lines and lines[0].strip() == "---":
+        for i, line in enumerate(lines[1:], start=2):
+            if line.strip() == "---":
+                body_start = i + 1
+                break
+    rows = _parse_jsonl_lines(lines, body_start, len(lines) + 1)
+    naive_count = sum(1 for line in lines if NAIVE_ROW_RE.match(line))
 
     pages, pages_src = _declared_pages(fm, lines, [])
     return StagingParse(fm, rows, naive_count, fm_err, "jsonl", pages, pages_src)

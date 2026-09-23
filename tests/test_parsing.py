@@ -166,3 +166,78 @@ def test_denominator_glob_stays_narrow_enough(name):
     from kbqa.conventions import DEFAULT
 
     assert not fnmatch.fnmatch(name, DEFAULT.denominator_glob)
+
+
+# --------------------------------------------------------------------------
+# Two shapes that cost 962 rows their visibility
+# --------------------------------------------------------------------------
+
+def _staging(tmp_path, body, name="_collect-x-staging.md"):
+    f = tmp_path / name
+    f.write_text("---\nbatch: x\n---\n\n" + body, encoding="utf-8")
+    return f
+
+
+ROW_A = '{"id": "acme.a", "vendor_term": "A", "source_url": "https://d.test/a"}'
+ROW_B = '{"id": "acme.b", "vendor_term": "B", "source_url": "https://d.test/b"}'
+
+
+def test_an_array_written_one_object_per_line_parses(tmp_path):
+    """`{...},` — the trailing comma made every line "Extra data".
+
+    797 rows in one batch and 108 in another. Not malformed data: an ordinary
+    JSON array, written the way a human writes one.
+    """
+    body = "```json\n[\n" + ROW_A + ",\n" + ROW_B + "\n]\n```\n"
+    p = parse_staging(_staging(tmp_path, body))
+    assert [r.obj["id"] for r in p.rows if r.obj] == ["acme.a", "acme.b"]
+    assert not [r for r in p.rows if r.error]
+
+
+def test_a_pretty_printed_object_spanning_lines_parses(tmp_path):
+    """`{` alone on a line failed with "Expecting property name" at column 2.
+
+    41, 11 and 5 rows across three batches — all of them ordinary JSON.
+    """
+    body = (
+        '{\n  "id": "acme.a",\n  "vendor_term": "A"\n}\n'
+        '{\n  "id": "acme.b",\n  "vendor_term": "B"\n}\n'
+    )
+    p = parse_staging(_staging(tmp_path, body))
+    assert [r.obj["id"] for r in p.rows if r.obj] == ["acme.a", "acme.b"]
+
+
+def test_a_brace_inside_a_string_does_not_end_the_object(tmp_path):
+    """A quote is evidence and may contain anything, braces included."""
+    body = '{\n  "id": "acme.a",\n  "source_quote": "use {curly} braces \\" here"\n}\n'
+    p = parse_staging(_staging(tmp_path, body))
+    ok = [r for r in p.rows if r.obj]
+    assert len(ok) == 1
+    assert "{curly}" in ok[0].obj["source_quote"]
+
+
+def test_a_broken_row_in_a_one_per_line_block_still_costs_one_row(tmp_path):
+    """The resilience brace-accumulation would have destroyed.
+
+    Accumulating by depth lets one unclosed object swallow every good row after
+    it, turning a single corrupt row into a lost block. The shape is chosen by
+    majority vote before parsing so this case keeps its old behaviour.
+    """
+    body = "```json\n" + ROW_A + '\n{"id": "broken",\n' + ROW_B + "\n```\n"
+    p = parse_staging(_staging(tmp_path, body))
+    assert len([r for r in p.rows if r.obj]) == 2
+    assert len([r for r in p.rows if r.error]) == 1
+
+
+def test_an_unclosed_object_in_a_pretty_block_is_reported_not_silent(tmp_path):
+    body = '{\n  "id": "acme.a",\n  "vendor_term": "A"\n'
+    p = parse_staging(_staging(tmp_path, body))
+    assert any(r.error and "never closed" in r.error for r in p.rows)
+
+
+def test_the_reported_line_is_where_the_object_started(tmp_path):
+    """A finding must point at something a reader can find."""
+    body = '{\n  "id": "acme.a",\n  "vendor_term": "A"\n}\n'
+    p = parse_staging(_staging(tmp_path, body))
+    ok = [r for r in p.rows if r.obj][0]
+    assert ok.line_no == 5, f"object starts on line 5, reported {ok.line_no}"
