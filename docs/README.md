@@ -92,7 +92,7 @@ index, following the [llms.txt convention](https://llmstxt.org/).
 tag in any raw URL:
 
 ```
-https://raw.githubusercontent.com/ramygwprod/kb-qa/v6.13.1/docs/MANUAL.md
+https://raw.githubusercontent.com/ramygwprod/kb-qa/v6.13.2/docs/MANUAL.md
 ```
 
 `main` moves. A session reading tomorrow's manual while running today's package

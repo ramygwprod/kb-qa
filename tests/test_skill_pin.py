@@ -50,7 +50,18 @@ def pinned_versions(text: str):
 
 
 def pinned_manifests(text: str):
-    return re.findall(r"manifest_sha256 ([0-9a-f]{64})", text)
+    """Match the WHOLE hex token, never a fixed count of it.
+
+    The original pattern was `[0-9a-f]{64}`, which on a 65-character token
+    matches the first 64 and reports a clean value. A hand-typed placeholder was
+    65 characters long; every subsequent re-pin used the same pattern, replaced
+    64 of the 65, and left the extra character in place. The pin was wrong for
+    six releases and this test passed on every one of them, because the test and
+    the re-pin shared the same blind spot.
+
+    So: capture greedily, and let the caller judge the length.
+    """
+    return re.findall(r"manifest_sha256 ([0-9a-f]+)", text)
 
 
 def granted_tools(text: str):
@@ -85,6 +96,21 @@ def test_pinned_version_matches_the_package(skill_text):
         f"SKILL.md pins {pinned} but this package is {__version__}. "
         "Update the pin in the same commit that tags the release."
     )
+
+
+def test_the_pinned_manifest_is_a_wellformed_sha256(skill_text):
+    """64 hex characters, exactly. Not 63, not 65.
+
+    An agent comparing a real 64-character digest against a 65-character pin can
+    never match it — so the check either halts every session or, once it stopped
+    halting, reports a stale pin every single time. Either way the one signal
+    that a validator was swapped becomes noise.
+    """
+    for value in pinned_manifests(skill_text):
+        assert len(value) == 64, (
+            f"pinned manifest is {len(value)} characters, not 64: {value!r}. "
+            "No real digest can equal it."
+        )
 
 
 def test_pinned_manifest_matches_the_package(skill_text):
@@ -219,3 +245,23 @@ def test_both_snippets_carry_a_checkout_placeholder():
             f"{snippet.parent.name} has no checkout placeholder, so a kb-qa "
             "working copy under any other name is writable"
         )
+
+
+def test_a_malformed_pin_is_caught_at_any_length(skill_text):
+    """The guard that was missing. Proven to fail in both directions."""
+    real = MANIFEST_SHA256
+    for bad in (real + "4", real[:-1], real + "abc"):
+        mutated = re.sub(r"manifest_sha256 [0-9a-f]+", f"manifest_sha256 {bad}", skill_text)
+        lengths = [len(v) for v in pinned_manifests(mutated)]
+        assert 64 not in lengths, f"a {len(bad)}-character pin read as well-formed"
+
+
+def test_the_old_pattern_would_have_missed_it():
+    """Documents the blind spot, so it is not reintroduced as a tidy-up.
+
+    `[0-9a-f]{64}` against a 65-character token yields a clean 64-character
+    match and hides the defect. That is why this file now captures greedily.
+    """
+    malformed = f"manifest_sha256 {MANIFEST_SHA256}4"
+    assert re.findall(r"manifest_sha256 ([0-9a-f]{64})", malformed) == [MANIFEST_SHA256]
+    assert pinned_manifests(malformed) == [MANIFEST_SHA256 + "4"]

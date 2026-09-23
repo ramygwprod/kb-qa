@@ -16,6 +16,33 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.13.2] — 2026-09-23
+
+### Fixed
+
+- **The manifest pinned in `kbqa-check` was 65 hex characters.** A sha256 is 64,
+  so no real digest could ever equal it. Found by the collection session reading
+  the skill, not by this package's tests.
+
+  Origin: a placeholder hand-typed into the skill during a rewrite, one
+  character too long. Propagation: the re-pin used
+  `re.sub(r"manifest_sha256 [0-9a-f]{64}", …)`, which on a 65-character token
+  matches the first 64, replaces them, and leaves the 65th — self-perpetuating
+  once introduced. It survived six releases.
+
+  **`tests/test_skill_pin.py` passed on every one of them**, because it read the
+  pin with the same fixed-count pattern and extracted a clean 64 characters. The
+  test and the bug shared a blind spot, which is why a test passing is not
+  evidence when the test and the code were written by the same hand on the same
+  assumption.
+
+  Both now match the whole token (`[0-9a-f]+`) and the length is asserted
+  explicitly, with a test proving a 63-, 65- and 67-character pin all fail.
+
+  Consequence while it was live: from 6.9.0 the checking skill would have
+  reported a stale pin on every run — the exact false alarm 6.10.0 was released
+  to remove. Before that it would have halted every checking session at step 0.
+
 ## [6.13.1] — 2026-09-23
 
 ### Added
