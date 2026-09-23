@@ -1,6 +1,6 @@
 # kbqa — user manual
 
-**Version 6.12.0** · for operators and for maker agents
+**Version 6.12.1** · for operators and for maker agents
 
 Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -10,8 +10,15 @@ Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.12.0"
-python -m kbqa --version          # must print 6.12.0
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.12.1"
+# Day to day, the pipeline is two commands with a human between them:
+#
+#   /kbqa-collect <Subject Name>     collect until the source runs out
+#   /kbqa-check <subject folder>     run the gates, read the verdict
+#
+# Everything below is what those do, and what to run when you want it by hand.
+
+python -m kbqa --version          # must print 6.12.1
 ```
 
 **Audit a corpus** — needs no captures, changes nothing, answers "what here can
@@ -94,7 +101,7 @@ python3 -m venv .venv
 For an estate or CI, install from the pinned tag rather than a branch:
 
 ```bash
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.12.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.12.1"
 ```
 
 **Always a tag, never a branch.** A branch would let the gates and the data they
@@ -293,7 +300,79 @@ weight as a verified one.
 
 ## 5 · Workflows
 
-### 5.1 · Operator — auditing what you already have
+### 5.1 · Operator — one collection round
+
+Two commands, and you between them. That separation is the point: the collecting
+side never sees the verdict on its own work, because a context that does will
+edit toward it.
+
+**Collect.** In a session with the estate as its working directory:
+
+```
+/kbqa-collect <Subject Name>
+```
+
+It cannot fetch and it cannot write — it delegates to the `fetcher` and
+`row-writer` subagents, window by window, until the fetcher reports the source
+exhausted or stops on budget and parks with an offset. It returns a receipt per
+window and **no verdict**.
+
+**Check**, once it returns:
+
+```
+/kbqa-check <subject folder path>
+```
+
+Or run it yourself, which is the same thing without a session in the way:
+
+```bash
+D="<subject folder>"
+DEN=$(find "$D" -maxdepth 1 -name '_denominator*.md' | sort | head -1)
+[ -n "$DEN" ] && DARG="--denominator $DEN" || { DARG=""; echo "NOTE: no denominator — G4 will not run"; }
+find "$D" -maxdepth 1 -name '_collect-*-staging.md' | sort | while read -r s; do
+  b=$(basename "$s"); b=${b#_collect-}; b=${b%-staging.md}
+  python3 -m kbqa report --vendor-dir "$D" --batch "$b" $DARG --log _qa-log.jsonl
+done
+python3 -m kbqa g4 --rows "$D"/_collect-*-staging.md
+```
+
+That last line is the one people skip. It asks whether the windows form an
+unbroken chain that reached the end of the list — `collection_parked` means the
+collector stopped safely with more to do, `no_exhaustion_evidence` means nothing
+establishes the list ever ended.
+
+**Then route, and this is your job rather than anyone's tool.** `structural` and
+`planner` findings go back to planning; only `fixable` ones return to the
+row-writer, and with the finding, never the gate name. Handing a maker *"G3
+failed, 14 rows"* produces fourteen edited quotes.
+
+### 5.2 · Operator — a mapping round
+
+Mapping is the one round with no gate behind it. What guards it is that the
+subject's words are fingerprinted before and after.
+
+```bash
+python3 -m kbqa freeze --root <estate> --out _qa/verbatim.freeze.json
+#   … the mapping pass happens: statements appended to per-subject files …
+python3 -m kbqa freeze --root <estate> --check _qa/verbatim.freeze.json
+python3 -m kbqa mappings --file <estate>/**/_mappings.jsonl --root <estate>
+```
+
+`freeze --check` fails if a row's **verbatim fields** changed — `vendor_term`,
+`parent_path`, the quote, the URL. Our reading stays revisable; theirs does not.
+
+**If it reports drift, restore the rows from version control. Never re-freeze.**
+Re-freezing records the edit as the new truth, which is the single thing the
+command exists to prevent, and the request to do it always arrives sounding
+reasonable.
+
+`mappings` then checks the statements are well-formed: `mapped` names a concept
+and a SKOS relation, `examined-no-match` carries a note saying why no broader
+concept fits, every id exists and means one thing. **It never checks whether a
+mapping is right** — the same limit as G3, which proves a quote is real and
+cannot prove it supports the claim.
+
+### 5.3 · Operator — auditing what you already have
 
 Start here on an unfamiliar estate. Needs no captures and changes nothing.
 
@@ -319,7 +398,7 @@ property of how the batch was collected, not a defect to repair.
 `--field-values` lists every field the collector emits, flagging those outside
 the contract. That is the evidence for the next schema version.
 
-### 5.2 · Operator — checking one batch
+### 5.4 · Operator — checking one batch
 
 ```bash
 python -m kbqa report \
@@ -339,7 +418,7 @@ Read the **Coverage** section before the findings. It names the gates that did
 *not* run and why, so a short findings list is never mistaken for broad
 coverage.
 
-### 5.3 · Operator — adopting a hash for a batch collected before the contract
+### 5.5 · Operator — adopting a hash for a batch collected before the contract
 
 A corpus collected before `source_capture_sha256` and `pages:` were required
 fails G1 on `capture_hash_absent` and `no_declared_pages` however good its rows
@@ -369,7 +448,7 @@ problems, adopt and record. When it is a batch nobody has checked, re-fetch.
 
 ---
 
-### 5.4 · Operator — resuming collection
+### 5.6 · Operator — resuming collection
 
 1. `kbqa sweep` — know which trees rest on checkable evidence
 2. Collect a batch with the fetcher/row-writer split (§5.5)
@@ -378,7 +457,7 @@ problems, adopt and record. When it is a batch nobody has checked, re-fetch.
 5. Re-run the report — a finding is resolved when it stops appearing
 6. Merge to Gold, then `kbqa g6 --root <estate>`
 
-### 5.5 · Maker agent — consuming a report
+### 5.7 · Maker agent — consuming a report
 
 You are being handed work. The report is at `_qa/<batch>.report.md`, and
 `_qa/<batch>.report.json` carries the same plan in machine-readable form.
@@ -413,7 +492,7 @@ claim, the claim is not supported.
 **Verify by re-running the same command.** A finding is resolved when it stops
 appearing — not when it is explained.
 
-### 5.6 · Role separation — enforced by capability
+### 5.8 · Role separation — enforced by capability
 
 Attestation is not proof. **Deny the tool instead.** Copy both definitions into
 the estate:
@@ -431,7 +510,7 @@ ungroundable rows being produced in the first place.
 G6 still checks the `fetched_by_this_agent` attestation, but that check is a
 backstop for a collapse the tool list should have made impossible.
 
-### 5.7 · Confirming a format without disclosing data
+### 5.9 · Confirming a format without disclosing data
 
 When the checker must not read the estate — a separate session, a reviewer, a
 support conversation:
@@ -449,7 +528,7 @@ The output is designed to be pasted to someone who must not see the data.
 
 ---
 
-### 5.8 · Pipeline runbook
+### 5.10 · Pipeline runbook
 
 `$C` = corpus root · `$D` = `$C/<container>/<Subject>` · `$B` = batch name.
 
@@ -838,7 +917,7 @@ and the data they judge change in the same push.
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.12.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.12.1"
 ```
 
 > `pip < 21.3` cannot read this project's metadata and installs an empty package
@@ -994,9 +1073,9 @@ gate that did not run has found nothing, which is not the same as having found
 nothing wrong.
 
 **`sweep` says a file is `not-a-batch`, or the batch count dropped after
-upgrading to 6.12.0.**
+upgrading to 6.12.1.**
 That file matched the staging filename pattern but declares no batch
-frontmatter and holds no rows. Before 6.12.0 it was counted as a batch, so
+frontmatter and holds no rows. Before 6.12.1 it was counted as a batch, so
 totals were inflated and CI reported gate failures about it. If it really is a
 batch, give it frontmatter; if it is a document, rename it out of the pattern.
 

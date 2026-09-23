@@ -148,7 +148,7 @@
     <p class="lede">Every collected claim traces to a verbatim quote in a page capture stored before the claim was written — or it fails a gate. This is how that holds, end to end.</p>
     <div class="regimes">
       <span class="regime"><b>r1a-vendor-catalogue</b> &nbsp;owns collection · steps 0–4</span>
-      <span class="regime"><b>kbqa v6.12.0</b> &nbsp;owns verification · G0–G6</span>
+      <span class="regime"><b>kbqa v6.12.1</b> &nbsp;owns verification · G0–G6</span>
       <span class="regime"><b>agents/</b> &nbsp;make the role split structural</span>
     </div>
   </header>
@@ -246,6 +246,13 @@
             <polyline class="edge-back" points="845,546 845,582 115,582 115,112" marker-end="url(#ar)"/>
           </g>
 
+          <!-- the window loop: most of a subject is this, going round -->
+          <g color="var(--petrol)">
+            <path class="edge-back" d="M 260 219 C 214 219 214 300 252 336" marker-end="url(#ar)"/>
+          </g>
+          <text class="t-edge" x="196" y="284" text-anchor="middle" fill="var(--petrol)">next</text>
+          <text class="t-edge" x="196" y="296" text-anchor="middle" fill="var(--petrol)">window</text>
+
           <!-- edge labels -->
           <text class="t-edge" x="352" y="152">exit 0</text>
           <text class="t-edge t-stop" x="446" y="76" text-anchor="middle">exit 2</text>
@@ -254,7 +261,7 @@
           <text class="t-edge" x="480" y="574" text-anchor="middle" fill="var(--petrol)">structural &amp; planner findings → replan, never back to the row-writer</text>
         </svg>
       </div>
-      <figcaption>The fetcher and the row-writer are separate agents because a quote matching a capture the same agent wrote proves only that one author agreed with itself. The dashed return path is the anti-gaming edge: failures route to whoever plans the batch, never to whoever wrote the rows.</figcaption>
+      <figcaption>Most of a subject is the dashed loop on the left, going round: one window captured, its rows written, then the next — until the fetcher reports the source exhausted, or stops on budget and parks with an offset. A window that is killed costs one window. The fetcher and the row-writer are separate agents because a quote matching a capture the same agent wrote proves only that one author agreed with itself. The dashed return path is the anti-gaming edge: failures route to whoever plans the batch, never to whoever wrote the rows.</figcaption>
     </figure>
   </section>
 
@@ -401,6 +408,30 @@
   </section>
 
   <section>
+    <div class="eyebrow">After collection</div>
+    <h2>The mapping round has no gate — it has a fingerprint</h2>
+    <p>Assigning a subject's term to a standard category is interpretation, not evidence, so it happens <strong>outside</strong> the rows: statements in their own files, keyed by the merged row's <code>id</code>, carrying a <a href="https://www.w3.org/TR/skos-reference/">SKOS</a> relation and a provenance. The rows are never edited, and that is checked rather than promised.</p>
+
+    <div class="cols">
+      <div class="cell">
+        <h3>freeze</h3>
+        <p>Fingerprints the fields that are the <strong>subject's own words</strong> — their term, their nesting, the quote, the URL — before a pass and after. A changed or vanished row fails.</p>
+        <p style="color:var(--rust)"><strong>Drift is restored from version control, never re-frozen.</strong> Re-freezing records the edit as the new truth.</p>
+      </div>
+      <div class="cell">
+        <h3>mappings</h3>
+        <p>Checks the statements are well-formed: a relation from the SKOS set, a reason when nothing matches, every id present and meaning one thing.</p>
+        <p>It never checks whether a mapping is <em>right</em>. That stays judgement.</p>
+      </div>
+      <div class="cell">
+        <h3>what stays revisable</h3>
+        <p><code>canonical</code>, <code>confidence</code>, <code>mechanism</code>, <code>outcome</code> are <strong>our</strong> reading and always editable — freezing them would block the round it protects.</p>
+        <p>Which fields are whose is a profile decision, not a constant.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
     <div class="eyebrow">Honest limits</div>
     <h2>What the machinery does not reach</h2>
     <div class="limits">
@@ -417,8 +448,8 @@
         <p>If the index itself was selective, nothing notices. This is why the fetcher captures the vendor's own list before scope is decided.</p>
       </div>
       <div>
-        <h3>Gold has no producer</h3>
-        <p>G6 validates <code>feature-tree.md</code>'s declared proof count, but nothing in the pipeline writes that file. Hand-written, the count is self-attested and the check is vacuous.</p>
+        <h3>Gold has no producer, and no audit</h3>
+        <p>G6 validates <code>feature-tree.md</code>'s declared proof count, but nothing in the pipeline writes that file — Gold is assembled by hand, so the merge step has no code to inspect. Measured on one estate: <strong>126</strong> ids name different things depending on which layer you read, which is what an unaudited merge produces.</p>
       </div>
       <div>
         <h3>Enforcement stops at level 3½</h3>
@@ -428,7 +459,7 @@
   </section>
 
   <footer>
-    kbqa v6.12.0 · 226 tests · decisions D-001 through D-008 recorded with evidence and reversal conditions. Collection discipline: r1a-vendor-catalogue, rounds R1a → R1b → R2 → R3.
+    kbqa v6.12.1 · 226 tests · decisions D-001 through D-008 recorded with evidence and reversal conditions. Collection discipline: r1a-vendor-catalogue, rounds R1a → R1b → R2 → R3.
   </footer>
 
 </div>

@@ -16,6 +16,27 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.12.1] — 2026-09-23
+
+### Fixed
+
+- **The workflow docs described the pipeline as it was before the skills
+  existed.** MANUAL §5 never mentioned `/kbqa-collect` or `/kbqa-check` — the
+  two commands the pipeline is actually driven by — and led instead with
+  auditing an existing corpus. An operator following it would have run the gates
+  by hand and never learned the collection round exists.
+
+  §5.1 is now one collection round and §5.2 a mapping round; the previous eight
+  workflows renumber to §5.3–§5.10. The quickstart opens with the two commands
+  rather than with `--version`.
+
+- **`docs/pipeline.html` had no window loop and no mapping round.** The diagram
+  showed a single pass through the fetcher, when most of a subject is that loop
+  going round. It now draws the loop, adds a section for `freeze` and
+  `mappings`, and states in the limits that Gold has no producer *and no audit* —
+  126 ids naming different things across layers is what an unaudited hand-merge
+  produces.
+
 ## [6.12.0] — 2026-09-17
 
 ### Changed
