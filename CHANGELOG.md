@@ -16,6 +16,57 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.13.3] — 2026-09-23
+
+### Fixed
+
+- **Rows nothing could parse were in no tier, no total, and no summary.** A
+  sweep counts only rows that came back as objects, so an unreadable row joined
+  neither the tier figures nor the row count — and while the report named them
+  in a table, the terminal summary said nothing at all. On one estate that was
+  **962 rows across 5 batches**, sitting inside figures that otherwise looked
+  accounted for.
+
+  The summary now prints `UNREADABLE` when any exist, and the totals carry
+  `unreadable_batches` and `unreadable_rows`. Kept out of the tiers on purpose:
+  a row nothing could read is not a badly-tiered row, and blending them would
+  produce a number meaning neither.
+
+  A test asserts the line does **not** print on a clean estate — a line that
+  always appears is a line nobody reads.
+
+- **`llms.txt` links pointed at `main` while the file told readers to pin.** It
+  asked a reader to substitute their tag by hand, in a document whose whole
+  argument is that pinning should be mechanical. Links are now rewritten to the
+  tag at release, and `DEVELOPMENT.md` §9 makes that a release step.
+
+## [6.13.2] — 2026-09-23
+
+### Fixed
+
+- **The manifest pinned in `kbqa-check` was 65 hex characters.** A sha256 is 64,
+  so no real digest could ever equal it. Found by the collection session reading
+  the skill, not by this package's tests.
+
+  Origin: a placeholder hand-typed into the skill during a rewrite, one
+  character too long. Propagation: the re-pin used
+  `re.sub(r"manifest_sha256 [0-9a-f]{64}", …)`, which on a 65-character token
+  matches the first 64, replaces them, and leaves the 65th — self-perpetuating
+  once introduced. It survived six releases.
+
+  **`tests/test_skill_pin.py` passed on every one of them**, because it read the
+  pin with the same fixed-count pattern and extracted a clean 64 characters. The
+  test and the bug shared a blind spot, which is why a test passing is not
+  evidence when the test and the code were written by the same hand on the same
+  assumption.
+
+  Both now match the whole token (`[0-9a-f]+`) and the length is asserted
+  explicitly, with a test proving a 63-, 65- and 67-character pin all fail.
+
+  Consequence while it was live: from 6.9.0 the checking skill would have
+  reported a stale pin on every run — the exact false alarm 6.10.0 was released
+  to remove. Before that it would have halted every checking session at step 0.
+
 ## [6.13.1] — 2026-09-23
 
 ### Added

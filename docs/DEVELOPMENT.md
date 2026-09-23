@@ -1,6 +1,6 @@
 # kbqa — developer guide
 
-**Version 6.13.1** · for anyone extending or maintaining the package
+**Version 6.13.3** · for anyone extending or maintaining the package
 
 For *using* the tool, see [MANUAL.md](MANUAL.md). This document covers
 architecture, how to extend it, what must not break, and how to release.
@@ -419,7 +419,11 @@ each `bad_*` fails for exactly one known reason.
    contract change, with evidence and a reversal condition
 3. Bump `pyproject.toml` **and** `src/kbqa/__init__.py` together
 4. `pytest tests/ -q` green; fixtures regenerate byte-identically
-5. Update pins in `ci/estate-qa.yml`, `ci/estate-pre-push`, **and**
+5. Re-pin with a pattern that matches the **whole** hex token —
+   `manifest_sha256 [0-9a-f]+`, never `[0-9a-f]{64}`. A fixed count silently
+   repairs 64 characters of a malformed 65-character pin and leaves the rest,
+   which is how one hand-typed placeholder survived six releases with a green
+   test. Update pins in `ci/estate-qa.yml`, `ci/estate-pre-push`, **and**
    `skills/kbqa-check/SKILL.md` — the skill pins the version *and* the
    `manifest_sha256`, and `tests/test_skill_pin.py` fails the release if either
    is stale. A stale pin fires the skill's tamper check on a legitimate
@@ -430,8 +434,11 @@ each `bad_*` fails for exactly one known reason.
 7. Merge, wait for the **Merged** badge, *then* resync locally. Resetting before
    the merge lands silently leaves you on the old commit, and everything after
    operates on the wrong one
-8. Tag `vMAJOR.MINOR.PATCH`, push the tag
-9. Confirm CI is green **on the tag** — that is what corpora pin, not `main`
+8. Rewrite the links in `llms.txt` to the tag being cut — they must never say
+   `main`. A file whose argument is that pinning should be mechanical cannot
+   ask its reader to substitute by hand
+9. Tag `vMAJOR.MINOR.PATCH`, push the tag
+10. Confirm CI is green **on the tag** — that is what corpora pin, not `main`
 
 ### Pinning
 

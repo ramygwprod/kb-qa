@@ -4,30 +4,30 @@
 
 Two commands drive it, with a human between them: `/kbqa-collect <Subject>` collects until the source is exhausted; `/kbqa-check <folder>` runs the gates. The separation is the point — a context that sees the verdict on its own work will edit toward it.
 
-**Read the docs for the version you run.** Replace `main` with your tag in any URL below; `python3 -m kbqa --version` prints it. `main` moves, and reading a newer manual than the package you have is the drift this package exists to catch.
+**Every link below is pinned to `v6.13.3`**, the release this file ships with. If `python3 -m kbqa --version` prints something else, substitute your own tag — reading a newer manual than the package you have is the drift this package exists to catch, and nothing should be left to a reader's diligence that a release step can do.
 
 **If you are an agent running the pipeline, the skills are your source, not these documents.** `kbqa-collect` and `kbqa-check` carry the procedure and the boundary, are versioned with the package, and pin a manifest. The documents below explain, record, and let a human decide; the skill is what binds.
 
 ## Start here
 
-- [Documentation index](https://raw.githubusercontent.com/ramygwprod/kb-qa/main/docs/README.md): every document, organised by the kind of question it answers (Diátaxis). Start here if unsure.
-- [README](https://raw.githubusercontent.com/ramygwprod/kb-qa/main/README.md): what the package is, the honest limit stated first, install and run.
+- [Documentation index](https://raw.githubusercontent.com/ramygwprod/kb-qa/v6.13.3/docs/README.md): every document, organised by the kind of question it answers (Diátaxis). Start here if unsure.
+- [README](https://raw.githubusercontent.com/ramygwprod/kb-qa/v6.13.3/README.md): what the package is, the honest limit stated first, install and run.
 
 ## How to use it
 
-- [Manual](https://raw.githubusercontent.com/ramygwprod/kb-qa/main/docs/MANUAL.md): quickstart, ten workflows including one collection round and one mapping round, every action, every finding code, thirty troubleshooting entries by symptom, the trust model, and the Do/Don't boundary.
-- [Pipeline diagram](https://github.com/ramygwprod/kb-qa/blob/main/docs/pipeline.html): four role lanes, the isolation boundary, the window loop, the mapping round, and where the guarantees stop. Self-contained HTML.
+- [Manual](https://raw.githubusercontent.com/ramygwprod/kb-qa/v6.13.3/docs/MANUAL.md): quickstart, ten workflows including one collection round and one mapping round, every action, every finding code, thirty troubleshooting entries by symptom, the trust model, and the Do/Don't boundary.
+- [Pipeline diagram](https://github.com/ramygwprod/kb-qa/blob/v6.13.3/docs/pipeline.html): four role lanes, the isolation boundary, the window loop, the mapping round, and where the guarantees stop. Self-contained HTML.
 
 ## Reference
 
-- [Staging format](https://raw.githubusercontent.com/ramygwprod/kb-qa/main/docs/STAGING-FORMAT.md): the on-disk shape of a staging file, a capture and a denominator.
-- [Mapping contract](https://raw.githubusercontent.com/ramygwprod/kb-qa/main/docs/MAPPING-CONTRACT.md): mapping statements live outside rows, keyed by merged row id, carrying a SKOS relation and a review status.
+- [Staging format](https://raw.githubusercontent.com/ramygwprod/kb-qa/v6.13.3/docs/STAGING-FORMAT.md): the on-disk shape of a staging file, a capture and a denominator.
+- [Mapping contract](https://raw.githubusercontent.com/ramygwprod/kb-qa/v6.13.3/docs/MAPPING-CONTRACT.md): mapping statements live outside rows, keyed by merged row id, carrying a SKOS relation and a review status.
 
 ## Why it is built this way
 
-- [Decisions](https://raw.githubusercontent.com/ramygwprod/kb-qa/main/docs/DECISIONS.md): fifteen records, each with the evidence that forced it and the condition under which it would be reversed. Read before proposing that something be changed back.
-- [Developer guide](https://raw.githubusercontent.com/ramygwprod/kb-qa/main/docs/DEVELOPMENT.md): architecture, adding a domain, invariants, known traps, release process, trust model for maintainers.
-- [Changelog](https://raw.githubusercontent.com/ramygwprod/kb-qa/main/CHANGELOG.md): every release with the measurement or request that caused it.
+- [Decisions](https://raw.githubusercontent.com/ramygwprod/kb-qa/v6.13.3/docs/DECISIONS.md): fifteen records, each with the evidence that forced it and the condition under which it would be reversed. Read before proposing that something be changed back.
+- [Developer guide](https://raw.githubusercontent.com/ramygwprod/kb-qa/v6.13.3/docs/DEVELOPMENT.md): architecture, adding a domain, invariants, known traps, release process, trust model for maintainers.
+- [Changelog](https://raw.githubusercontent.com/ramygwprod/kb-qa/v6.13.3/CHANGELOG.md): every release with the measurement or request that caused it.
 
 ## What this package does not do
 

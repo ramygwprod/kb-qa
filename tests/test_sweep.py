@@ -463,3 +463,60 @@ def test_tree_rows_are_never_folded_into_the_tier_percentages(estate):
     after = json.loads((root / "_qa-estate-audit.json").read_text())
     assert after["totals"] == before, "tree rows moved a tier figure"
     assert after["trees_without_batches"] == {"Orphan": 2}
+
+
+# --------------------------------------------------------------------------
+# Rows nothing could read
+# --------------------------------------------------------------------------
+
+UNPARSEABLE = (
+    "---\nbatch: broken\nsource_capture: _capture-broken.raw.txt\n---\n\n"
+    '{"id": "acme.good", "vendor_term": "Good", "what_it_does": "Works.", '
+    '"source_url": "https://docs.acme.test/g", "source_quote": "q", '
+    '"access_date": "2026-08-23", "evidence_grade": "official-doc", '
+    '"confidence": "high", "mechanism": "Native", "outcome": "yes", '
+    '"depth_level": "feature"}\n'
+    '{"id": "acme.broken", "vendor_term": "Broken"\n'   # no closing brace
+)
+
+
+def test_unreadable_rows_reach_the_terminal_summary(estate, capsys):
+    """962 of these sat inside figures that looked accounted for.
+
+    `rec["rows"]` counts only rows that parsed, so an unreadable row is in no
+    tier and in no total — and it was reported in the body of the report but
+    never in the summary. An operator reading stdout saw nothing at all.
+    """
+    root = estate(Acme="good")
+    d = root / "Competitors" / "Acme"
+    (d / "_collect-broken-staging.md").write_text(UNPARSEABLE, encoding="utf-8")
+
+    assert cli.main(["sweep", "--root", str(root)]) == 0
+    out = capsys.readouterr().out
+    assert "UNREADABLE" in out, out
+
+    machine = json.loads((root / "_qa-estate-audit.json").read_text())
+    assert machine["totals"]["unreadable_rows"] == 1
+    assert machine["totals"]["unreadable_batches"] == 1
+
+
+def test_unreadable_rows_are_not_folded_into_any_tier(estate):
+    """Two different questions. A row nothing could read is not a tiered row."""
+    root = estate(Acme="good")
+    cli.main(["sweep", "--root", str(root)])
+    before = json.loads((root / "_qa-estate-audit.json").read_text())["totals"]
+
+    (root / "Competitors" / "Acme" / "_collect-broken-staging.md").write_text(
+        UNPARSEABLE, encoding="utf-8")
+    cli.main(["sweep", "--root", str(root)])
+    after = json.loads((root / "_qa-estate-audit.json").read_text())["totals"]
+
+    assert after["rows"] == before["rows"] + 1, "only the parseable row joins the total"
+    assert after["unreadable_rows"] == 1
+
+
+def test_a_clean_estate_says_nothing_about_unreadable_rows(estate, capsys):
+    """A line that always prints is a line nobody reads."""
+    root = estate(Acme="good")
+    cli.main(["sweep", "--root", str(root)])
+    assert "UNREADABLE" not in capsys.readouterr().out

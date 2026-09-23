@@ -15,7 +15,7 @@ and you do not touch the tool.
 ## 0 · Establish which validator you are about to trust
 
 ```bash
-PINNED=v6.13.1
+PINNED=v6.13.3
 LATEST=$(git ls-remote --tags https://github.com/ramygwprod/kb-qa.git 2>/dev/null \
          | grep -o 'v[0-9][0-9.]*$' | sort -V | tail -1)
 [ -n "$LATEST" ] && [ "$LATEST" != "$PINNED" ] \
@@ -29,8 +29,8 @@ python3 -m kbqa --version && python3 -m kbqa --manifest | head -1
 Expected for this copy's pin:
 
 ```
-6.13.1
-manifest_sha256 0a80b037dd36036aefc622a5034b9331f423d17d8ec63c482248d10993953e864
+6.13.3
+manifest_sha256 4aa5f924fbffb534cca878bc2e936707cdff3f0713324b5b1b34f029a58a40ab
 ```
 
 Reinstalling first is deliberate. The authoritative copy is on GitHub, so a
