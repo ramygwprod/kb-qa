@@ -69,3 +69,66 @@ def test_these_guards_can_actually_fail():
     """A drift check that has never failed has not been tested."""
     assert "`definitely_not_a_real_code`" not in MANUAL
     assert not re.search(r"`definitely_not_a_command\b", MANUAL)
+
+
+# --------------------------------------------------------------------------
+# Nothing falls out of the index
+# --------------------------------------------------------------------------
+
+DOCS_DIR = ROOT / "docs"
+DOCS_INDEX = (DOCS_DIR / "README.md").read_text(encoding="utf-8")
+LLMS_TXT = (ROOT / "llms.txt").read_text(encoding="utf-8")
+
+
+def doc_files():
+    """Every document in docs/, except the index itself."""
+    return sorted(p.name for p in DOCS_DIR.iterdir()
+                  if p.is_file() and p.name != "README.md")
+
+
+@pytest.mark.parametrize("name", doc_files())
+def test_every_doc_is_in_the_index(name):
+    """A document nobody can find is a document nobody reads.
+
+    The failure this guards is not a broken link — it is a file added to docs/
+    and never announced, which looks identical to a complete doc set. That is
+    the same shape as every defect in DECISIONS.md.
+    """
+    assert name in DOCS_INDEX, (
+        f"docs/{name} exists and docs/README.md never names it"
+    )
+
+
+@pytest.mark.parametrize("name", doc_files())
+def test_every_doc_is_in_llms_txt(name):
+    """The machine-readable index must not be a subset of the human one."""
+    assert name in LLMS_TXT, (
+        f"docs/{name} is absent from llms.txt, so an agent enumerating the "
+        "documentation will not find it"
+    )
+
+
+def test_llms_txt_opens_the_way_the_convention_requires():
+    """H1 project name, then a blockquote summary. Parsers rely on both."""
+    lines = [l for l in LLMS_TXT.splitlines() if l.strip()]
+    assert lines[0].startswith("# "), "llms.txt must open with an H1 project name"
+    assert lines[1].startswith("> "), "llms.txt must follow the H1 with a blockquote summary"
+
+
+def test_llms_txt_stays_an_index_not_a_manual():
+    """The convention caps it near 2,000 words; past that it stops being read."""
+    words = len(LLMS_TXT.split())
+    assert words < 2000, f"llms.txt is {words} words — publish llms-full.txt instead"
+
+
+def test_both_indexes_say_to_pin_the_version():
+    """`main` moves. A session reading a newer manual than it runs is the drift
+    this package spends its time catching elsewhere."""
+    for name, text in (("docs/README.md", DOCS_INDEX), ("llms.txt", LLMS_TXT)):
+        assert "main" in text and "version" in text.lower(), name
+        assert "--version" in text, f"{name} never says how to find the installed version"
+
+
+def test_the_index_guards_can_fail():
+    assert "definitely-not-a-doc.md" not in DOCS_INDEX
+    assert "definitely-not-a-doc.md" not in LLMS_TXT

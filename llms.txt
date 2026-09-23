@@ -1,0 +1,38 @@
+# kbqa
+
+> Validation gates for evidence-grounded data collection. Every collected row must be traceable to a verbatim quote in a page capture stored *before* the row was written, or it fails. Built so that a collecting agent cannot pass by editing the validator.
+
+Two commands drive it, with a human between them: `/kbqa-collect <Subject>` collects until the source is exhausted; `/kbqa-check <folder>` runs the gates. The separation is the point — a context that sees the verdict on its own work will edit toward it.
+
+**Read the docs for the version you run.** Replace `main` with your tag in any URL below; `python3 -m kbqa --version` prints it. `main` moves, and reading a newer manual than the package you have is the drift this package exists to catch.
+
+**If you are an agent running the pipeline, the skills are your source, not these documents.** `kbqa-collect` and `kbqa-check` carry the procedure and the boundary, are versioned with the package, and pin a manifest. The documents below explain, record, and let a human decide; the skill is what binds.
+
+## Start here
+
+- [Documentation index](https://raw.githubusercontent.com/ramygwprod/kb-qa/main/docs/README.md): every document, organised by the kind of question it answers (Diátaxis). Start here if unsure.
+- [README](https://raw.githubusercontent.com/ramygwprod/kb-qa/main/README.md): what the package is, the honest limit stated first, install and run.
+
+## How to use it
+
+- [Manual](https://raw.githubusercontent.com/ramygwprod/kb-qa/main/docs/MANUAL.md): quickstart, ten workflows including one collection round and one mapping round, every action, every finding code, thirty troubleshooting entries by symptom, the trust model, and the Do/Don't boundary.
+- [Pipeline diagram](https://github.com/ramygwprod/kb-qa/blob/main/docs/pipeline.html): four role lanes, the isolation boundary, the window loop, the mapping round, and where the guarantees stop. Self-contained HTML.
+
+## Reference
+
+- [Staging format](https://raw.githubusercontent.com/ramygwprod/kb-qa/main/docs/STAGING-FORMAT.md): the on-disk shape of a staging file, a capture and a denominator.
+- [Mapping contract](https://raw.githubusercontent.com/ramygwprod/kb-qa/main/docs/MAPPING-CONTRACT.md): mapping statements live outside rows, keyed by merged row id, carrying a SKOS relation and a review status.
+
+## Why it is built this way
+
+- [Decisions](https://raw.githubusercontent.com/ramygwprod/kb-qa/main/docs/DECISIONS.md): fifteen records, each with the evidence that forced it and the condition under which it would be reversed. Read before proposing that something be changed back.
+- [Developer guide](https://raw.githubusercontent.com/ramygwprod/kb-qa/main/docs/DEVELOPMENT.md): architecture, adding a domain, invariants, known traps, release process, trust model for maintainers.
+- [Changelog](https://raw.githubusercontent.com/ramygwprod/kb-qa/main/CHANGELOG.md): every release with the measurement or request that caused it.
+
+## What this package does not do
+
+- **G3 proves a quote is real and on the page it cites. It does not prove the quote supports the claim.** A row can pass every gate while claiming far more than its quote warrants.
+- **A capture is what the fetch tool returned, not necessarily what the server sent.** A converting or summarising fetcher yields quotes that match the capture and differ from the page.
+- **Coverage is measured against the index that was captured.** A selective index goes unnoticed.
+- **Nothing checks that a mapping is correct** — only that the statement is well-formed and that the subject's words were not edited while mapping them.
+- Levels 1–3 of the trust model are tamper-*evident*. Only CI re-running the gates from a pinned tag, on infrastructure the collecting agent cannot reach, is tamper-proof.
