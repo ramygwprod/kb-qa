@@ -1,6 +1,6 @@
 # kbqa — developer guide
 
-**Version 6.14.0** · for anyone extending or maintaining the package
+**Version 6.14.1** · for anyone extending or maintaining the package
 
 For *using* the tool, see [MANUAL.md](MANUAL.md). This document covers
 architecture, how to extend it, what must not break, and how to release.
@@ -353,6 +353,24 @@ if it were a law.*
 **The base rate matters:** every batch failing 100% turned out to be a checker
 defect. Before concluding a corpus is bad, check whether the rule it breaks is
 one you can justify.
+
+### The serialisation trap
+
+962 rows were unreadable because the parser accepted JSON written one way. Two
+shapes defeated it — a trailing comma, and an object spread over several lines —
+and both are ordinary JSON that every other tool reads.
+
+If you touch `parsing.py`, the rule is: **read the JSON people write, not the
+JSON a specification described.** Five of the six shapes now read were added
+after a corpus proved a constraint wrong, and no test caught any of them, because
+the fixtures are authored by the same hand that wrote the constraint. That is
+why they are authored rather than harvested — and it is exactly the limit of
+that choice.
+
+One subtlety worth keeping: accumulating by brace depth reads a multi-line
+object, and lets a single unclosed object swallow every row after it. The shape
+is therefore chosen by majority vote *before* parsing, which keeps a corrupt row
+costing one row in the common case.
 
 ### The redaction trap
 

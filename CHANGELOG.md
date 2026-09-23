@@ -16,6 +16,28 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.14.1] — 2026-09-23
+
+### Fixed
+
+- **The documentation still described three row serialisations.** 6.14.0 taught
+  the parser two more writing styles and updated none of the prose. Anyone
+  reading `STAGING-FORMAT.md` would have concluded their file was malformed
+  when it is now read correctly — the precise error that cost 962 rows their
+  visibility, repeated in the document that exists to prevent it.
+
+  `STAGING-FORMAT.md` now separates the three **containers** from the two
+  **writing styles** read inside any of them, and states the brace-depth rule
+  and the majority-vote reader choice.
+
+  `MANUAL §10` no longer says three shapes are supported, and says plainly that
+  a sixth shape means the parser changes rather than the file.
+
+  `DEVELOPMENT §7` gains the serialisation trap: read the JSON people write, not
+  the JSON a specification described — with the note that accumulating by brace
+  depth unconditionally would let one unclosed object swallow every row after
+  it, which is why the shape is chosen first.
+
 ## [6.14.0] — 2026-09-23
 
 ### Fixed
