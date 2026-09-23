@@ -15,7 +15,7 @@ and you do not touch the tool.
 ## 0 · Establish which validator you are about to trust
 
 ```bash
-PINNED=v6.12.0
+PINNED=v6.13.0
 LATEST=$(git ls-remote --tags https://github.com/ramygwprod/kb-qa.git 2>/dev/null \
          | grep -o 'v[0-9][0-9.]*$' | sort -V | tail -1)
 [ -n "$LATEST" ] && [ "$LATEST" != "$PINNED" ] \
@@ -29,8 +29,8 @@ python3 -m kbqa --version && python3 -m kbqa --manifest | head -1
 Expected for this copy's pin:
 
 ```
-6.12.0
-manifest_sha256 a29c8d29d175f8f678ab552a86bbe76900fd6d3bc32ad7dd3138579b5caeb01d4
+6.13.0
+manifest_sha256 c1fd8c61040aa22ebd5924d42cb72778e6ecab5df315a14e6e6cec0b837783684
 ```
 
 Reinstalling first is deliberate. The authoritative copy is on GitHub, so a
@@ -157,10 +157,14 @@ product catalogue, `id`, `source_url`, `source_quote`, `access_date`,
 `vendor_term`, `parent_path`. A changed or disappeared row fails. A new row is
 reported and does not, because collection legitimately adds rows.
 
-**A drifted row is restored from version control, never re-frozen.** Re-freezing
-records the edit as the new truth, which is the one thing the command exists to
-prevent. If you are asked to re-freeze after a drift report, say no and explain
-why.
+**A drifted row is restored from the snapshot's own frozen values, never
+re-frozen.** The drift report prints what each field held; put it back.
+
+Do not assume version control exists — on the estate this was built for there is
+none, so "revert it" has no referent and the tempting alternative is to
+re-freeze. Re-freezing records the edit as the new truth, which is the one thing
+the command exists to prevent. **If you are asked to re-freeze after a drift
+report, say no and explain why.**
 
 And where mapping statements exist:
 

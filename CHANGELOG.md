@@ -16,6 +16,48 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.13.0] — 2026-09-23
+
+### Fixed
+
+- **`freeze` assumed version control, and the estate it was built for has
+  none.** No `.git` anywhere up to the mount boundary. The only recovery
+  material is three month-old tarballs in a directory the project's own rules
+  say not to trust as current.
+
+  So a fingerprint-only snapshot reported drift and left nothing to restore
+  from: *"revert it"* had no referent, and the tempting alternative is to
+  re-freeze — recording the edit as the new truth, which is the single thing the
+  command exists to prevent.
+
+  The snapshot now **stores the frozen values**, and a drift report prints what
+  each field held beside what it holds now. `--fingerprints-only` drops them for
+  an estate that does have history, and says plainly that drift will then be
+  detectable but not recoverable.
+
+  A guard whose remedy cannot be carried out is not a guard.
+
+## [6.12.1] — 2026-09-23
+
+### Fixed
+
+- **The workflow docs described the pipeline as it was before the skills
+  existed.** MANUAL §5 never mentioned `/kbqa-collect` or `/kbqa-check` — the
+  two commands the pipeline is actually driven by — and led instead with
+  auditing an existing corpus. An operator following it would have run the gates
+  by hand and never learned the collection round exists.
+
+  §5.1 is now one collection round and §5.2 a mapping round; the previous eight
+  workflows renumber to §5.3–§5.10. The quickstart opens with the two commands
+  rather than with `--version`.
+
+- **`docs/pipeline.html` had no window loop and no mapping round.** The diagram
+  showed a single pass through the fetcher, when most of a subject is that loop
+  going round. It now draws the loop, adds a section for `freeze` and
+  `mappings`, and states in the limits that Gold has no producer *and no audit* —
+  126 ids naming different things across layers is what an unaudited hand-merge
+  produces.
+
 ## [6.12.0] — 2026-09-17
 
 ### Changed

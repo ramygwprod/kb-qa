@@ -153,3 +153,67 @@ def test_the_snapshot_records_which_code_made_it(tmp_path):
     cli.main(["freeze", "--root", str(root), "--out", str(snap)])
     doc = json.loads(snap.read_text())
     assert doc["manifest_sha256"] and doc["kbqa_version"] and doc["profile"]
+
+
+# --------------------------------------------------------------------------
+# An estate with no version control
+# --------------------------------------------------------------------------
+
+def test_a_drift_report_says_what_the_field_held(tmp_path, capsys):
+    """Measured on the estate this was built for: no `.git` anywhere.
+
+    A fingerprint answers "did this change" and cannot answer "to what". Told to
+    restore from version control that does not exist, an operator has no
+    referent — and the likeliest outcome is that they re-freeze, which records
+    the edit as the new truth.
+    """
+    root, _ = _estate(tmp_path, vendor_term="Widgets")
+    snap = tmp_path / "freeze.json"
+    cli.main(["freeze", "--root", str(root), "--out", str(snap)])
+    capsys.readouterr()
+
+    _estate(tmp_path, vendor_term="Widget")
+    cli.main(["freeze", "--root", str(root), "--check", str(snap)])
+    out = capsys.readouterr().out
+
+    assert "frozen: 'Widgets'" in out, out
+    assert "now   : 'Widget'" in out
+    assert "Restore each field to its frozen value" in out
+    assert "version control" not in out
+
+
+def test_fingerprints_only_admits_it_cannot_recover(tmp_path, capsys):
+    root, _ = _estate(tmp_path)
+    snap = tmp_path / "freeze.json"
+    cli.main(["freeze", "--root", str(root), "--out", str(snap), "--fingerprints-only"])
+    assert "not recoverable" in capsys.readouterr().out
+
+    _estate(tmp_path, vendor_term="Widget")
+    cli.main(["freeze", "--root", str(root), "--check", str(snap)])
+    out = capsys.readouterr().out
+    assert "cannot say what" in out
+    assert "re-collected from its source" in out
+
+
+def test_values_are_stored_by_default(tmp_path):
+    import json as _json
+
+    root, _ = _estate(tmp_path)
+    snap = tmp_path / "freeze.json"
+    cli.main(["freeze", "--root", str(root), "--out", str(snap)])
+    doc = _json.loads(snap.read_text())
+    assert doc["stores_values"] is True
+    row = doc["rows"]["acme.widgets"]
+    assert row["values"]["vendor_term"] == "Widgets"
+    assert row["values"]["source_quote"]
+
+
+def test_re_freezing_is_never_offered_as_the_fix(tmp_path, capsys):
+    """The request to re-freeze always arrives sounding reasonable."""
+    root, _ = _estate(tmp_path)
+    snap = tmp_path / "freeze.json"
+    cli.main(["freeze", "--root", str(root), "--out", str(snap)])
+    capsys.readouterr()
+    _estate(tmp_path, vendor_term="Widget")
+    cli.main(["freeze", "--root", str(root), "--check", str(snap)])
+    assert "Never re-freeze" in capsys.readouterr().out

@@ -17,6 +17,17 @@ set.
     …do the mapping pass…
     kbqa freeze --root <dir> --check _qa/verbatim.freeze.json
 
+THE SNAPSHOT STORES VALUES, NOT ONLY HASHES. A fingerprint answers "did this
+change"; it cannot answer "to what". In an estate under version control that is
+enough, because the diff is elsewhere. Measured on the estate this was built
+for, there is no version control at all — no `.git` anywhere up to the mount
+boundary — so a hash-only snapshot would report drift and leave nothing to
+restore from, and "revert it" would be advice with no referent.
+
+So the frozen values travel with the fingerprint, and a drift report prints what
+the field used to hold. `--fingerprints-only` drops them for an estate that does
+have history and would rather keep the file small.
+
 The check is deliberately one-sided about new rows. A row that APPEARED is
 reported and does not fail: collection legitimately adds rows, and this command
 is also useful mid-collection. A row that CHANGED or DISAPPEARED fails, because
@@ -46,6 +57,10 @@ EXIT_DRIFT = 1
 EXIT_USAGE = 1
 
 
+def _values(obj: dict, fields: Tuple[str, ...]) -> Dict[str, object]:
+    return {f: obj.get(f) for f in fields}
+
+
 def _fingerprint(obj: dict, fields: Tuple[str, ...]) -> str:
     """A stable hash of the verbatim fields only.
 
@@ -60,7 +75,7 @@ def _fingerprint(obj: dict, fields: Tuple[str, ...]) -> str:
     ).hexdigest()
 
 
-def _collect(root: Path) -> Tuple[Dict[str, dict], List[str]]:
+def _collect(root: Path, keep_values: bool = True) -> Tuple[Dict[str, dict], List[str]]:
     """Every row in the corpus, keyed by id, with where it came from."""
     conv = _conventions()
     fields = active().verbatim_fields
@@ -91,12 +106,15 @@ def _collect(root: Path) -> Tuple[Dict[str, dict], List[str]]:
                     "verbatim fields; frozen from the first seen"
                 )
                 continue
-            rows.setdefault(rid, {"fingerprint": fp, "file": str(path)})
+            record = {"fingerprint": fp, "file": str(path)}
+            if keep_values:
+                record["values"] = _values(rp.obj, fields)
+            rows.setdefault(rid, record)
     return rows, warnings
 
 
-def _record(root: Path, out: Path) -> int:
-    rows, warnings = _collect(root)
+def _record(root: Path, out: Path, keep_values: bool = True) -> int:
+    rows, warnings = _collect(root, keep_values)
     if not rows:
         print(f"freeze: no rows found under {root}")
         print("  Freezing nothing would later compare clean against anything,")
@@ -109,6 +127,7 @@ def _record(root: Path, out: Path) -> int:
         "profile": active().name,
         "verbatim_fields": list(active().verbatim_fields),
         "frozen_at": utc_now_iso(),
+        "stores_values": keep_values,
         "root": str(root),
         "rows": rows,
         "warnings": warnings,
@@ -116,8 +135,13 @@ def _record(root: Path, out: Path) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
-    print(f"frozen {len(rows)} row(s) -> {out}")
+    size_kb = out.stat().st_size // 1024
+    print(f"frozen {len(rows)} row(s) -> {out}  ({size_kb} KB)")
     print(f"  verbatim fields: {', '.join(active().verbatim_fields)}")
+    if keep_values:
+        print("  values stored — a drift report can show what the field held")
+    else:
+        print("  fingerprints only — drift will be detectable but not recoverable")
     for w in warnings[:10]:
         print(f"  warning: {w}")
     if len(warnings) > 10:
@@ -160,6 +184,13 @@ def _check(root: Path, snapshot: Path) -> int:
 
     for rid in changed[:25]:
         print(f"    changed: {rid}  in {after[rid]['file']}")
+        was, now = before[rid].get("values"), after[rid].get("values")
+        if was and now:
+            for f in sorted(was):
+                if was[f] != now.get(f):
+                    print(f"        {f}:")
+                    print(f"          frozen: {was[f]!r}")
+                    print(f"          now   : {now.get(f)!r}")
     if len(changed) > 25:
         print(f"    … and {len(changed) - 25} more")
     for rid in gone[:25]:
@@ -172,9 +203,17 @@ def _check(root: Path, snapshot: Path) -> int:
     if changed or gone:
         print()
         print("  A mapping pass may add a mapping. It may not edit the words")
-        print("  being mapped. Restore the rows from version control rather")
-        print("  than re-freezing — re-freezing records the edit as the new")
-        print("  truth, which is the one thing this command exists to prevent.")
+        print("  being mapped.")
+        if doc.get("stores_values"):
+            print("  Restore each field to its frozen value above.")
+        else:
+            print("  This snapshot holds fingerprints only, so it cannot say what")
+            print("  the field held. Restore from version control if the estate")
+            print("  has any; if it does not, the original is gone and the row")
+            print("  must be re-collected from its source.")
+        print("  Never re-freeze to clear this. Re-freezing records the edit as")
+        print("  the new truth, which is the one thing this command exists to")
+        print("  prevent — and the request to do it always sounds reasonable.")
         return EXIT_DRIFT
     return EXIT_OK
 
@@ -184,6 +223,11 @@ def run(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--root", required=True)
     ap.add_argument("--out", default=None, help="record a snapshot here")
     ap.add_argument("--check", default=None, help="compare against this snapshot")
+    ap.add_argument(
+        "--fingerprints-only", action="store_true",
+        help="omit the frozen values. Only for an estate with version control: "
+             "without either, a drift report cannot say what was lost",
+    )
     args = ap.parse_args(argv)
 
     root = Path(args.root)
@@ -194,4 +238,6 @@ def run(argv: Optional[List[str]] = None) -> int:
         print("freeze: give exactly one of --out (record) or --check (compare)")
         return EXIT_USAGE
 
-    return _record(root, Path(args.out)) if args.out else _check(root, Path(args.check))
+    if args.out:
+        return _record(root, Path(args.out), keep_values=not args.fingerprints_only)
+    return _check(root, Path(args.check))
