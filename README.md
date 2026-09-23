@@ -7,17 +7,14 @@ Built to be a validation layer a collecting agent **cannot pass by editing the
 validator**. Implements a private commissioning specification, which is not
 published — nothing here requires it at runtime.
 
-📖 **[docs/MANUAL.md](docs/MANUAL.md)** — user manual: quickstart, workflows for
-operators and maker agents, the full action surface, what a well-formed dataset
-is, findings reference, troubleshooting, and the **Do/Don't boundary** (§11)
-that says what a maker agent may and may not do when a gate fails.
-🔧 **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** — developer guide:
-architecture, adding a domain, invariants, known traps, release process.
-🗺️ **[docs/pipeline.html](docs/pipeline.html)** — the pipeline drawn: four
-roles, the isolation boundary, the seven gates, and where the guarantees stop.
-Open it in a browser; no build step.
-📋 **[CHANGELOG.md](CHANGELOG.md)** · 🧾 **[docs/DECISIONS.md](docs/DECISIONS.md)**
-— contract changes with the evidence behind them.
+📚 **[docs/README.md](docs/README.md)** — the documentation index, organised by
+[Diátaxis](https://diataxis.fr/): tutorial, how-to, reference, explanation. Every
+document is listed there, and a test fails the build if one is not.
+🤖 **[llms.txt](llms.txt)** — the machine-readable index, following the
+[llms.txt convention](https://llmstxt.org/), for an agent enumerating the docs.
+
+Read the docs for the version you run: replace `main` with your tag in any raw
+URL, since `main` moves and `python3 -m kbqa --version` says what you have.
 
 ## The honest limit, stated first
 

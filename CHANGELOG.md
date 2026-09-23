@@ -16,6 +16,35 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.13.1] — 2026-09-23
+
+### Added
+
+- **`docs/README.md` — the documentation index, organised by
+  [Diátaxis](https://diataxis.fr/).** Four kinds of document, each answering a
+  different kind of question: tutorial, how-to, reference, explanation. The
+  framework's claim is that docs become confusing when the kinds are mixed — a
+  reader looking up a finding code does not want an argument about evidence.
+
+  Nine documents had accumulated with no entry point. The index says which to
+  read for which question, and **a test fails the build if a file exists in
+  `docs/` and the index does not name it.** A document nobody can find is a
+  document nobody reads, which is the same failure as a gate that did not run.
+
+- **`llms.txt`** at the repository root, following the
+  [llms.txt convention](https://llmstxt.org/): H1, a blockquote summary, then a
+  curated directory of links with descriptions. Tested to stay under the
+  convention's 2,000-word cap, to keep its required opening shape, and to list
+  every document the human index lists — a machine index that is a subset of the
+  human one is worse than none.
+
+  It ends with what the package does **not** do, because an agent enumerating
+  the docs to decide whether to trust a verdict needs the limits before the
+  features.
+
+- Both indexes state the version-pinning rule: read the docs for the version you
+  run, `main` moves, and `--version` says what you have.
+
 ## [6.13.0] — 2026-09-23
 
 ### Fixed
