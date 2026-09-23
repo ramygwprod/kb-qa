@@ -16,6 +16,27 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.13.0] — 2026-09-23
+
+### Fixed
+
+- **`freeze` assumed version control, and the estate it was built for has
+  none.** No `.git` anywhere up to the mount boundary. The only recovery
+  material is three month-old tarballs in a directory the project's own rules
+  say not to trust as current.
+
+  So a fingerprint-only snapshot reported drift and left nothing to restore
+  from: *"revert it"* had no referent, and the tempting alternative is to
+  re-freeze — recording the edit as the new truth, which is the single thing the
+  command exists to prevent.
+
+  The snapshot now **stores the frozen values**, and a drift report prints what
+  each field held beside what it holds now. `--fingerprints-only` drops them for
+  an estate that does have history, and says plainly that drift will then be
+  detectable but not recoverable.
+
+  A guard whose remedy cannot be carried out is not a guard.
+
 ## [6.12.1] — 2026-09-23
 
 ### Fixed

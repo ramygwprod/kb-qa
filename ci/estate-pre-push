@@ -32,7 +32,7 @@ if ! python3 -c "import kbqa" >/dev/null 2>&1; then
 pre-push: kbqa is not installed, so the gates did not run.
 
   python3 -m pip install --upgrade pip
-  python3 -m pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.12.1"
+  python3 -m pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.13.0"
 
 If a previous install reported "Successfully installed UNKNOWN-0.0.0", it
 installed an empty package: pip older than 21.3 cannot read this project's

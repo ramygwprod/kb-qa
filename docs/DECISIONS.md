@@ -675,3 +675,42 @@ that have thought about it longer.
 
 **Reversal condition.** If a corpus emerges whose ids are not unique in the
 merged layer, identity must move to a new explicit key — never to a name.
+
+
+## D-015 · A guard carries its own recovery material
+
+**Date:** 2026-09-23 · **Version:** 6.13.0
+
+`kbqa freeze` recorded a sha256 per row and told an operator who saw drift to
+restore from version control. Verified on the estate it was built for: **there
+is no version control.** No `.git` at the root or in any parent; the only
+recovery material is three tarballs, two a month old, in a directory the
+project's own rules mark as retired ground.
+
+A remedy that cannot be carried out is worse than none, because the operator
+still has to do *something* — and the available something is to re-freeze,
+which records the edit as the new truth. The guard would have produced the
+outcome it exists to prevent, while reporting correctly.
+
+**Ruling.** A freeze snapshot stores the verbatim **values**, not only their
+fingerprints, and a drift report prints what each field held. Recovery no longer
+depends on an artifact outside this package.
+
+`--fingerprints-only` remains for an estate with history, and says out loud that
+drift will be detectable and not recoverable — so choosing it is a choice rather
+than a default.
+
+**Cost.** The snapshot grows with the corpus: roughly 600 bytes per row for a
+product catalogue, so a 30,000-row estate produces a file in the tens of
+megabytes. That is the correct trade. A small file that cannot restore anything
+is cheaper and useless.
+
+**The general form.** Every guard in this package should be asked what its
+remedy depends on, and whether that thing exists here. This one depended on a
+version-control system nobody had, and nothing in 250 tests could notice,
+because the dependency was in English rather than in code.
+
+**Reversal condition.** If snapshot size becomes the binding constraint, store
+values only for the fields most at risk of tidying — `vendor_term`,
+`parent_path` — and fingerprints for the rest. Never drop values entirely while
+the estate has no history.
