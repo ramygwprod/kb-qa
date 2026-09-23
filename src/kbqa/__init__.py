@@ -5,7 +5,7 @@ page capture. This package reads a data estate and writes verdicts. It never
 mutates collected data.
 """
 
-__version__ = "6.13.3"
+__version__ = "6.14.0"
 
 # Import registers the bundled profiles; one is activated so a bare
 # `python -m kbqa g2 ...` has a contract to validate against. Override with

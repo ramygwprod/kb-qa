@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kbqa"
-version = "6.13.3"
+version = "6.14.0"
 description = "Validation gates for evidence-grounded data collection"
 requires-python = ">=3.9"
 dependencies = [

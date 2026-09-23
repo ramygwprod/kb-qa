@@ -16,6 +16,34 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.14.0] — 2026-09-23
+
+### Fixed
+
+- **962 rows the parser could not read were two ordinary JSON shapes it did not
+  accept.** Diagnosed by probing the five batches the new `UNREADABLE` line
+  surfaced. Neither was corrupt data.
+
+  | shape | rows | why it failed |
+  |---|---|---|
+  | a JSON array written one object per line, `{…},` | 905 | the trailing comma makes each line *"Extra data"* — the decoder reads the object, then finds the comma |
+  | a pretty-printed object spread over several lines | 57 | the first line is `{` alone, which fails with *"Expecting property name"* at column 2 |
+
+  Rows are now accumulated by **brace depth** rather than by line, with string
+  and escape handling so a brace inside a quote does not end an object, and a
+  single trailing comma is stripped before decoding.
+
+- **The shape is chosen before parsing, by majority vote.** Brace accumulation
+  alone regressed a real case: one unclosed object swallows every good row after
+  it, turning one corrupt row into a lost block. Where most objects close on
+  their own line the reader stays line-at-a-time and a bad row costs one row;
+  where none do, it accumulates. A test pins both directions.
+
+- **The fenced and unfenced readers had drifted apart.** The fenced path had
+  learned these shapes and the bare path had not, so the same content parsed or
+  did not depending on whether somebody had wrapped it in a fence. One reader
+  now serves both.
+
 ## [6.13.3] — 2026-09-23
 
 ### Fixed
