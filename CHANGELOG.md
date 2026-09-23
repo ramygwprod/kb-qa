@@ -16,6 +16,30 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.13.3] — 2026-09-23
+
+### Fixed
+
+- **Rows nothing could parse were in no tier, no total, and no summary.** A
+  sweep counts only rows that came back as objects, so an unreadable row joined
+  neither the tier figures nor the row count — and while the report named them
+  in a table, the terminal summary said nothing at all. On one estate that was
+  **962 rows across 5 batches**, sitting inside figures that otherwise looked
+  accounted for.
+
+  The summary now prints `UNREADABLE` when any exist, and the totals carry
+  `unreadable_batches` and `unreadable_rows`. Kept out of the tiers on purpose:
+  a row nothing could read is not a badly-tiered row, and blending them would
+  produce a number meaning neither.
+
+  A test asserts the line does **not** print on a clean estate — a line that
+  always appears is a line nobody reads.
+
+- **`llms.txt` links pointed at `main` while the file told readers to pin.** It
+  asked a reader to substitute their tag by hand, in a document whose whole
+  argument is that pinning should be mechanical. Links are now rewritten to the
+  tag at release, and `DEVELOPMENT.md` §9 makes that a release step.
+
 ## [6.13.2] — 2026-09-23
 
 ### Fixed

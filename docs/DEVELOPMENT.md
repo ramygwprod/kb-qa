@@ -1,6 +1,6 @@
 # kbqa — developer guide
 
-**Version 6.13.2** · for anyone extending or maintaining the package
+**Version 6.13.3** · for anyone extending or maintaining the package
 
 For *using* the tool, see [MANUAL.md](MANUAL.md). This document covers
 architecture, how to extend it, what must not break, and how to release.
@@ -434,8 +434,11 @@ each `bad_*` fails for exactly one known reason.
 7. Merge, wait for the **Merged** badge, *then* resync locally. Resetting before
    the merge lands silently leaves you on the old commit, and everything after
    operates on the wrong one
-8. Tag `vMAJOR.MINOR.PATCH`, push the tag
-9. Confirm CI is green **on the tag** — that is what corpora pin, not `main`
+8. Rewrite the links in `llms.txt` to the tag being cut — they must never say
+   `main`. A file whose argument is that pinning should be mechanical cannot
+   ask its reader to substitute by hand
+9. Tag `vMAJOR.MINOR.PATCH`, push the tag
+10. Confirm CI is green **on the tag** — that is what corpora pin, not `main`
 
 ### Pinning
 

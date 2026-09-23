@@ -286,6 +286,12 @@ def build(
     verifiable = [b for b in batches if b["tier"] == VERIFIABLE]
     unassessable = [b for b in batches if b["tier"] == UNASSESSABLE]
     unverifiable = [b for b in batches if b["tier"] == UNVERIFIABLE]
+    # Rows nothing could parse are in no tier and in no total — `rec["rows"]`
+    # counts only what came back as an object. Reported in the body but never in
+    # the summary, so 962 of them sat inside figures that looked accounted for.
+    unreadable = [b for b in batches if b["rows_unparseable"]]
+    rows_unreadable = sum(b["rows_unparseable"] for b in unreadable)
+
     rows_v = sum(b["rows"] for b in verifiable)
     rows_x = sum(b["rows"] for b in unassessable)
     rows_u = sum(b["rows"] for b in unverifiable)
@@ -459,6 +465,8 @@ def build(
             "vendors": len(by_vendor),
             "batches": len(batches),
             "rows": total_rows,
+            "unreadable_batches": len(unreadable),
+            "unreadable_rows": rows_unreadable,
             "verifiable_batches": len(verifiable),
             "unassessable_batches": len(unassessable),
             "unverifiable_batches": len(unverifiable),
@@ -535,6 +543,13 @@ def run(argv: List[str]) -> int:
     # Printed, not only written. A file matched by the discovery glob that is
     # not a batch is a discovery defect, and an operator who reads the terminal
     # and not the report would otherwise never learn the totals excluded it.
+    if machine["totals"].get("unreadable_rows"):
+        tt = machine["totals"]
+        print(
+            f"  UNREADABLE   ={tt['unreadable_batches']:>4} batches / "
+            f"{tt['unreadable_rows']:>6} rows could not be parsed at all — "
+            "counted in no tier and in no total above"
+        )
     if machine.get("trees_without_batches"):
         tw = machine["trees_without_batches"]
         print(
