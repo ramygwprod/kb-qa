@@ -166,8 +166,16 @@ def _int_or_none(v) -> Optional[int]:
     return None
 
 
+def stopped_urls(path: Optional[Path]) -> Set[str]:
+    """The URLs that key a stop-condition with a reason, from a stops file."""
+    if path is None or not path.exists():
+        return set()
+    stops, _ = parse_stops(path)
+    return {k for k in stops if k.startswith(("http://", "https://"))}
+
+
 def read_windows(
-    rows_files: List[str], findings: List[Finding]
+    rows_files: List[str], findings: List[Finding], stops: Optional[Set[str]] = None
 ) -> List[Dict[str, object]]:
     """Per-batch window declarations, for surfaces with no published index.
 
@@ -185,7 +193,15 @@ def read_windows(
     `window_returned` counts ITEMS the source returned, not rows written. One
     item can legitimately yield several rows, so rows >= returned is normal and
     rows < returned is the truncation signal.
+
+    A returned page that holds nothing to record — a pricing page, a legal
+    notice — yields no row, and the collector records it as a stop-condition
+    keyed by its URL (`no feature: …`). Such a page is accounted for, so it is
+    counted beside the rows: a page the staging file lists in `pages:`, that no
+    row cites, and that a stop-condition names. Counting rows alone reported
+    those windows as underwritten, which was untrue of them.
     """
+    stops = stops or set()
     WINDOW_ENDS = ("exhausted", "budget", "error")
     windows: List[Dict[str, object]] = []
     for r in rows_files:
@@ -215,12 +231,16 @@ def read_windows(
 
         # Non-tautological: the collector declares how many items came back,
         # the checker counts rows independently. Neither side computes both.
-        if rows_here < ret:
+        pages = fm.get("pages") if isinstance(fm.get("pages"), list) else []
+        cited = {str(x.obj.get("source_url")) for x in parsed.rows if x.obj is not None}
+        stopped_here = sorted({str(u) for u in pages} & stops - cited)
+        if rows_here + len(stopped_here) < ret:
             findings.append(
                 Finding(
                     "window_underwritten",
                     f"{p.name} declares {ret} item(s) returned but holds "
-                    f"{rows_here} row(s); items came back that no row records",
+                    f"{rows_here} row(s) and {len(stopped_here)} page(s) closed by a "
+                    "stop-condition; items came back that nothing records",
                     where=str(p),
                 )
             )
@@ -256,6 +276,7 @@ def read_windows(
             "requested": req,
             "returned": ret,
             "rows": rows_here,
+            "stopped_pages": len(stopped_here),
             "end": str(end) if end is not None else None,
             "offset": _int_or_none(fm.get("window_offset")),
         })
@@ -278,7 +299,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
     if args.stops:
         inputs["stops"] = input_ref(Path(args.stops))
 
-    windows = read_windows(args.rows, findings)
+    windows = read_windows(args.rows, findings, stopped_urls(Path(args.stops) if args.stops else None))
 
     if args.denominator is None:
         return _window_mode(windows, inputs, findings)

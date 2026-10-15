@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install this repository's skills from a tag, and record what was installed.
 #
-#   bash skills/install.sh v6.15.0
+#   bash skills/install.sh v6.15.1
 #
 # Installs kbqa-check and kbqa-merge into ~/.claude/skills/. Run by the
 # operator, in their own terminal (PIPELINE-SPEC §5): installs are never made
@@ -21,7 +21,7 @@
 # Overrides (for tests only): KBQA_REPO, KBQA_SKILLS_HOME, KBQA_BACKUP_DIR.
 set -euo pipefail
 
-TAG="${1:?usage: bash skills/install.sh <tag, e.g. v6.15.0>}"
+TAG="${1:?usage: bash skills/install.sh <tag, e.g. v6.15.1>}"
 REPO="${KBQA_REPO:-https://github.com/ramygwprod/kb-qa.git}"
 HOME_SKILLS="${KBQA_SKILLS_HOME:-$HOME/.claude/skills}"
 BACKUPS="${KBQA_BACKUP_DIR:-$HOME/.kbqa-check-backups}"

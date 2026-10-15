@@ -15,8 +15,17 @@ D="${1:?usage: check_subject.sh <subject dir> [<project root>]}"
 ROOT="${2:-.}"
 LOG="$D/_qa-log.jsonl"
 STOPS="$D/_stop-conditions.md"
+# The mapping references: from the estate's kbqa-estate.json — the file the
+# collector reads too, so both sides name the same codebook and element list —
+# or, without it, the paths this script has always used.
 CODEBOOK="$ROOT/research/standard-work/3-themes/themes-intent-candidate.md"
 ELEMENTS="$ROOT/research/standard-work/4-axis2/apqc-v8-elements.jsonl"
+CONFIG="$ROOT/kbqa-estate.json"
+if [ -f "$CONFIG" ]; then
+  _cfg() { python3 -c 'import json,sys; v=json.load(open(sys.argv[1])).get(sys.argv[2]); print(v or "")' "$CONFIG" "$1"; }
+  C=$(_cfg themes_codebook) && [ -n "$C" ] && CODEBOOK="$ROOT/$C"
+  E=$(_cfg apqc_elements) && [ -n "$E" ] && ELEMENTS="$ROOT/$E"
+fi
 SURFACE_RE='^(product|docs|help)-([0-9]{4}-[0-9]{2}-[0-9]{2})(-w[0-9]{2})?$'
 
 # One line per verdict: gate, verdict, scanned, finding codes.
@@ -69,7 +78,7 @@ for surf in product docs help; do
   else
     echo "   NOTE: no _denominator-$surf-<date>.md — coverage of this surface NOT measured"
   fi
-  python3 -m kbqa g4 --rows "${ROWS[@]}" \
+  python3 -m kbqa g4 --rows "${ROWS[@]}" ${SARG[@]+"${SARG[@]}"} \
     --vendor-dir "$D" --batch "_surface-$surf-windows" --log "$LOG" | summ
 done
 

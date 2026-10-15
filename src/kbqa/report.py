@@ -394,11 +394,13 @@ REMEDIES: Dict[str, Remedy] = {
     ),
     "window_underwritten": Remedy(
         FIXABLE,
-        "The batch declares more items returned than it holds rows. Items came "
-        "back from the source that no row records. Either write the missing "
-        "rows, or correct the declaration if it over-counted — but establish "
-        "which before changing either. Lowering `window_returned` to match the "
-        "rows makes the finding disappear without recovering the items.",
+        "The batch declares more items returned than it holds rows, and no "
+        "stop-condition accounts for the rest. Either write the missing rows; or, "
+        "for a returned page that holds nothing to record, add `<url> | no "
+        "feature: <what the page is>` keyed by its URL; or correct the declaration "
+        "if it over-counted — but establish which before changing anything. "
+        "Lowering `window_returned` to match the rows makes the finding disappear "
+        "without recovering the items.",
     ),
     "unfetchable_source": Remedy(
         FIXABLE,

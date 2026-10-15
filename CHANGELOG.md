@@ -16,6 +16,32 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.15.1] — 2026-10-16
+
+Found by running the collector's output, end to end, through `/kbqa-check` and
+`/kbqa-merge` before the first real collection.
+
+### Fixed
+
+- **G4 called a window underwritten when a returned page held nothing to
+  record.** It counted rows against `window_returned`, so a window whose pricing
+  page or legal notice yielded no row failed — though the collector had recorded
+  that page as `<url> | no feature: <what the page is>`. A page the staging file
+  lists in `pages:`, that no row cites and that a stop-condition names, now
+  counts as recorded. A stop on a page that has a row is not counted twice. The
+  check script passes the stop-conditions to the window check too.
+- **The settings snippets' checkout placeholder had one leading slash.** A rule
+  path with one slash is relative to the settings file, so the substituted rule
+  protected nothing. It is `//ABSOLUTE/…` now, and the README says why.
+
+### Changed
+
+- `check_subject.sh` reads the codebook and APQC element list from the estate's
+  `kbqa-estate.json` when it exists — the file the collector reads — so both
+  sides use the same references. Without it, the old paths still apply.
+
+---
+
 ## [6.15.0] — 2026-10-15
 
 Session 1 of `PIPELINE-SPEC.md` (2026-10-07): the gates and the `kbqa-check`

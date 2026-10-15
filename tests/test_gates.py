@@ -716,6 +716,68 @@ def _windowed(tmp_path, name, requested, returned, n_rows, end="budget", **extra
     return str(f)
 
 
+def _window_with_pages(tmp_path, name, pages, cited, end="exhausted"):
+    """One window whose `pages:` lists every URL it captured; one row per cited page."""
+    import json as _json
+
+    rows = "\n".join(_json.dumps({
+        "id": f"acme.{u.rsplit('/', 1)[-1]}", "vendor_term": u.rsplit("/", 1)[-1].title(),
+        "what_it_does": "Does a thing.", "source_url": u,
+        "source_quote": "Acme Widgets let you compose reusable UI blocks.",
+        "access_date": "2026-08-23", "evidence_grade": "official-doc", "confidence": "high",
+        "mechanism": "Native", "outcome": "yes", "depth_level": "feature",
+    }) for u in cited)
+    fm = ([f"batch: {name}", "pages:"] + [f"  - {u}" for u in pages]
+          + [f"window_requested: 20", f"window_returned: {len(pages)}", f"window_end: {end}"])
+    f = tmp_path / f"_collect-{name}-staging.md"
+    f.write_text("---\n" + "\n".join(fm) + "\n---\n\n" + rows + "\n", encoding="utf-8")
+    return str(f)
+
+
+PAGES = ["https://docs.acme.test/webhooks", "https://docs.acme.test/retries",
+         "https://docs.acme.test/pricing"]
+
+
+def test_a_returned_page_closed_by_a_stop_condition_is_not_underwritten(tmp_path):
+    """A page that holds nothing to record is accounted for, not missing.
+
+    The window returned three pages; two produced rows, and the third is a
+    pricing page the collector recorded as `no feature: …`, keyed by its URL.
+    Counting rows alone called that window underwritten, which is untrue of it.
+    """
+    from kbqa.gates import g4_completeness
+
+    w = _window_with_pages(tmp_path, "docs-2026-08-23-w01", PAGES, PAGES[:2])
+    stops = tmp_path / "_stop-conditions.md"
+    stops.write_text(f"- {PAGES[2]} | no feature: pricing page\n", encoding="utf-8")
+    v, code = g4_completeness.run(["--rows", w, "--stops", str(stops)])
+
+    assert "window_underwritten" not in [f.code for f in v.findings], v.findings
+    assert code == 0, v.findings
+
+
+def test_a_returned_page_with_neither_row_nor_stop_is_still_underwritten(tmp_path):
+    from kbqa.gates import g4_completeness
+
+    w = _window_with_pages(tmp_path, "docs-2026-08-23-w01", PAGES, PAGES[:2])
+    stops = tmp_path / "_stop-conditions.md"
+    stops.write_text("- https://docs.acme.test/elsewhere | no feature: another page\n", encoding="utf-8")
+    v, _ = g4_completeness.run(["--rows", w, "--stops", str(stops)])
+    assert "window_underwritten" in [f.code for f in v.findings]
+
+
+def test_a_stop_on_a_page_that_has_a_row_is_not_counted_twice(tmp_path):
+    """Only pages no row cites can be closed by a stop: a page cannot be both."""
+    from kbqa.gates import g4_completeness
+
+    w = _window_with_pages(tmp_path, "docs-2026-08-23-w01", PAGES, PAGES[:1])
+    stops = tmp_path / "_stop-conditions.md"
+    stops.write_text(f"- {PAGES[0]} | no feature: overview\n- {PAGES[2]} | no feature: pricing page\n",
+                     encoding="utf-8")
+    v, _ = g4_completeness.run(["--rows", w, "--stops", str(stops)])
+    assert "window_underwritten" in [f.code for f in v.findings], "1 row + 1 stopped page < 3 returned"
+
+
 def test_windows_that_never_reach_the_end_do_not_pass(tmp_path):
     """A short window is not proof the list ended.
 

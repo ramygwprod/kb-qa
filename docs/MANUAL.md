@@ -1,6 +1,6 @@
 # kbqa — user manual
 
-**Version 6.15.0** · for operators and for maker agents
+**Version 6.15.1** · for operators and for maker agents
 
 Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -10,7 +10,7 @@ Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.15.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.15.1"
 # Day to day, the pipeline is two commands with a human between them:
 #
 #   /kbqa-collect <Subject Name>     collect until the source runs out
@@ -18,7 +18,7 @@ pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.15.0"
 #
 # Everything below is what those do, and what to run when you want it by hand.
 
-python -m kbqa --version          # must print 6.15.0
+python -m kbqa --version          # must print 6.15.1
 ```
 
 **Audit a corpus** — needs no captures, changes nothing, answers "what here can
@@ -101,7 +101,7 @@ python3 -m venv .venv
 For an estate or CI, install from the pinned tag rather than a branch:
 
 ```bash
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.15.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.15.1"
 ```
 
 **Always a tag, never a branch.** A branch would let the gates and the data they
@@ -940,7 +940,7 @@ not a report.
 | `window_end_undeclared` | fixable | gap | A count cannot say why it stopped; declare exhausted/budget/error |
 | `window_end_unknown_value` | fixable | issue | A fourth value is not a fourth outcome |
 | `window_ended_in_error` | planner | gap | The range beyond is unattempted, not absent. An error is never the end |
-| `window_underwritten` | fixable | issue | More items returned than rows written; items nobody recorded |
+| `window_underwritten` | fixable | issue | More items returned than rows written and pages closed by a stop-condition; items nobody recorded |
 | `zero_rows` | structural | gap | A parser seeing nothing and a file holding nothing look identical |
 
 ---
@@ -994,7 +994,7 @@ and the data they judge change in the same push.
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.15.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.15.1"
 ```
 
 > `pip < 21.3` cannot read this project's metadata and installs an empty package
