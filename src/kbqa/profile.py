@@ -29,7 +29,7 @@ model, so swapping the framework changes no gate logic.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple, Type
+from typing import Callable, Dict, List, Optional, Tuple, Type
 
 from pydantic import BaseModel
 
@@ -62,6 +62,16 @@ class Profile:
     verbatim_fields: Tuple[str, ...] = (
         "id", "source_url", "source_quote", "access_date",
     )
+
+    #: Rules that apply only to batches collected under the current convention
+    #: (K1). Takes one decoded row object, returns (code, message) pairs.
+    #:
+    #: Kept out of the row model on purpose. The model validates every row in
+    #: the estate, and tightening it would fail thousands of legacy rows that
+    #: cannot be repaired — only re-collected. A rule that can only be met by
+    #: re-collection belongs on new batches, and the legacy gap belongs on the
+    #: re-collection list (`sweep --recollect`), not in a verdict.
+    strict_row_check: Optional[Callable[[dict], List[Tuple[str, str]]]] = None
 
     def is_registered(self, field_name: str) -> bool:
         return field_name in self.extensions

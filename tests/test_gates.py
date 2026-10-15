@@ -63,19 +63,47 @@ def test_good_passes_g4(fx):
 
 
 def test_good_passes_g6_once_the_gates_have_actually_run(fx):
-    """G6 passes a clean estate — but only one whose batches were checked.
+    """G6 passes a clean estate — one whose batches were checked AND merged.
 
     This mirrors the real cycle rather than shortcutting it: verdicts exist
-    because the gates ran, not because the fixture ships them.
+    because the gates ran, not because the fixture ships them. Since v6.15.0
+    (K4) a CLEAR batch whose rows are in no tree is not clean, so the merge is
+    part of the cycle too. The tree is `good_proof_count`'s: the same two rows,
+    with a proof line that counts them — what a merge of this batch produces.
+    """
+    import shutil
+
+    from kbqa import cli
+    from kbqa.parsing import parse_staging
+
+    d = fx("good")
+    assert cli.main(["report", "--vendor-dir", str(d), "--batch", "widgets"]) == 0
+
+    shutil.copy(fx("good_proof_count") / "feature-tree.md", d / "feature-tree.md")
+    ids = lambda p: [r.obj["id"] for r in parse_staging(p).rows if r.obj]  # noqa: E731
+    assert ids(d / "feature-tree.md") == ids(d / STAGING), "the tree must hold exactly the batch's rows"
+
+    v, code = g6_integrity.run(["--root", str(d)])
+    assert v.verdict == PASS, v.findings
+    assert code == EXIT_PASS
+
+
+def test_g6_fails_a_batch_that_was_checked_but_never_merged(fx):
+    """K4: CLEAR on its current bytes, and none of its rows in the tree.
+
+    The state the clean-estate test above used to call clean. It is the
+    operator's next action, not a finished batch.
     """
     from kbqa import cli
 
     d = fx("good")
     assert cli.main(["report", "--vendor-dir", str(d), "--batch", "widgets"]) == 0
+    assert not (d / "feature-tree.md").exists()
 
     v, code = g6_integrity.run(["--root", str(d)])
-    assert v.verdict == PASS, v.findings
-    assert code == EXIT_PASS
+    assert [f.code for f in v.findings] == ["clear_not_merged"]
+    assert v.counts["batches_clear"] == 1 and v.counts["clear_not_merged"] == 1
+    assert v.verdict == FAIL and code == EXIT_FAIL
 
 
 def test_g6_fails_an_estate_whose_batches_were_never_checked(fx):
@@ -371,6 +399,59 @@ def test_colliding_labels_do_not_collapse(fx):
     assert len(resolved) == 2, "colliding labels collapsed into one index item"
 
 
+# ── G4 · what the stop-conditions reader takes as an entry ───────────────
+#
+# `good_with_stop` has one index item no row cites. Each test replaces the
+# stop file and asks whether that item counts as stopped.
+
+NEVER_FETCHED = "https://docs.acme.test/widgets/never-fetched"
+
+
+def _g4_with_stops(fx, text):
+    d = fx("good_with_stop")
+    (d / STOPS).write_text(text, encoding="utf-8")
+    v, code = g4_completeness.run(
+        ["--denominator", str(d / DENOM), "--rows", str(d / STAGING), "--stops", str(d / STOPS)]
+    )
+    stops, errors = g4_completeness.parse_stops(d / STOPS)
+    return v, code, stops, errors
+
+
+@pytest.mark.parametrize("text", [
+    # The estate form, `<url> | <reason>` (Incomming/2026-10-07/PIPELINE-SPEC.md:20).
+    f"- {NEVER_FETCHED} | 404 at fetch time on 2026-08-23\n",
+    f"{NEVER_FETCHED} | 404 at fetch time on 2026-08-23\n",
+    f"```\n{NEVER_FETCHED} | 404 at fetch time on 2026-08-23\n```\n",
+], ids=["list-item", "bare-url-line", "fenced"])
+def test_g4_reads_a_pipe_stop_condition(fx, text):
+    v, code, stops, errors = _g4_with_stops(fx, text)
+    assert errors == []
+    assert stops == {NEVER_FETCHED: "404 at fetch time on 2026-08-23"}
+    assert v.verdict == PASS, v.findings
+    assert v.counts["existence_stopped"] == 1
+
+
+@pytest.mark.parametrize("key", [NEVER_FETCHED, "Never Fetched"], ids=["url", "label"])
+def test_g4_still_reads_a_colon_stop_condition(fx, key):
+    v, code, stops, errors = _g4_with_stops(fx, f"- {key}: 404 at fetch time on 2026-08-23\n")
+    assert errors == []
+    assert stops == {key: "404 at fetch time on 2026-08-23"}
+    assert v.verdict == PASS, v.findings
+    assert v.counts["existence_stopped"] == 1
+
+
+@pytest.mark.parametrize("text", [
+    f"{NEVER_FETCHED} |404 at fetch time on 2026-08-23\n",
+    f"{NEVER_FETCHED} | \n",
+], ids=["no-space-after-pipe", "empty-reason"])
+def test_g4_pipe_entry_without_a_spaced_reason_fails(fx, text):
+    v, code, stops, errors = _g4_with_stops(fx, text)
+    assert stops == {}
+    assert len(errors) == 1
+    assert "stop_condition_without_reason" in codes(v)
+    assert v.verdict == FAIL and code == EXIT_FAIL
+
+
 # ── G5 is advisory and must never gate ───────────────────────────────────
 
 
@@ -432,6 +513,30 @@ def test_modified_bronze_fails_g6(fx, tmp_path):
     assert v6.verdict == FAIL
     assert "bronze_modified" in codes(v6)
     assert code == EXIT_FAIL
+
+
+def test_modified_bare_denominator_fails_g6(fx):
+    """`_denominator.md` with no suffix is Bronze too (docs/DECISIONS.md D-009).
+
+    G6 matched only `_denominator-*.md`, so an edit to the bare file after the
+    G4 verdict that vouched for it went unreported. The handover reports 18
+    such files in the estate (reported, not observed from this repo).
+    """
+    from kbqa.verdict import write_verdict
+
+    d = fx("good")
+    bare = d / "_denominator.md"
+    (d / DENOM).rename(bare)
+    v, _ = g4_completeness.run(["--denominator", str(bare), "--rows", str(d / STAGING)])
+    assert v.verdict == PASS, v.findings
+    write_verdict(v, d, "widgets", None)
+
+    bare.write_text(bare.read_text() + "- [Added Later](https://docs.acme.test/widgets/later)\n",
+                    encoding="utf-8")
+
+    v6, code = g6_integrity.run(["--root", str(d)])
+    assert [f.where for f in v6.findings if f.code == "bronze_modified"] == [str(bare)]
+    assert v6.verdict == FAIL and code == EXIT_FAIL
 
 
 def test_stale_manifest_in_verdict_fails_g6(fx):

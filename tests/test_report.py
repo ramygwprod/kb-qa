@@ -19,6 +19,7 @@ from kbqa import cli, report
 from kbqa.report import FIXABLE, PLANNER, REMEDIES, STRUCTURAL
 
 GATES_DIR = pathlib.Path(report.__file__).parent / "gates"
+PROFILES_DIR = pathlib.Path(report.__file__).parent / "profiles"
 
 
 # Calls whose first positional argument is a finding code. `_bulk` is a helper
@@ -28,12 +29,51 @@ GATES_DIR = pathlib.Path(report.__file__).parent / "gates"
 CODE_EMITTERS = ("Finding", "_bulk")
 
 
+def _finding_wrappers(tree):
+    """Local helpers that pass their first parameter on as a Finding's code.
+
+    `_bulk` was named by hand above; a second helper (`f` in mapcheck, v6.15.0)
+    was not, and its 18 codes looked unemitted. Recognising the shape instead of
+    the name means the next helper is seen too.
+    """
+    names = set()
+    for fn in ast.walk(tree):
+        if not (isinstance(fn, ast.FunctionDef) and fn.args.args):
+            continue
+        first = fn.args.args[0].arg
+        for c in ast.walk(fn):
+            if (isinstance(c, ast.Call) and getattr(c.func, "id", "") == "Finding"
+                    and c.args and isinstance(c.args[0], ast.Name) and c.args[0].id == first):
+                names.add(fn.name)
+    return names
+
+
+def _strict_check_codes():
+    """Codes a profile's `strict_row_check` returns as `(code, message)` tuples.
+
+    G2 turns each into `Finding(code, msg, where)` with `code` a variable, so no
+    literal appears in the gates (g2_conformance.py: `for code, msg in strict(…)`).
+    """
+    codes = set()
+    for p in sorted(PROFILES_DIR.glob("*.py")):
+        for fn in ast.walk(ast.parse(p.read_text(encoding="utf-8"))):
+            if not (isinstance(fn, ast.FunctionDef) and fn.name == "strict_row_check"):
+                continue
+            for t in ast.walk(fn):
+                if (isinstance(t, ast.Tuple) and t.elts and isinstance(t.elts[0], ast.Constant)
+                        and isinstance(t.elts[0].value, str)):
+                    codes.add(t.elts[0].value)
+    return codes
+
+
 def _emitted_codes():
     """Every literal code passed to a finding-emitting call in the gates."""
-    codes = set()
+    codes = _strict_check_codes()
     for p in sorted(GATES_DIR.glob("*.py")):
-        for node in ast.walk(ast.parse(p.read_text(encoding="utf-8"))):
-            if not (isinstance(node, ast.Call) and getattr(node.func, "id", "") in CODE_EMITTERS):
+        tree = ast.parse(p.read_text(encoding="utf-8"))
+        emitters = set(CODE_EMITTERS) | _finding_wrappers(tree)
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and getattr(node.func, "id", "") in emitters):
                 continue
             if node.args and isinstance(node.args[0], ast.Constant):
                 codes.add(node.args[0].value)
@@ -41,6 +81,17 @@ def _emitted_codes():
                 if kw.arg == "code" and isinstance(kw.value, ast.Constant):
                     codes.add(kw.value.value)
     return codes
+
+
+def test_the_code_scan_sees_every_emission_path():
+    """The scan is itself a guard, so it must see each path a code takes.
+
+    One code per path, checked by name: a literal `Finding`, the `_bulk` helper,
+    a helper found by shape (mapcheck's `f`), and a profile's strict row check.
+    """
+    found = _emitted_codes()
+    for code in ("zero_rows", "clear_not_merged", "theme_unknown", "id_not_first_key"):
+        assert code in found, f"the code scan no longer sees {code!r}"
 
 
 # --------------------------------------------------------------------------
@@ -120,10 +171,29 @@ def test_missing_capture_is_a_structural_gap(fx, tmp_path):
     d = fx("bad_missing_capture")
     cli.main(["report", "--vendor-dir", str(d), "--batch", "widgets"])
     text = (d / "_qa" / "widgets.report.md").read_text()
-    assert "**BLOCKED**" in text
+    # K7: with no capture, G1 and G3 scan 0 items, so the batch is NOT CHECKED
+    # (qa-diffs/README.md K7; PIPELINE-SPEC.md §2 lists it as its own status).
+    assert "**NOT CHECKED**" in text
     assert "capture_missing" in text
     assert "**class**: structural · **nature**: gap" in text
     assert "nothing to check them against" in text
+
+
+def test_missing_capture_is_never_clear_or_blocked(fx):
+    """K7: "legacy batches without captures now read NOT CHECKED (G1/G3 scanned 0)
+    instead of BLOCKED". NOT CHECKED is never CLEAR, so merge refuses it; and a
+    batch that was not checked must not read as one that was checked and failed.
+    """
+    import json
+    d = fx("bad_missing_capture")
+    cli.main(["report", "--vendor-dir", str(d), "--batch", "widgets"])
+    text = (d / "_qa" / "widgets.report.md").read_text()
+    data = json.loads((d / "_qa" / "widgets.report.json").read_text())
+
+    assert data["status"] == "NOT CHECKED"
+    assert {"g1_capture", "g3_grounding"} <= set(data["not_checked"])
+    assert "**CLEAR**" not in text
+    assert "**BLOCKED**" not in text
 
 
 # --------------------------------------------------------------------------

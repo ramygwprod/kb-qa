@@ -13,6 +13,7 @@ from typing import List, Optional
 from . import __version__, freeze, mappings, probe, profile, report, sweep
 from .gates import g0_permission, g1_capture, g2_conformance
 from .gates import g3_grounding, g4_completeness, g5_bundles, g6_integrity
+from .gates import mapcheck, surfaces
 from .manifest import MANIFEST, MANIFEST_SHA256
 from .verdict import write_verdict
 
@@ -24,6 +25,9 @@ GATES = {
     "g4": g4_completeness,
     "g5": g5_bundles,
     "g6": g6_integrity,
+    # Not numbered gates, but they emit verdicts and take the recording flags.
+    "surfaces": surfaces,
+    "mapcheck": mapcheck,
 }
 
 USAGE = """kbqa {version} — validation gates for evidence-grounded collection
@@ -38,7 +42,12 @@ gates:
   g4 [--denominator <f>] --rows <f>... [--stops <f>]  completeness
        no --denominator: window mode, needs a terminal zero-return
   g5 --rows <f>...                             bundles (advisory, always exit 0)
-  g6 --root <project>                          integrity
+  g6 --root <project>                          integrity (+ CLEAR batches not merged)
+  surfaces --subject <d> [--stops <f>]         the three mandatory surfaces, per subject
+  mapcheck --staging <f> --map <A> [--map <B>] --codebook <f> --elements <f> [--subject <d>]
+                                               mapping files: well-formed, codes exist, A/B agreement
+
+every check prints `scanned`; scanned 0 is NOT CHECKED, never clean
 
 recording args (optional, apply to every gate):
   --vendor-dir <dir>   write _qa/<batch>.<gate>.json under this directory
@@ -46,11 +55,14 @@ recording args (optional, apply to every gate):
   --log <path>         append one line to this _qa-log.jsonl
 
 cycle:
-  report --vendor-dir <d> --batch <name> [--denominator <f>] [--stops <f>]
+  report --vendor-dir <d> --batch <name> [--denominator <f>] [--stops <f>] [--log <f>]
                                                run G1-G3 (+G4), write a
-                                               remediation report for the maker
-  sweep  --root <estate> [--field-values]      audit the whole estate: which
-                                               batches can be checked at all
+                                               remediation report for the maker;
+                                               with --log: fix round, PARKED state
+  sweep  --root <estate> [--field-values] [--recollect <f.jsonl>]
+                                               audit the whole estate: which
+                                               batches can be checked at all;
+                                               --recollect writes the re-collection list
 
 diagnostics:
   probe --staging <f> [--capture <f>]          report file SHAPE, not content

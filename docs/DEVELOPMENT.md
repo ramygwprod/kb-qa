@@ -1,6 +1,6 @@
 # kbqa — developer guide
 
-**Version 6.14.1** · for anyone extending or maintaining the package
+**Version 6.15.0** · for anyone extending or maintaining the package
 
 For *using* the tool, see [MANUAL.md](MANUAL.md). This document covers
 architecture, how to extend it, what must not break, and how to release.
@@ -60,6 +60,8 @@ The test for which layer something belongs in:
 | `manifest.py` | SHA-256 of every module, computed at import |
 | `verdict.py` | `Verdict`, `Finding`, JSON writer, log writer |
 | `gates/g0…g6` | the checks. Read-only, write only a verdict |
+| `gates/surfaces.py` | per subject: each of `product`, `docs`, `help` is indexed or stopped with a URL-keyed reason |
+| `gates/mapcheck.py` | mapping files `_map-<batch>-<A\|B>.jsonl`: well-formed, every code exists, A/B agreement — never that a mapping is right |
 | `report.py` | remediation report for the maker |
 | `sweep.py` | corpus-wide audit |
 | `freeze.py` | fingerprints `Profile.verbatim_fields`; answers *did interpreting the data change it* |

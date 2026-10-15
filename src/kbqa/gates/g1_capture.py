@@ -30,7 +30,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
 
     if not staging.exists():
         findings.append(Finding("staging_missing", f"staging file not found: {staging}"))
-        v = Verdict(GATE, FAIL, inputs, {"declared_pages": 0, "checked": 0, "failed": 1}, findings)
+        v = Verdict(GATE, FAIL, inputs, {"declared_pages": 0, "checked": 0, "scanned": 0, "failed": 1}, findings)
         return v, EXIT_FAIL
 
     # 1 · capture exists and is non-empty
@@ -38,7 +38,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
         findings.append(
             Finding("capture_missing", f"capture file not found: {capture}")
         )
-        v = Verdict(GATE, FAIL, inputs, {"declared_pages": 0, "checked": 0, "failed": 1}, findings)
+        v = Verdict(GATE, FAIL, inputs, {"declared_pages": 0, "checked": 0, "scanned": 0, "failed": 1}, findings)
         return v, EXIT_FAIL
 
     if capture.stat().st_size == 0:
@@ -123,6 +123,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
         "pages_source": parsed.pages_source,
         "capture_blocks": len(cap.blocks),
         "checked": len(declared),
+        "scanned": len(declared),
         "failed": len(findings),
     }
     verdict = PASS if not findings else FAIL

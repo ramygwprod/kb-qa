@@ -5,6 +5,8 @@ Estate-wide checks that no single-batch gate can see:
   · every feature-tree's `proof:` count matches its own content
   · no Bronze file changed after the verdict that vouched for it
   · no staging file attests `fetched_by_this_agent: true` (role collapse)
+  · no batch is CLEAR on its current bytes but absent from its tree (K4)
+  · something was scanned at all — an empty root is NOT CHECKED, never clean (K7)
 
 The manifest check is tamper-EVIDENCE, not tamper-proofing. It tells a human
 that a verdict came from code other than the approved code. Only CI running
@@ -19,12 +21,12 @@ from typing import List, Optional, Tuple
 
 from ..manifest import MANIFEST_SHA256, sha256_file
 from ..parsing import parse_staging
+from ..profile import conventions
 from ..verdict import FAIL, PASS, Finding, Verdict
 from . import EXIT_FAIL, EXIT_PASS
 
 GATE = "g6_integrity"
 
-BRONZE_PATTERNS = ("_robots-*.txt", "_capture-*.raw.txt", "_denominator-*.md")
 PROOF_RE = re.compile(r"^proof:\s*(?P<val>.+?)\s*$", re.MULTILINE)
 INT_RE = re.compile(r"\d+")
 
@@ -72,6 +74,13 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
             )
 
     # 2 · Bronze files modified after the verdict that vouched for them
+    #
+    # The patterns come from the active profile's conventions. A private copy
+    # here had stayed at `_denominator-*.md` after the conventions moved to
+    # `_denominator*.md` (docs/DECISIONS.md D-009), so an edited bare
+    # `_denominator.md` was never checked.
+    conv = conventions()
+    bronze_patterns = (conv.robots_glob, conv.capture_glob, conv.denominator_glob)
     bronze_checked = 0
     for vf in verdict_files:
         try:
@@ -87,7 +96,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
             if not p or not recorded_hash:
                 continue
             path = Path(p)
-            if not any(path.match(pat) for pat in BRONZE_PATTERNS):
+            if not any(path.match(pat) for pat in bronze_patterns):
                 continue
             if not path.exists():
                 findings.append(
@@ -168,7 +177,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
     # "No verdict" and "a verdict for different bytes" are distinguished
     # deliberately: the first was never checked, the second was checked and
     # then changed. Only the second implies someone saw a result.
-    unchecked, stale, failing = [], [], []
+    unchecked, stale, failing, clear = [], [], [], []
     for stg in stagings:
         current = sha256_file(stg)
         qa_dir = stg.parent / "_qa"
@@ -193,6 +202,33 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
             continue
         if any(d.get("verdict") == FAIL for _, d, sha in recorded if sha == current):
             failing.append(stg)
+            continue
+        # CLEAR = the three batch gates each passed on the bytes the file holds now.
+        passed = {d.get("gate") for _, d, sha in recorded
+                  if sha == current and d.get("verdict") == PASS}
+        if {"g1_capture", "g2_conformance", "g3_grounding"} <= passed:
+            clear.append(stg)
+
+    # 6 · K4 — a CLEAR batch whose rows are not in the tree is stranded.
+    #
+    # "Merged" is read from the tree itself, by id: every row id of the batch is
+    # present in the subject's feature-tree.md. No merge log is trusted for it,
+    # because a log can say a merge happened that the tree does not show.
+    stranded, partial = [], []
+    tree_ids_cache = {}
+    for stg in clear:
+        tree = stg.parent / "feature-tree.md"
+        if tree not in tree_ids_cache:
+            tree_ids_cache[tree] = (
+                {str(r.obj.get("id")) for r in parse_staging(tree).rows if r.obj}
+                if tree.exists() else set()
+            )
+        ids = [str(r.obj.get("id")) for r in parse_staging(stg).rows if r.obj]
+        present = [i for i in ids if i in tree_ids_cache[tree]]
+        if not present:
+            stranded.append(stg)
+        elif len(present) < len(ids):
+            partial.append((stg, len(ids) - len(present), len(ids)))
 
     def _bulk(code: str, paths: List[Path], summary: str) -> None:
         for p in paths[:15]:
@@ -209,6 +245,24 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
           "the file changed after it was checked")
     _bulk("batch_known_failing", failing,
           "the current verdict for this batch is FAIL and it is still in the estate")
+    _bulk("clear_not_merged", stranded,
+          "CLEAR on its current bytes, and none of its rows is in feature-tree.md — "
+          "the operator runs /kbqa-merge")
+    for stg, missing, total in partial:
+        findings.append(Finding(
+            "clear_partially_merged",
+            f"{stg}: CLEAR, but {missing} of {total} row ids are not in feature-tree.md — "
+            "a merge that stopped part-way, or ids changed; a human looks before anything merges",
+            where=str(stg),
+        ))
+
+    scanned = checked_verdicts + len(trees) + len(stagings)
+    if scanned == 0:
+        findings.append(Finding(
+            "nothing_checked",
+            f"no verdict, feature tree or staging file under {root}; an empty check "
+            "is NOT CHECKED, not clean",
+        ))
 
     counts = {
         "verdicts": checked_verdicts,
@@ -220,6 +274,10 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
         "batches_unchecked": len(unchecked),
         "batches_stale": len(stale),
         "batches_known_failing": len(failing),
+        "batches_clear": len(clear),
+        "clear_not_merged": len(stranded),
+        "clear_partially_merged": len(partial),
+        "scanned": scanned,
         "failed": len(findings),
     }
     verdict = PASS if not findings else FAIL

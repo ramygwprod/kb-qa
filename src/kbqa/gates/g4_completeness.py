@@ -95,32 +95,65 @@ def disambiguate(items: List[Tuple[str, str]]) -> Dict[str, Tuple[str, str]]:
     return resolved
 
 
-def parse_stops(path: Path) -> Tuple[Dict[str, str], List[str]]:
-    """Stop-conditions keyed by URL or label. Each MUST carry a reason."""
-    stops: Dict[str, str] = {}
+STOP_PIPE_RE = re.compile(r"^(?P<key>\S.*?)\s+\|\s+(?P<reason>.*?)\s*$")
+LIST_ITEM_RE = re.compile(r"^\s*[-*]\s+")
+FENCE_RE = re.compile(r"^\s*```")
+
+
+def read_stop_entries(path: Path) -> Tuple[List[Tuple[str, str, int]], List[str], int]:
+    """Stop-condition entries as (key, reason, line_no), errors, lines ignored.
+
+    The file's documented form is `<url> | <reason>`, one per line, and the
+    estate's files carry YAML frontmatter and prose around those lines. The
+    earlier parser read every non-blank line as an entry in `<key>: <reason>`
+    form, so on a real file it reported the frontmatter keys as stop-conditions
+    and every `<url> | <reason>` line without a later `: ` as "no reason" —
+    11 false findings on one subject.
+
+    An ENTRY is a line inside a ``` fence, a list item, or a line that starts
+    with a URL. Everything else — frontmatter, headings, prose — is commentary,
+    and is counted rather than silently dropped. Both separators are accepted;
+    an entry with neither is still an error.
+    """
+    entries: List[Tuple[str, str, int]] = []
     errors: List[str] = []
-    for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    ignored = 0
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = 0
+    if lines and lines[0].strip() == "---":
+        for i in range(1, len(lines)):
+            if lines[i].strip() == "---":
+                start = i + 1
+                break
+        ignored += start
+    in_fence = False
+    for line_no, line in enumerate(lines[start:], start=start + 1):
         s = line.strip()
-        if not s or s.startswith("#") or s.startswith("---"):
+        if FENCE_RE.match(s):
+            in_fence = not in_fence
             continue
-        s = s.lstrip("-").strip()
         if not s:
             continue
-        # The key is often a URL, so the separator is a colon followed by
-        # whitespace — never the colon in "https://".
-        m = STOP_RE.match(s)
-        if not m:
+        is_item = bool(LIST_ITEM_RE.match(line))
+        if not (in_fence or is_item or s.startswith(("http://", "https://"))):
+            ignored += 1
+            continue
+        s = LIST_ITEM_RE.sub("", s).strip()
+        m = STOP_PIPE_RE.match(s) or STOP_RE.match(s)
+        if not m or not m.group("reason").strip():
             errors.append(
                 f"line {line_no}: stop-condition has no reason: {line.strip()!r} "
-                "(expected '<url-or-label>: <reason>')"
+                "(expected '<url> | <reason>' or '<url-or-label>: <reason>')"
             )
             continue
-        key, reason = m.group("key").strip(), m.group("reason").strip()
-        if not reason:
-            errors.append(f"line {line_no}: stop-condition {key!r} has an empty reason")
-            continue
-        stops[key] = reason
-    return stops, errors
+        entries.append((m.group("key").strip(), m.group("reason").strip(), line_no))
+    return entries, errors, ignored
+
+
+def parse_stops(path: Path) -> Tuple[Dict[str, str], List[str]]:
+    """Stop-conditions keyed by URL or label. Each MUST carry a reason."""
+    entries, errors, _ = read_stop_entries(path)
+    return {k: r for k, r, _ in entries}, errors
 
 
 def _int_or_none(v) -> Optional[int]:
@@ -253,7 +286,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
     denom = Path(args.denominator)
     if not denom.exists():
         findings.append(Finding("denominator_missing", f"not found: {denom}"))
-        return Verdict(GATE, FAIL, inputs, {}, findings), EXIT_FAIL
+        return Verdict(GATE, FAIL, inputs, {"scanned": 0, "failed": 1}, findings), EXIT_FAIL
 
     items = parse_denominator(denom)
     if not items:
@@ -331,6 +364,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
         "evidence_covered_by_name": len(by_name),
         "without_row": len(without_row),
         "rows": total_rows,
+        "scanned": len(resolved),
         "failed": len(without_row),
     }
 
@@ -374,7 +408,7 @@ def _window_mode(
             )
         )
         return (
-            Verdict(GATE, FAIL, inputs, {"windows": 0, "failed": 1}, findings),
+            Verdict(GATE, FAIL, inputs, {"windows": 0, "scanned": 0, "failed": 1}, findings),
             EXIT_FAIL,
         )
 
@@ -448,6 +482,7 @@ def _window_mode(
 
     counts = {
         "windows": len(ordered),
+        "scanned": len(ordered),
         "items_returned": sum(int(w["returned"]) for w in ordered),
         "rows": sum(int(w["rows"]) for w in ordered),
         "reached_end_of_list": len(exhausted),

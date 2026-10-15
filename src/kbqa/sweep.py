@@ -127,6 +127,7 @@ def audit_batch(staging: Path, root: Optional[Path] = None, depth: int = 2) -> d
         return rec
 
     rec["row_format"] = parsed.row_format
+    rec["naive_rows"] = parsed.naive_count
     rec["rows"] = len([r for r in parsed.rows if r.obj is not None])
     rec["rows_unparseable"] = len([r for r in parsed.rows if r.obj is None])
 
@@ -261,11 +262,22 @@ def build(
         if not any(fnmatch.fnmatch(str(g.relative_to(root)), pat) for pat in exclude)
     ]
     tree_subjects: Dict[str, int] = {}
+    # K8 · Merged rows with no `parent_path`. They are never edited — the
+    # breadcrumb is the subject's words and was not captured — so they are
+    # listed for re-collection, by id.
+    trees_no_parent: List[dict] = []
     for g in trees:
         subj = vendor_of(g, root, depth)
         rows_in_tree = 0
         try:
-            rows_in_tree = len([r for r in parse_staging(g).rows if r.obj is not None])
+            objs = [r.obj for r in parse_staging(g).rows if r.obj is not None]
+            rows_in_tree = len(objs)
+            empty = [str(o.get("id")) for o in objs
+                     if not isinstance(o.get("parent_path"), str) or not o["parent_path"].strip()]
+            if empty:
+                trees_no_parent.append({"subject": subj, "path": str(g.relative_to(root)),
+                                        "rows": len(empty), "tree_rows": rows_in_tree,
+                                        "ids": empty})
         except Exception:  # noqa: BLE001 — an unreadable tree is still a tree
             pass
         tree_subjects[subj] = tree_subjects.get(subj, 0) + rows_in_tree
@@ -478,6 +490,7 @@ def build(
         "batches": batches,
         "excluded": excluded,
         "trees_without_batches": ungrounded_subjects,
+        "trees_no_parent_path": trees_no_parent,
         "tree_subjects": len(tree_subjects),
         "not_batches": [b["path"] for b in not_batches],
         "fields": fields,
@@ -485,8 +498,69 @@ def build(
     return "\n".join(lines) + "\n", machine
 
 
+RECOLLECT_REASON = {
+    UNVERIFIABLE: "no capture — re-fetch and re-collect; the rows cannot be grounded",
+    UNASSESSABLE: "capture has no page markers — re-fetch with per-page markers",
+    "batch-rows-unreadable": "rows the parser cannot read as rows — rewrite from the capture, or re-collect",
+    "tree-without-batch": "merged rows with no staging batch or capture anywhere — re-collect",
+    "tree-rows-no-parent-path": "merged rows with an empty parent_path — re-collect; never edit the rows",
+}
+
+
+def recollect_items(machine: dict) -> List[dict]:
+    """K8 · The re-collection list, as items a planner works through.
+
+    Derived entirely from this sweep's own findings — nothing is typed. Every
+    item names what is affected and why; none says what to change in a row,
+    because no row is changed: it is replaced by re-collection.
+    """
+    items: List[dict] = []
+    for b in machine["batches"]:
+        if b["tier"] in (UNVERIFIABLE, UNASSESSABLE):
+            items.append({"kind": b["tier"], "subject": b["vendor"], "path": b["path"],
+                          "rows": b["rows"], "reason": RECOLLECT_REASON[b["tier"]]})
+        naive = b.get("naive_rows")
+        if b.get("rows_unparseable") or (naive is not None and naive != b["rows"]):
+            items.append({"kind": "batch-rows-unreadable", "subject": b["vendor"],
+                          "path": b["path"], "rows": max(naive or 0, b["rows"]),
+                          "rows_parsed": b["rows"], "naive_rows": naive,
+                          "rows_unparseable": b.get("rows_unparseable", 0),
+                          "reason": RECOLLECT_REASON["batch-rows-unreadable"]})
+    for subj, n in machine["trees_without_batches"].items():
+        items.append({"kind": "tree-without-batch", "subject": subj, "path": None,
+                      "rows": n, "reason": RECOLLECT_REASON["tree-without-batch"]})
+    for t in machine["trees_no_parent_path"]:
+        items.append({"kind": "tree-rows-no-parent-path", "subject": t["subject"],
+                      "path": t["path"], "rows": t["rows"], "tree_rows": t["tree_rows"],
+                      "ids": t["ids"], "reason": RECOLLECT_REASON["tree-rows-no-parent-path"]})
+    return items
+
+
+def write_recollect(machine: dict, target: Path) -> List[dict]:
+    items = recollect_items(machine)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with open(target, "w", encoding="utf-8") as fh:
+        for it in items:
+            fh.write(json.dumps(it, ensure_ascii=False) + "\n")
+    by_kind = Counter(i["kind"] for i in items)
+    rows_by_kind = Counter()
+    for i in items:
+        rows_by_kind[i["kind"]] += i["rows"] or 0
+    md = [f"# Re-collection list", "",
+          f"Generated `{machine['generated']}` by kbqa `{__version__}` from `sweep --root {machine['root']}`.",
+          f"One line per item in `{target.name}`. Rows are never edited; each item is re-collected.", "",
+          "| kind | items | rows | reason |", "|---|---|---|---|"]
+    for k in RECOLLECT_REASON:
+        md.append(f"| `{k}` | {by_kind.get(k, 0)} | {rows_by_kind.get(k, 0)} | {RECOLLECT_REASON[k]} |")
+    md += ["", "Items can overlap (one subject may appear under several kinds); "
+           "the totals per kind are not to be summed into one figure.", ""]
+    target.with_suffix(".md").write_text("\n".join(md) + "\n", encoding="utf-8")
+    return items
+
+
 def run(argv: List[str]) -> int:
     root: Optional[Path] = None
+    recollect: Optional[Path] = None
     out: Optional[Path] = None
     with_fields = False
     exclude: List[str] = []
@@ -510,6 +584,8 @@ def run(argv: List[str]) -> int:
             i += 2; continue
         if arg == "--field-values":
             with_fields = True; i += 1; continue
+        if arg == "--recollect" and nxt:
+            recollect = Path(nxt); i += 2; continue
         print(f"sweep: unexpected argument {arg!r}")
         return 1
 
@@ -564,6 +640,12 @@ def run(argv: List[str]) -> int:
             "frontmatter, held no rows — excluded from every figure above; "
             "named in the report"
         )
+    if recollect is not None:
+        items = write_recollect(machine, recollect)
+        print(f"re-collection list:   {recollect}  ({len(items)} item(s); "
+              f"summary {recollect.with_suffix('.md')})")
+    print(f"  scanned: {t['batches']} batch(es), {machine['tree_subjects']} tree subject(s)"
+          + ("  — NOT CHECKED: nothing matched" if not t["batches"] and not machine["tree_subjects"] else ""))
     # Auditing is not gating: an estate that is mostly unverifiable is a fact to
     # record, not a run to fail. Exit non-zero only when nothing could be read.
     return 0 if machine["totals"]["batches"] else 1

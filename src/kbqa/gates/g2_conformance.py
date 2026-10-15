@@ -14,7 +14,7 @@ from typing import List, Optional, Tuple
 
 from pydantic import ValidationError
 
-from ..profile import row_model
+from ..profile import active, conventions, row_model
 from ..parsing import parse_staging
 from ..verdict import FAIL, PASS, Finding, Verdict, input_ref
 from . import EXIT_FAIL, EXIT_PASS
@@ -37,7 +37,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
 
     if not staging.exists():
         findings.append(Finding("staging_missing", f"staging file not found: {staging}"))
-        return Verdict(GATE, FAIL, inputs, {"rows": 0, "checked": 0, "failed": 1}, findings), EXIT_FAIL
+        return Verdict(GATE, FAIL, inputs, {"rows": 0, "checked": 0, "scanned": 0, "failed": 1}, findings), EXIT_FAIL
 
     parsed = parse_staging(staging)
     if parsed.frontmatter_error:
@@ -58,10 +58,18 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
         findings.append(
             Finding(
                 "parser_disagrees_with_naive_count",
-                f"parser found {len(parsed.rows)} rows, naive '^{{\"id\"' count found "
-                f"{parsed.naive_count}; the parser is wrong until proven otherwise",
+                f"parser found {len(parsed.rows)} rows, naive count of '\"id\":' keys "
+                f"found {parsed.naive_count}; the parser is wrong until proven otherwise",
             )
         )
+
+    # K1 · rules for batches collected under the current naming convention.
+    # A legacy batch is not checked against them — it is re-collected, never
+    # edited — and the counts say which happened, so "not applied" is visible.
+    batch = conventions().batch_of(staging.name)
+    surface = conventions().surface_of(batch)
+    strict = active().strict_row_check if surface else None
+    strict_checked = 0
 
     validated = 0
     seen_ids = {}
@@ -88,6 +96,11 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
                 )
             )
             continue
+
+        if strict is not None:
+            strict_checked += 1
+            for code, msg in strict(rp.obj):
+                findings.append(Finding(code, msg, where))
 
         try:
             row = row_model().model_validate(rp.obj)
@@ -125,8 +138,12 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
     counts = {
         "rows": len(parsed.rows),
         "naive_rows": parsed.naive_count,
+        "scanned": len(parsed.rows),
         "checked": len(parsed.rows),
         "validated": validated,
+        "surface": surface or "legacy",
+        "strict_rules": "applied" if strict is not None else "not applied (legacy batch name)",
+        "strict_checked": strict_checked,
         "failed": len(findings),
     }
     verdict = PASS if not findings else FAIL

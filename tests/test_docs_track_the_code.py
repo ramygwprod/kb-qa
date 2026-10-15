@@ -45,8 +45,14 @@ def test_the_manual_states_the_real_code_count():
 
 
 def dispatched_commands():
-    """Subcommands the CLI answers to, read from its dispatch rather than a list."""
-    return set(re.findall(r'argv\[0\] == "([a-z][a-z0-9_-]*)"', CLI))
+    """Subcommands the CLI answers to, read from its dispatch rather than a list.
+
+    Two dispatch paths: an `argv[0] == "…"` branch, and the `GATES` table. Reading
+    only the first let v6.15.0's `surfaces` and `mapcheck` — both added to the
+    table — ship with no line in the manual.
+    """
+    from kbqa.cli import GATES
+    return set(re.findall(r'argv\[0\] == "([a-z][a-z0-9_-]*)"', CLI)) | set(GATES)
 
 
 @pytest.mark.parametrize("command", sorted(dispatched_commands()))

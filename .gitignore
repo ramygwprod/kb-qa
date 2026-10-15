@@ -2,6 +2,10 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+# Local package builds. A v5.0.0 copy of the package was committed here once
+# (#7) and stayed, stale, until v6.15.0; the package builds from src/ only.
+build/
+dist/
 .pytest_cache/
 .DS_Store
 
@@ -17,3 +21,15 @@ __pycache__/
 # the scale of the collection. The gates were built from it, but nothing in
 # this package requires it at runtime.
 Requirements/
+
+# Estate artifacts handed over for inspection. The operator copies files here
+# deliberately — it is the sanctioned channel across the isolation boundary,
+# since this session cannot read the estate itself.
+#
+# Never published. This repository is PUBLIC, and anything carried across that
+# boundary may name subjects, cite their URLs, or quote their pages. The same
+# reasoning as Requirements/ above: readable on disk, invisible to git.
+incoming/
+Incomming/
+Incoming/
+INCOMING/

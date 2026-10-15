@@ -16,6 +16,77 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.15.0] — 2026-10-15
+
+Session 1 of `PIPELINE-SPEC.md` (2026-10-07): the gates and the `kbqa-check`
+skill for the five-step flow. The gate changes are the operator's reviewed
+patch `qa-diffs/02-kb-qa-v6.15.0.patch` (K1–K8), applied unchanged; the
+entries marked *added here* were made on top of it. Figures from the estate
+are as **reported** by the handover — this repository never reads the estate.
+
+### Added
+
+- **K1 · strict rules for new batches.** A batch named
+  `<surface>-<YYYY-MM-DD>[-wNN]` is held to `id_not_first_key`,
+  `parent_path_empty` and `evidence_grade_spelling`; a legacy-named batch is
+  not, and its verdict says so.
+- **K2 · `surfaces`.** Each subject has `product`, `docs` and `help`, each
+  indexed by `_denominator-<surface>-<date>.md` or stopped with a URL-keyed
+  `<url> | surface <slug> not published: …`.
+- **K3 · one fix round, then PARKED,** counted from the staging hashes in the
+  subject's `_qa-log.jsonl`.
+- **K4 · `clear_not_merged`, `clear_partially_merged` in G6:** a batch CLEAR on
+  its current bytes whose rows are not in `feature-tree.md`.
+- **K5 · `mapcheck`** for `_map-<batch>-<A|B>.jsonl`: well-formed, every code
+  exists, A/B agreement on all rows — never that a mapping is right.
+- **K6 · operator sample** in each report, fixed seed.
+- **K7 · `scanned` in every verdict.** A gate that scanned 0 items makes the
+  batch **NOT CHECKED**, never CLEAR.
+- **K8 · `sweep --recollect`** writes the re-collection list.
+- **`kbqa-check` skill** (`qa-diffs/01`): pre-flight, `check_subject.sh`,
+  coverage per surface. *Added here:* the pre-flight names the `python3` it ran
+  and where kbqa was imported from; it compares the installed skill with
+  `INSTALLED-FROM-kbqa-check` and STOPs on any difference (PIPELINE-SPEC §5);
+  `skills/install.sh` installs the skills from a tag and writes one record per
+  skill. The pins moved from `SKILL.md` to `scripts/preflight.sh`, where the
+  comparison runs.
+- **`kbqa-merge` skill** (`qa-diffs/03`, PIPELINE-SPEC §1 step 5): appends one
+  CLEAR batch to `feature-tree.md` — CLEAR on the staging file's current bytes,
+  G1–G3 PASS from the installed gate code, rows unchanged, ids never
+  renumbered, `proof:` recomputed, reversibility proven before writing.
+  Operator-only (`disable-model-invocation`). *Added here:* `--undo`, from the
+  log alone, for a tree's latest merge only, refused unless the result has
+  exactly the logged pre-merge sha256; a durable write (fsync the file, rename,
+  fsync the folder); and the pre-flight checks the merge skill's own install
+  record (`preflight.sh kbqa-check kbqa-merge`).
+
+### Fixed
+
+- *Added here:* **a merge reported failure when another batch was waiting.**
+  The drafted merge treated any `clear_not_merged` in the subject as a finding
+  on its own tree, so with two CLEAR batches the first merge always "failed".
+  It now judges only findings that point at its own tree or batch.
+- **G2's naive count gave false `parser_disagrees_with_naive_count`.** It chose
+  a pattern per format, and an array written one object per line inside a fence
+  matched neither: 91 false findings on staging (reported). One count now, every
+  `"id":` key in the row region.
+- **G4 could not read the stop-condition files' real form,** `<url> | <reason>`
+  amid frontmatter and prose: 11 false `stop_condition_without_reason` on one
+  subject (reported). Entries are list items, fenced lines and URL lines.
+- *Added here:* **G6 did not protect a bare `_denominator.md`.** Its Bronze
+  patterns were a private copy that had stayed at `_denominator-*.md`; they now
+  come from the conventions. 18 such files in the estate (reported).
+- *Added here:* **25 finding codes had no remedy** — every `mapcheck` code and
+  `subject_missing`. The coverage test saw only 7 of them: it read literal
+  `Finding(…)` calls, and 18 codes go through a helper, 3 more through the
+  profile's strict check. It now recognises both paths.
+- *Added here:* **MANUAL never mentioned `surfaces` or `mapcheck`.** The docs
+  test read only `argv[0] == …` dispatch, and both commands are in the gate
+  table. It reads the table too; §6 and §7 now cover every command and all 91
+  codes.
+
+---
+
 ## [6.14.1] — 2026-09-23
 
 ### Fixed
