@@ -8,10 +8,10 @@ nine batches in the estate that had captures and could therefore be grounded at
 all. An estate audit read 0% verifiable as a result.
 
 The lesson these tests encode: a decode failure in one shape is a signal to try
-the other, not a verdict about the file. And the naive cross-check must follow
-the format, because `^{"id"` counts nothing in a pretty-printed array and
-`^\\s*"id":` counts nothing in JSONL — using the wrong one fails a batch for a
-reason that is not true of it.
+the other, not a verdict about the file. And the naive cross-check must not
+depend on the parser's reading of the format: it was once chosen by format, and
+a fenced array written one object per line matched neither pattern, so correct
+parses failed G2 as "naive count 0".
 """
 
 from pathlib import Path
@@ -74,25 +74,62 @@ def test_fenced_jsonl(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# The cross-check must follow the format
+# The cross-check counts the same way in every format
 # --------------------------------------------------------------------------
 
-@pytest.mark.parametrize(
-    "body,fmt",
-    [
-        ("\n".join(ROWS) + "\n", "jsonl"),
-        ("```json\n" + "\n".join(ROWS) + "\n```\n", "fenced-jsonl"),
-        ('```json\n[\n{\n  "id": "a"\n},\n{\n  "id": "b"\n}\n]\n```\n', "fenced-array"),
-    ],
-)
-def test_naive_count_agrees_with_the_parse(tmp_path, body, fmt):
-    """§G2 FAILs when parser and naive count disagree.
+ONE_PER_LINE_ARRAY = "```json\n[\n" + ",\n".join(ROWS) + "\n]\n```\n"
+PRETTY_UNFENCED = '{\n  "id": "acme.a",\n  "vendor_term": "A"\n}\n{\n  "id": "acme.b"\n}\n'
 
-    A per-format naive pattern is what stops that firing on a correct parse.
+
+@pytest.mark.parametrize(
+    "body,fmt,n",
+    [
+        ("\n".join(ROWS) + "\n", "jsonl", 3),
+        ("```json\n" + "\n".join(ROWS) + "\n```\n", "fenced-jsonl", 3),
+        ('```json\n[\n{\n  "id": "a"\n},\n{\n  "id": "b"\n}\n]\n```\n', "fenced-array", 2),
+        (ONE_PER_LINE_ARRAY, "fenced-array", 3),
+        (",\n".join(ROWS) + "\n", "jsonl", 3),
+        (PRETTY_UNFENCED, "jsonl", 2),
+        ('{"vendor_term": "A", "id": "acme.a"}\n', "jsonl", 1),
+    ],
+    ids=["jsonl", "fenced-jsonl", "fenced-array", "fenced-array-one-per-line",
+         "unfenced-array-lines", "unfenced-pretty", "id-not-first"],
+)
+def test_naive_count_agrees_with_a_correct_parse(tmp_path, body, fmt, n):
+    """§G2 FAILs when parser and naive count disagree, so on a correct parse they must not.
+
+    `fenced-array-one-per-line` is the defect: three rows, parsed correctly, and
+    a naive count of 0 because neither per-format pattern matched `{"id": …},`
+    inside an array. `id-not-first` failed `^{"id"` the same way.
     """
     p = parse_staging(_write(tmp_path, body))
     assert p.row_format == fmt
-    assert p.naive_count == len(_ok(p))
+    assert len(_ok(p)) == n
+    assert p.naive_count == n
+
+
+def test_an_id_inside_a_quoted_value_is_not_a_key(tmp_path):
+    body = '{"id": "acme.a", "source_quote": "send {\\"id\\": 5} to the API"}\n'
+    p = parse_staging(_write(tmp_path, body))
+    assert len(_ok(p)) == 1 and p.naive_count == 1
+
+
+def test_frontmatter_is_not_counted(tmp_path):
+    p = tmp_path / "_collect-widgets-staging.md"
+    p.write_text('---\nbatch: w\nnote: \'{"id": "x"}\'\n---\n' + ROWS[0] + "\n", encoding="utf-8")
+    assert parse_staging(p).naive_count == 1
+
+
+def test_a_row_the_parser_misses_still_disagrees(tmp_path):
+    """The cross-check exists to catch this: a row the parser did not see.
+
+    An object opened inside a prose line is skipped by the parser (a row starts
+    with `{`), but its key is still on a line in the row region.
+    """
+    body = ROWS[0] + "\n" + 'see also {"id": "acme.z", "vendor_term": "Z"}\n'
+    p = parse_staging(_write(tmp_path, body))
+    assert len(_ok(p)) == 1
+    assert p.naive_count == 2, "the naive count must see what the parser skipped"
 
 
 # --------------------------------------------------------------------------

@@ -16,7 +16,7 @@ than different.
 """
 
 from enum import Enum
-from typing import Dict, Literal, Optional, Union
+from typing import Dict, List, Literal, Optional, Tuple, Union
 
 from pydantic import Field, field_validator
 
@@ -221,6 +221,44 @@ EXTENSIONS: Dict[str, ExtensionField] = {
                 "for removal unless the collector can say what it means."),
 }
 
+# The schema's spelling of each grade — one spelling per value (K1). The enum
+# above still accepts both spellings of "verify", because legacy rows use the
+# bare form and are never edited. A NEW batch writes the schema's spelling.
+SCHEMA_EVIDENCE_GRADES = ("official-doc", "help", "marketing", "verified", "[verify]")
+
+
+def strict_row_check(obj: dict) -> List[Tuple[str, str]]:
+    """K1 rules for batches collected under the current convention.
+
+    Each returns a code the report routes as `fixable`: the row disagrees with
+    the schema, and the row-writer can correct it from the capture. None of
+    them is applied to legacy batches — see `Profile.strict_row_check`.
+    """
+    out: List[Tuple[str, str]] = []
+    keys = list(obj)
+    if not keys or keys[0] != "id":
+        out.append((
+            "id_not_first_key",
+            f"first key is {keys[0] if keys else None!r}; `id` must be the first "
+            "key so a line-based count sees the row",
+        ))
+    pp = obj.get("parent_path")
+    if not isinstance(pp, str) or not pp.strip():
+        out.append((
+            "parent_path_empty",
+            f"parent_path is {pp!r}; write the page's own breadcrumb verbatim, "
+            "or `unknown` when the page shows none — never empty",
+        ))
+    grade = obj.get("evidence_grade")
+    if grade not in SCHEMA_EVIDENCE_GRADES:
+        out.append((
+            "evidence_grade_spelling",
+            f"evidence_grade {grade!r} is not one of the schema's spellings "
+            f"({' | '.join(SCHEMA_EVIDENCE_GRADES)})",
+        ))
+    return out
+
+
 PROFILE = register(Profile(
     name="vendor-catalogue",
     description=(
@@ -240,4 +278,5 @@ PROFILE = register(Profile(
         "id", "source_url", "source_quote", "access_date",
         "vendor_term", "parent_path",
     ),
+    strict_row_check=strict_row_check,
 ))

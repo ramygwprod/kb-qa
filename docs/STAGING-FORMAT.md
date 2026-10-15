@@ -18,11 +18,11 @@ reads each and records which container it found in `row_format`; a silent
 fallback between formats is how a parser starts disagreeing with the file it
 claims to have read.
 
-| `row_format` | shape | naive cross-check |
-|---|---|---|
-| `jsonl` | one object per line at column 0 | `^{"id"` |
-| `fenced-array` | a pretty-printed JSON array inside a ```` ```json ```` fence | `^\s*"id":` |
-| `fenced-jsonl` | one object per line **inside** a fence | `^{"id"` |
+| `row_format` | shape |
+|---|---|
+| `jsonl` | one object per line at column 0 |
+| `fenced-array` | a pretty-printed JSON array inside a ```` ```json ```` fence |
+| `fenced-jsonl` | one object per line **inside** a fence |
 
 Within any of those, two **writing styles** are read, in a fence or out of one:
 
@@ -46,9 +46,13 @@ not valid JSON as a whole, so `json.loads` failed with "Extra data" and the
 batch was reported as zero rows — silently, on batches that had captures and
 could therefore be grounded.
 
-§G2's naive cross-check is **per format**. `^{"id"` counts nothing in a
-pretty-printed array and `^\s*"id":` counts nothing in JSONL, so the wrong
-pattern would fail a batch for a reason untrue of it.
+§G2's naive cross-check is **one count for every format** (v6.15.0): every
+`"id":` key in the row region — inside the ```` ```json ```` fences, or after the
+frontmatter when there is no fence — at any position on a line. A `\"id\":`
+escaped inside a string value is not a key and is not counted. Until v6.14.1 the
+count was chosen per format (`^{"id"` or `^\s*"id":`), and an array written one
+object per line inside a fence matched neither, so correctly parsed rows read as
+"naive count 0" and failed G2 for a reason untrue of them.
 
 ## Frontmatter
 
@@ -163,9 +167,11 @@ capture_file: _capture-guides.raw.txt
 
 Rules the parser enforces:
 
-- **`id` serialises first** in the line-per-object formats. A row starting with
-  another key is invisible to §G2's naive count, and G2 FAILs on
-  parser/naive divergence — which is what makes the cross-check meaningful.
+- **`id` serialises first.** For a batch named under the current convention
+  (`<surface>-<YYYY-MM-DD>[-wNN]`) G2 reports a row that starts with another key
+  as `id_not_first_key`; a legacy-named batch is not held to it, and the verdict
+  says the strict rules were not applied. The naive count itself no longer
+  depends on key order.
 - `id` is a lowercase dotted path. Underscores are allowed and a single segment
   is valid; v1 permitted `-` but not `_`, which cost 857 rows over an arbitrary
   distinction, and required two segments, which cost another 47 top-level nodes.
@@ -197,15 +203,36 @@ and take their label from the last path segment.
 
 ## `_stop-conditions.md` (SILVER)
 
-Keyed by URL **or** label. The separator is a colon followed by whitespace —
-never the colon in `https://`.
+Keyed by URL **or** label. Two forms are read, the pipe first:
+
+| form | where it comes from |
+|---|---|
+| `<url> \| <reason>` | the form the estate writes, **as reported** by the operator's handover (`Incomming/2026-10-07/PIPELINE-SPEC.md` §2, `qa-diffs/README.md` defect 2). Whitespace on both sides of the pipe |
+| `<url-or-label>: <reason>` | this repo's earlier form. A colon followed by whitespace — never the colon in `https://` |
+
+An **entry** is a `-` or `*` list item, a line inside a ```` ``` ```` fence, or a
+line that starts with `http://` or `https://`. Everything else — frontmatter,
+headings, prose, other list markers such as `+` or `1.` — is not read. The G4
+verdict does not report how many lines were not read. A line not read can only
+leave an index item uncovered, which G4 reports; it cannot make G4 pass.
+
+````
+---
+code: <subject>-stops
+---
+
+# Stop conditions
 
 ```
-- https://docs.acme.test/widgets/never-fetched: 404 at fetch time on 2026-08-23
+https://docs.acme.test/widgets/never-fetched | 404 at fetch time on 2026-08-23
+```
+
 - Legacy Widgets: superseded, vendor removed the page
-```
+````
 
-A stop-condition without a reason FAILs G4. "We stopped" is not a reason.
+An entry without a reason FAILs G4 (`stop_condition_without_reason`) — so do
+`<url> |` with nothing after the pipe, and `<url> |reason` with no space after
+it. "We stopped" is not a reason.
 
 ## `feature-tree.md` (GOLD)
 

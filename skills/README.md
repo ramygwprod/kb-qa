@@ -39,9 +39,25 @@ or a row.
 
 ## Install
 
+**`kbqa-check`** and **`kbqa-merge`** are installed globally, from a tag, by the
+operator in their own terminal (PIPELINE-SPEC §5):
+
+```bash
+bash skills/install.sh v6.15.0
+```
+
+It clones the tag, copies each skill to `~/.claude/skills/<skill>/`, and writes
+`INSTALLED-FROM-<skill>` there — the tag, the commit and the sha256 of every
+installed file. An existing install is moved to `~/.kbqa-check-backups/`,
+outside the skills folder, never deleted. The pre-flight compares the installed
+files with each record and STOPs on any difference
+(`preflight.sh kbqa-check kbqa-merge` checks both). The script then prints the
+`pip` command for the validator itself, which the operator also runs.
+
+The collecting side:
+
 ```
 <estate>/.claude/skills/kbqa-collect/SKILL.md
-<estate>/.claude/skills/kbqa-check/SKILL.md
 <estate>/.claude/agents/fetcher.md
 <estate>/.claude/agents/row-writer.md
 ```
@@ -112,7 +128,8 @@ level 3½ and why a human reading the verdicts is load-bearing.
 
 ## Keeping the pins current
 
-`kbqa-check/SKILL.md` pins the version and the manifest SHA.
+`kbqa-check/scripts/preflight.sh` pins the version (`PINNED`) and the manifest
+SHA (`EXPECTED_MANIFEST`) — the values the pre-flight actually compares.
 `tests/test_skill_pin.py` fails the release if either goes stale, if either
 skill gains a writing tool, or if a deny rule is dropped.
 

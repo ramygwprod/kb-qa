@@ -40,7 +40,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
         if not path.exists():
             findings.append(Finding(f"{label}_missing", f"{label} file not found: {path}"))
     if findings:
-        return Verdict(GATE, FAIL, inputs, {"rows": 0, "checked": 0, "failed": 1}, findings), EXIT_FAIL
+        return Verdict(GATE, FAIL, inputs, {"rows": 0, "checked": 0, "scanned": 0, "failed": 1}, findings), EXIT_FAIL
 
     parsed = parse_staging(staging)
     cap = parse_capture(capture)
@@ -71,7 +71,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
                 GATE,
                 FAIL,
                 inputs,
-                {"rows": rows_present, "checked": 0, "grounded": 0,
+                {"rows": rows_present, "checked": 0, "scanned": 0, "grounded": 0,
                  "unassessable": rows_present, "capture_blocks": 0, "failed": 1},
                 findings,
             ),
@@ -157,6 +157,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
     counts = {
         "rows": len(parsed.rows),
         "checked": checked,
+        "scanned": checked,
         "grounded": grounded,
         "failed": len(findings),
     }

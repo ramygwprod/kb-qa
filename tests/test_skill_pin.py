@@ -1,7 +1,12 @@
 """The checking skill pins a version and a manifest SHA. Keep them true.
 
-The skill tells an agent to refuse a verdict when `--manifest` disagrees with
-the pinned value. That check is the only signal an agent gets that the
+The pins live in `kbqa-check/scripts/preflight.sh` (`PINNED`,
+`EXPECTED_MANIFEST`) — the values the pre-flight actually compares before any
+gate runs. Until v6.15.0 they were written in SKILL.md, for an agent to compare
+by hand; they are read from wherever the comparison happens.
+
+The pre-flight refuses to run a gate when `--manifest` disagrees with the
+pinned value. That check is the only signal an agent gets that the
 validator was swapped — so a pin left stale across a release makes it fire on a
 legitimate upgrade, and an agent that learns to ignore it has lost the signal
 entirely.
@@ -23,6 +28,7 @@ SKILLS = Path(__file__).resolve().parent.parent / "skills"
 SKILL_DIR = SKILLS / "kbqa-check"
 SKILL = SKILL_DIR / "SKILL.md"
 SNIPPET = SKILL_DIR / "settings-snippet.json"
+PREFLIGHT = SKILL_DIR / "scripts" / "preflight.sh"
 
 COLLECT = SKILLS / "kbqa-collect" / "SKILL.md"
 COLLECT_SNIPPET = SKILLS / "kbqa-collect" / "settings-snippet.json"
@@ -46,7 +52,8 @@ BYPASSES = [
 
 
 def pinned_versions(text: str):
-    return re.findall(r"^(\d+\.\d+\.\d+)$", text, re.MULTILINE)
+    """The version in `PINNED="${KBQA_PINNED:-v<version>}"`."""
+    return re.findall(r'^PINNED="\$\{KBQA_PINNED:-v(\d+\.\d+\.\d+)\}"$', text, re.MULTILINE)
 
 
 def pinned_manifests(text: str):
@@ -61,7 +68,8 @@ def pinned_manifests(text: str):
 
     So: capture greedily, and let the caller judge the length.
     """
-    return re.findall(r"manifest_sha256 ([0-9a-f]+)", text)
+    return re.findall(r'^EXPECTED_MANIFEST="\$\{KBQA_EXPECTED_MANIFEST:-([0-9a-f]+)\}"$',
+                      text, re.MULTILINE)
 
 
 def granted_tools(text: str):
@@ -82,6 +90,12 @@ def skill_text() -> str:
 
 
 @pytest.fixture(scope="module")
+def pin_text() -> str:
+    assert PREFLIGHT.exists(), f"the checking skill's pre-flight is missing: {PREFLIGHT}"
+    return PREFLIGHT.read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
 def deny_text() -> str:
     snippet = json.loads(SNIPPET.read_text(encoding="utf-8"))
     return " ".join(snippet["permissions"]["deny"])
@@ -89,16 +103,16 @@ def deny_text() -> str:
 
 # ── the shipped skill must be true ───────────────────────────────────────────
 
-def test_pinned_version_matches_the_package(skill_text):
-    pinned = pinned_versions(skill_text)
-    assert pinned, "SKILL.md declares no expected version"
+def test_pinned_version_matches_the_package(pin_text):
+    pinned = pinned_versions(pin_text)
+    assert pinned, "preflight.sh declares no expected version"
     assert __version__ in pinned, (
-        f"SKILL.md pins {pinned} but this package is {__version__}. "
+        f"preflight.sh pins {pinned} but this package is {__version__}. "
         "Update the pin in the same commit that tags the release."
     )
 
 
-def test_the_pinned_manifest_is_a_wellformed_sha256(skill_text):
+def test_the_pinned_manifest_is_a_wellformed_sha256(pin_text):
     """64 hex characters, exactly. Not 63, not 65.
 
     An agent comparing a real 64-character digest against a 65-character pin can
@@ -106,18 +120,20 @@ def test_the_pinned_manifest_is_a_wellformed_sha256(skill_text):
     halting, reports a stale pin every single time. Either way the one signal
     that a validator was swapped becomes noise.
     """
-    for value in pinned_manifests(skill_text):
+    values = pinned_manifests(pin_text)
+    assert values, "preflight.sh declares no expected manifest"
+    for value in values:
         assert len(value) == 64, (
             f"pinned manifest is {len(value)} characters, not 64: {value!r}. "
             "No real digest can equal it."
         )
 
 
-def test_pinned_manifest_matches_the_package(skill_text):
-    pinned = pinned_manifests(skill_text)
-    assert pinned, "SKILL.md declares no expected manifest_sha256"
+def test_pinned_manifest_matches_the_package(pin_text):
+    pinned = pinned_manifests(pin_text)
+    assert pinned, "preflight.sh declares no expected manifest"
     assert MANIFEST_SHA256 in pinned, (
-        f"SKILL.md pins {pinned} but the manifest is {MANIFEST_SHA256}. "
+        f"preflight.sh pins {pinned} but the manifest is {MANIFEST_SHA256}. "
         "Gate code changed without the pin being updated."
     )
 
@@ -139,15 +155,15 @@ def test_the_deny_snippet_covers_every_bypass(deny_text):
 
 # ── and the checks must be capable of failing ────────────────────────────────
 
-def test_a_stale_version_pin_is_caught(skill_text):
-    mutated = skill_text.replace(__version__, "9.9.9")
+def test_a_stale_version_pin_is_caught(pin_text):
+    mutated = pin_text.replace(f"KBQA_PINNED:-v{__version__}", "KBQA_PINNED:-v9.9.9")
+    assert pinned_versions(mutated) == ["9.9.9"]
     assert __version__ not in pinned_versions(mutated)
 
 
-def test_a_stale_manifest_pin_is_caught(skill_text):
-    mutated = re.sub(
-        r"manifest_sha256 [0-9a-f]{64}", "manifest_sha256 " + "0" * 64, skill_text
-    )
+def test_a_stale_manifest_pin_is_caught(pin_text):
+    mutated = re.sub(r"(KBQA_EXPECTED_MANIFEST:-)[0-9a-f]+", r"\g<1>" + "0" * 64, pin_text)
+    assert pinned_manifests(mutated) == ["0" * 64]
     assert MANIFEST_SHA256 not in pinned_manifests(mutated)
 
 
@@ -247,13 +263,13 @@ def test_both_snippets_carry_a_checkout_placeholder():
         )
 
 
-def test_a_malformed_pin_is_caught_at_any_length(skill_text):
+def test_a_malformed_pin_is_caught_at_any_length(pin_text):
     """The guard that was missing. Proven to fail in both directions."""
     real = MANIFEST_SHA256
     for bad in (real + "4", real[:-1], real + "abc"):
-        mutated = re.sub(r"manifest_sha256 [0-9a-f]+", f"manifest_sha256 {bad}", skill_text)
+        mutated = re.sub(r"(KBQA_EXPECTED_MANIFEST:-)[0-9a-f]+", r"\g<1>" + bad, pin_text)
         lengths = [len(v) for v in pinned_manifests(mutated)]
-        assert 64 not in lengths, f"a {len(bad)}-character pin read as well-formed"
+        assert lengths and 64 not in lengths, f"a {len(bad)}-character pin read as well-formed"
 
 
 def test_the_old_pattern_would_have_missed_it():
@@ -262,6 +278,6 @@ def test_the_old_pattern_would_have_missed_it():
     `[0-9a-f]{64}` against a 65-character token yields a clean 64-character
     match and hides the defect. That is why this file now captures greedily.
     """
-    malformed = f"manifest_sha256 {MANIFEST_SHA256}4"
-    assert re.findall(r"manifest_sha256 ([0-9a-f]{64})", malformed) == [MANIFEST_SHA256]
+    malformed = f'EXPECTED_MANIFEST="${{KBQA_EXPECTED_MANIFEST:-{MANIFEST_SHA256}4}}"'
+    assert re.findall(r"KBQA_EXPECTED_MANIFEST:-([0-9a-f]{64})", malformed) == [MANIFEST_SHA256]
     assert pinned_manifests(malformed) == [MANIFEST_SHA256 + "4"]

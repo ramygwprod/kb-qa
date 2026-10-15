@@ -14,7 +14,7 @@ zero batches.
 
 import re
 from dataclasses import dataclass, field
-from typing import Pattern
+from typing import Optional, Pattern, Tuple
 
 
 @dataclass(frozen=True)
@@ -66,6 +66,21 @@ class Conventions:
     fence_open_pattern: str = r"^\s*```+\s*json\s*$"
     fence_close_pattern: str = r"^\s*```+\s*$"
 
+    # --- mandatory surfaces (K2) -------------------------------------------
+    # Every subject publishes these three, or a stop-condition says it does
+    # not. The slugs are the collector's batch-name prefixes, so a batch named
+    # `docs-2026-01-31-w02` belongs to the `docs` surface. A batch whose name
+    # does not follow this pattern predates the convention: it is a legacy
+    # batch, and the rules that apply only to new batches (K1) do not run on
+    # it. Which rules ran is printed, so "not applied" never reads as "passed".
+    surfaces: Tuple[str, ...] = ("product", "docs", "help")
+    surface_batch_pattern: str = (
+        r"^(?P<surface>product|docs|help)-(?P<date>\d{4}-\d{2}-\d{2})(?:-w(?P<window>\d{2}))?$"
+    )
+    surface_denominator_pattern: str = (
+        r"^_denominator-(?P<surface>product|docs|help)-(?P<date>\d{4}-\d{2}-\d{2})\.md$"
+    )
+
     def batch_of(self, staging_name: str) -> str:
         """The batch name embedded in a staging filename."""
         n = staging_name
@@ -74,6 +89,11 @@ class Conventions:
         if n.endswith(self.staging_suffix):
             n = n[: -len(self.staging_suffix)]
         return n
+
+    def surface_of(self, batch: str) -> Optional[str]:
+        """The mandatory surface a batch belongs to, or None for a legacy name."""
+        m = re.match(self.surface_batch_pattern, batch)
+        return m.group("surface") if m else None
 
     def capture_for(self, batch: str) -> str:
         return self.capture_template.format(batch=batch)

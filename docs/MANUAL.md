@@ -1,6 +1,6 @@
 # kbqa — user manual
 
-**Version 6.14.1** · for operators and for maker agents
+**Version 6.15.0** · for operators and for maker agents
 
 Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -10,7 +10,7 @@ Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.14.1"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.15.0"
 # Day to day, the pipeline is two commands with a human between them:
 #
 #   /kbqa-collect <Subject Name>     collect until the source runs out
@@ -18,7 +18,7 @@ pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.14.1"
 #
 # Everything below is what those do, and what to run when you want it by hand.
 
-python -m kbqa --version          # must print 6.14.1
+python -m kbqa --version          # must print 6.15.0
 ```
 
 **Audit a corpus** — needs no captures, changes nothing, answers "what here can
@@ -101,7 +101,7 @@ python3 -m venv .venv
 For an estate or CI, install from the pinned tag rather than a branch:
 
 ```bash
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.14.1"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.15.0"
 ```
 
 **Always a tag, never a branch.** A branch would let the gates and the data they
@@ -731,6 +731,42 @@ output.
 **Read Coverage first.** The report names gates that did *not* run. A gate that
 did not run has found nothing — not the same as having found nothing wrong.
 
+### 5.11 · Operator — the three commands (PIPELINE-SPEC §1)
+
+| step | you type | what happens | what it never does |
+|---|---|---|---|
+| collect | `/kbqa-collect <Subject>` | plans, fetches, writes rows from captures, classifies | read a verdict |
+| check | `/kbqa-check <subject folder>` | runs the gates per batch and per surface; reports CLEAR · BLOCKED · PARKED · NOT CHECKED | edit a row, collect, merge |
+| merge | `/kbqa-merge <subject folder> <batch>` | appends one CLEAR batch to `feature-tree.md` | merge on its own, edit a row, renumber an id |
+
+Each runs in its own session. `/kbqa-check` and `/kbqa-merge` ship with this
+package and are installed with `bash skills/install.sh <tag>`; `/kbqa-collect`
+is built and installed from the collection repository.
+
+**Merging.** Only a batch `/kbqa-check` reported CLEAR, on the staging file's
+current bytes, with G1–G3 PASS from the installed gate code. The skill shows a
+dry run first — rows before + added = after, old and new proof line — then:
+
+```bash
+python3 ~/.claude/skills/kbqa-merge/scripts/merge.py --vendor-dir <subject> --batch <batch> --dry-run
+python3 ~/.claude/skills/kbqa-merge/scripts/merge.py --vendor-dir <subject> --batch <batch>
+```
+
+The rows are appended unchanged as one fenced block; nothing above it moves.
+The `proof:` line is recomputed, the tree is written atomically and durably,
+and `_merge-log.jsonl` records both hashes and both proof lines. G6 then runs:
+it must say nothing about this tree or batch.
+
+**Undo** uses the log alone, and only for a tree's latest merge:
+
+```bash
+python3 ~/.claude/skills/kbqa-merge/scripts/merge.py --vendor-dir <subject> --batch <batch> --undo
+```
+
+It refuses unless the tree is still exactly what that merge left and the
+result has exactly the logged pre-merge sha256. The rows stay in the staging
+file.
+
 ## 6 · All available actions
 
 Thirteen actions. **Ten are read-only by default; three write, and only ever to
@@ -747,7 +783,12 @@ something in a pipeline appears to "fix" a row, it is not kbqa doing it.
 | `g3 --staging <f> --capture <f>` | staging, capture | nothing | 0 / 1 |
 | `g4 --denominator <f> --rows <f>… [--stops <f>]` | denominator, rows, stops | nothing | 0 only when `without_row == 0` |
 | `g5 --rows <f>…` | rows | nothing | **always 0** — advisory |
-| `g6 --root <dir>` | whole corpus and its `_qa/` verdicts | nothing | 0 / 1 |
+| `g6 --root <dir>` | whole corpus and its `_qa/` verdicts | nothing | 0 / 1 — also FAILs on a CLEAR batch not in `feature-tree.md` |
+| `surfaces --subject <d> [--stops <f>]` | the subject's denominators, batches and `_stop-conditions.md` | nothing | 0 / 1 — each of `product`, `docs`, `help` is indexed or stopped |
+| `mapcheck --staging <f> --map <A> [--map <B>] --codebook <f> --elements <f> [--subject <d>]` | staging, the mapping files, codebook, element list | nothing | 0 / 1 — well-formed and every code exists; never that a mapping is right |
+
+Every gate's counts carry `scanned`. A gate that scanned 0 items has checked
+nothing: the report marks the batch **NOT CHECKED**, which is never CLEAR.
 
 `g0` is the only gate that writes unasked: it must store the robots.txt it
 judged, or its verdict cites nothing.
@@ -757,7 +798,7 @@ judged, or its verdict cites nothing.
 | action | reads | writes |
 |---|---|---|
 | `report --vendor-dir <d> --batch <b> [--denominator <f>] [--stops <f>] [--log <f>]` | staging, capture, denominator, stops | `_qa/<b>.report.md`, `_qa/<b>.report.json`, one verdict per gate, one log line |
-| `sweep --root <c> [--field-values] [--exclude <glob>] [--vendor-depth N] [--out <f>]` | every staging and capture under root | `_qa-estate-audit.md` and `.json` at the root |
+| `sweep --root <c> [--field-values] [--exclude <glob>] [--vendor-depth N] [--out <f>] [--recollect <f.jsonl>]` | every staging and capture under root | `_qa-estate-audit.md` and `.json` at the root; with `--recollect`, the re-collection list at that path |
 
 ### Diagnostics, interpretation guards and metadata — never write rows
 
@@ -804,47 +845,73 @@ Two ways a script gets this wrong:
 
 ## 7 · Findings reference
 
-57 codes. Every one carries a remedy, enforced by `tests/test_report.py` — a
+91 codes. Every one carries a remedy, enforced by `tests/test_report.py` — a
 report that falls back to "see the message" for its most important findings is
 not a report.
 
 | code | kind | nature | remedy summary |
 |---|---|---|---|
+| `actor_invalid` | fixable | issue | Mapping line: `actor` is one of A–E, empty only for NO-FUNCTION / NOT-FEATURE |
 | `batch_known_failing` | planner | issue | A current FAIL verdict, still in the estate |
 | `batch_unchecked` | fixable | gap | No verdict records this file — the gates never ran |
 | `bronze_missing` | structural | gap | A Bronze artifact is absent; re-fetch, never reconstruct |
 | `bronze_modified` | structural | issue | Bronze changed after it was written |
 | `bronze_touched_after_verdict` | structural | issue | Every verdict citing it is void |
 | `capture_empty` | structural | gap | Capture holds no text; re-fetch |
+| `capture_has_no_page_blocks` | structural | gap | Text stored, no page boundaries. Rows are **unassessable, not ungrounded** — re-fetch with markers |
 | `capture_hash_absent` | fixable | gap | Add `source_capture_sha256` to frontmatter |
 | `capture_hash_mismatch` | structural | issue | Rows written from different bytes; re-run the row-writer |
-| `capture_has_no_page_blocks` | structural | gap | Text stored, no page boundaries. Rows are **unassessable, not ungrounded** — re-fetch with markers |
 | `capture_missing` | structural | gap | Nothing to check against. Re-collect or record as unverifiable |
 | `capture_not_before_staging` | structural | issue | Rows cannot have been written from this capture |
+| `clear_not_merged` | planner | issue | CLEAR on its current bytes, no row in `feature-tree.md` — the operator merges it |
+| `clear_partially_merged` | planner | issue | Some ids in the tree, some not — a human compares before any merge; never renumber |
 | `collection_parked` | planner | gap | Stopped safely with more to collect. Correct — resume at the offset |
 | `completeness_unassessable` | planner | gap | No denominator and no windows — coverage is unknown, not complete |
+| `confidence_invalid` | fixable | issue | Mapping line: `confidence` is low, medium or high |
 | `denominator_missing` | structural | gap | Coverage unmeasurable |
 | `duplicate_id` | fixable | issue | Two rows share an id; establish which is which |
 | `duplicate_page_block` | structural | issue | A URL captured twice; re-fetch cleanly |
+| `element_dominates` | planner | issue | One APQC element on > 30 % of rows — a human reads a sample first |
 | `empty_denominator` | structural | gap | Re-capture the index surface |
+| `evidence_grade_spelling` | fixable | issue | Use the schema's spelling of the grade (current-convention batches) |
 | `frontmatter_unparseable` | fixable | issue | Correct the frontmatter |
+| `id_not_first_key` | fixable | issue | `id` must be the row's first key (current-convention batches) |
 | `index_item_without_row` | planner | gap | Plan a batch, or record a reasoned stop |
+| `input_missing` | structural | gap | A file the mapping check needs was not found — nothing was checked |
 | `manifest_mismatch` | structural | issue | **Tamper-evidence firing.** Verdicts came from other code |
+| `map_fields_mismatch` | fixable | issue | Mapping line: exactly the format's fields, none missing, none extra |
+| `map_id_duplicate` | fixable | issue | Mapping file: one line per staging id |
+| `map_id_missing` | fixable | gap | A staging row has no mapping line — write one, `needs-human` if unmappable |
+| `map_id_not_first` | fixable | issue | Mapping line: `id` must be the first key |
+| `map_id_not_in_staging` | fixable | issue | Mapping line for an id that is not a row of this batch — remove the line |
+| `map_line_unparseable` | fixable | issue | Mapping line is not one JSON object |
+| `map_null_value` | fixable | issue | Mapping line: no nulls; empty is `""` or `[]` |
+| `map_type` | fixable | issue | Mapping line: `theme_links` and `pcf_ids` are lists |
 | `marker_unbalanced` | structural | issue | Capture is corrupt; re-fetch, do not hand-repair |
+| `needs_human_without_reason` | fixable | issue | A `needs-human` line says why in `note` |
 | `no_declared_pages` | fixable | gap | Add the `pages:` list |
 | `no_exhaustion_evidence` | planner | gap | No window reached the end of the list; a short return is not the end |
 | `no_source_quote` | fixable | gap | Add a verbatim quote, or drop the row |
 | `no_source_url` | fixable | gap | Cite the page the quote is on |
+| `non_row_object` | fixable | issue | An object with no `id`, `source_url` or `source_quote` in the rows block — batch metadata belongs in the frontmatter |
 | `nothing_checked` | structural | gap | An empty check is not a pass |
 | `page_not_in_capture` | planner | issue | Fetch the page, or the row is unsupported |
 | `pages_not_a_list` | fixable | issue | `pages:` must be a list |
+| `parent_path_empty` | fixable | issue | Copy the page's own breadcrumb verbatim, else `unknown` (current-convention batches) |
 | `parser_disagrees_with_naive_count` | structural | issue | **Tooling fault.** Fix `parsing.py`, not the rows |
+| `pcf_entry_shape` | fixable | issue | Each `pcf_ids` entry is `{pcf_id, hierarchy_id, name}` |
+| `pcf_not_copied` | fixable | issue | `hierarchy_id` / `name` differ from the element list — copy, never retype |
+| `pcf_unknown` | fixable | issue | `pcf_id` is not in the element list, so it does not exist |
 | `proof_count_mismatch` | fixable | issue | Correct the GOLD proof count |
 | `proof_unparseable` | fixable | issue | Restore a readable `proof:` line |
 | `quote_from_wrong_page` | fixable | issue | Correct `source_url`; the row is misattributed |
 | `quote_not_in_capture` | fixable | issue | **Most gameable.** Replace the quote or drop the row — never quote-shop |
+| `reference_empty` | structural | gap | Codebook or element list gave nothing to check against — nothing was checked |
 | `robots_unreachable` | structural | gap | Not permission to proceed. Retry; if persistent, treat as closed |
 | `role_collapse` | structural | issue | One agent fetched and wrote. Re-collect with separated roles |
+| `role_source_empty` | fixable | issue | Mapping line: fill `role_source` |
+| `role_source_invalid` | fixable | issue | `role_source` is `rbac-row`, `rbac-vendor:<row id>` or `apqc-closest` |
+| `role_source_row_unknown` | fixable | issue | `rbac-vendor:<row id>` names a row the subject does not have |
 | `root_missing` | structural | gap | Nothing was inspected |
 | `row_unparseable` | fixable | issue | Invalid JSON; it was never checked |
 | `row_unparseable_not_checked` | structural | issue | Unchecked rows are not sound rows |
@@ -852,9 +919,18 @@ not a report.
 | `schema_violation` | fixable | issue | Correct the row, or bump the contract deliberately |
 | `site_wide_disallow` | structural | issue | **Terminal.** No retry, no alternate fetcher |
 | `staging_missing` | structural | gap | Wrong batch name, or the row-writer never ran |
+| `status_invalid` | fixable | issue | Mapping line: `status` is `mapped` or `needs-human` |
 | `stop_condition_without_reason` | fixable | gap | "We stopped" is not a reason |
 | `stops_file_missing` | structural | gap | Wrong path, or no stops recorded — not the same thing |
+| `subject_missing` | structural | gap | The path is not a subject folder — nothing was checked |
+| `surface_contradiction` | planner | issue | A surface both indexed and unpublished — a human decides which file is wrong |
+| `surface_missing` | planner | issue | A mandatory surface has neither an index nor a URL-keyed stop |
+| `surface_stop_without_page` | planner | issue | A 'not published' stop must be keyed by the fetched page that shows it |
+| `surface_unfinished` | planner | issue | An indexed surface with no batch — run its windows or park with an offset |
 | `term_at_multiple_urls` | planner | issue | Advisory. An R2 naming question; resolve nothing by guessing |
+| `theme_link_unknown` | fixable | issue | A `theme_links` entry is not a codebook code |
+| `theme_unknown` | fixable | issue | `theme` is not a codebook code or a non-feature code |
+| `too_many_maps` | structural | issue | At most two mapping files, A and B |
 | `unfetchable_source` | fixable | gap | Citation nobody can retrieve; capture the document and cite its URL |
 | `url_not_in_capture` | planner | issue | Page never fetched, or the URL is invented |
 | `verdict_stale` | fixable | issue | Checked, then edited. Re-run the gates |
@@ -918,7 +994,7 @@ and the data they judge change in the same push.
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.14.1"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.15.0"
 ```
 
 > `pip < 21.3` cannot read this project's metadata and installs an empty package

@@ -21,12 +21,15 @@ the report never says what failed without saying what may legitimately change.
 """
 
 import json
+import random
 from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
 from . import __version__
 from .gates import g1_capture, g2_conformance, g3_grounding, g4_completeness
 from .manifest import MANIFEST, MANIFEST_SHA256
+from .manifest import sha256_file
+from .parsing import parse_staging
 from .verdict import Verdict, utc_now_iso, write_verdict
 
 STRUCTURAL = "structural"
@@ -56,6 +59,7 @@ GAP_CODES = {
     "completeness_unassessable", "no_exhaustion_evidence",
     "window_declaration_incomplete", "window_end_undeclared",
     "collection_parked", "window_chain_gap", "window_ended_in_error",
+    "subject_missing", "input_missing", "reference_empty", "map_id_missing",
 }
 
 
@@ -452,6 +456,192 @@ REMEDIES: Dict[str, Remedy] = {
     ),
 }
 
+# --- K1 · rules for batches under the current naming convention ----------
+REMEDIES.update({
+    "id_not_first_key": Remedy(
+        FIXABLE,
+        "Write `id` as the first key of the row. Nothing else in the row changes.",
+    ),
+    "parent_path_empty": Remedy(
+        FIXABLE,
+        "Copy the page's own breadcrumb or navigation trail verbatim from that "
+        "page's block in the capture. If the page shows none, write `unknown`. "
+        "Never build one from the URL or the title, and never leave it empty.",
+    ),
+    "evidence_grade_spelling": Remedy(
+        FIXABLE,
+        "Use the schema's spelling of the grade (field-schema: official-doc | "
+        "help | marketing | verified | [verify]). The grade itself does not change.",
+    ),
+    # --- K2 · mandatory surfaces ------------------------------------------
+    "surface_missing": Remedy(
+        PLANNER,
+        "Collect the surface — capture its own index as "
+        "`_denominator-<surface>-<date>.md` — or, if the subject does not publish "
+        "it, record `<url> | surface <slug> not published: <what that page "
+        "shows>` citing a fetched page. \"Not found\" is unfinished, not a stop.",
+    ),
+    "surface_unfinished": Remedy(
+        PLANNER,
+        "The surface has a denominator but no batch. Run its windows until the "
+        "source returns nothing, or park with an offset.",
+    ),
+    "surface_contradiction": Remedy(
+        PLANNER,
+        "A surface cannot be both indexed and unpublished. A human reads both "
+        "files and decides which is wrong; neither is deleted to clear this.",
+    ),
+    "surface_stop_without_page": Remedy(
+        PLANNER,
+        "Key the stop-condition by the URL of the fetched page that shows the "
+        "surface is absent, so a reader can check it.",
+    ),
+    # --- K4 · stranded batches ---------------------------------------------
+    "clear_not_merged": Remedy(
+        PLANNER,
+        "The batch is CLEAR and its rows are not in the tree. The operator runs "
+        "`/kbqa-merge` for it. Nobody else merges.",
+    ),
+    "clear_partially_merged": Remedy(
+        PLANNER,
+        "Some of the batch's ids are in the tree and some are not. Stop: a human "
+        "compares the two before any merge. Never renumber ids to clear this.",
+    ),
+    # --- K2 · surfaces: the run itself -------------------------------------
+    "subject_missing": Remedy(
+        STRUCTURAL,
+        "The path given is not a subject folder. Pass `Competitors/<Subject>/` as "
+        "it exists on disk; nothing was checked, so nothing is clean.",
+    ),
+    # --- K5 · mapping files: the run itself --------------------------------
+    "input_missing": Remedy(
+        STRUCTURAL,
+        "One of the files the check needs — the staging file, a mapping file, the "
+        "codebook or the element list — was not found at the path given. Nothing "
+        "was checked. Pass the path that exists; do not create an empty file.",
+    ),
+    "too_many_maps": Remedy(
+        STRUCTURAL,
+        "A batch has at most two mapping files, A and B. Pass those two; a third "
+        "pass is not a tie-breaker.",
+    ),
+    "reference_empty": Remedy(
+        STRUCTURAL,
+        "The codebook gave no theme codes or the element list gave no elements, "
+        "so there was nothing to check the mapping against. Point at the real "
+        "reference files; nothing was checked.",
+    ),
+    # --- K5 · mapping files: one line per staging row ----------------------
+    "map_id_missing": Remedy(
+        FIXABLE,
+        "A staging row has no line in this mapping file. The mapping pass writes "
+        "one line for it — `needs-human` with a note if it cannot be mapped. "
+        "Never drop the row from staging to clear this.",
+    ),
+    "map_id_not_in_staging": Remedy(
+        FIXABLE,
+        "The mapping file has a line for an id that is not a row of this batch. "
+        "Remove that line from the mapping file; the batch's rows are not changed.",
+    ),
+    "map_id_duplicate": Remedy(
+        FIXABLE,
+        "An id has more than one line. Keep one line per staging id; a second "
+        "reading belongs in the other mapping file (A or B), not in this one.",
+    ),
+    "map_line_unparseable": Remedy(
+        FIXABLE,
+        "The line is not a JSON object. Rewrite it as one JSON object on one line.",
+    ),
+    "map_id_not_first": Remedy(
+        FIXABLE,
+        "Write `id` as the first key of the mapping line. Nothing else changes.",
+    ),
+    "map_fields_mismatch": Remedy(
+        FIXABLE,
+        "The line must carry exactly the mapping format's fields — id, user_story, "
+        "role, role_source, actor, theme, theme_links, pcf_ids, confidence, "
+        "status, note — none missing, none extra.",
+    ),
+    "map_null_value": Remedy(
+        FIXABLE,
+        "A field is null. An empty value is `\"\"` for text and `[]` for a list.",
+    ),
+    "map_type": Remedy(
+        FIXABLE,
+        "`theme_links` and `pcf_ids` are lists. Write them as JSON arrays, `[]` "
+        "when empty.",
+    ),
+    # --- K5 · mapping files: codes must exist ------------------------------
+    "theme_unknown": Remedy(
+        FIXABLE,
+        "`theme` must be a code from the codebook's table, or NONE, NO-FUNCTION or "
+        "NOT-FEATURE. A theme the codebook lacks is a question for the operator, "
+        "so mark the line `needs-human` with a note; never add the code here.",
+    ),
+    "theme_link_unknown": Remedy(
+        FIXABLE,
+        "Every `theme_links` entry must be a code from the codebook's table. Remove "
+        "the entry, or mark the line `needs-human` with a note.",
+    ),
+    "pcf_entry_shape": Remedy(
+        FIXABLE,
+        "Each `pcf_ids` entry is exactly `{pcf_id, hierarchy_id, name}`, in that "
+        "order, copied from the element list.",
+    ),
+    "pcf_unknown": Remedy(
+        FIXABLE,
+        "The `pcf_id` is not in the element list, so it does not exist. Use an id "
+        "from the list, or mark the line `needs-human` with a note.",
+    ),
+    "pcf_not_copied": Remedy(
+        FIXABLE,
+        "The `hierarchy_id` or `name` differs from the element list for that id. "
+        "Copy both from the list exactly; they are never retyped.",
+    ),
+    "role_source_empty": Remedy(
+        FIXABLE,
+        "Fill `role_source`: `rbac-row`, `rbac-vendor:<row id>` or `apqc-closest`. "
+        "It may be empty only when `theme` is NO-FUNCTION or NOT-FEATURE.",
+    ),
+    "role_source_invalid": Remedy(
+        FIXABLE,
+        "`role_source` must be `rbac-row`, `rbac-vendor:<row id>` or "
+        "`apqc-closest`, written exactly so.",
+    ),
+    "role_source_row_unknown": Remedy(
+        FIXABLE,
+        "`rbac-vendor:<row id>` names a row this subject does not have. Cite an "
+        "existing row id of the subject, or use another role source.",
+    ),
+    "actor_invalid": Remedy(
+        FIXABLE,
+        "`actor` is one of A, B, C, D, E — or empty only when `theme` is "
+        "NO-FUNCTION or NOT-FEATURE.",
+    ),
+    "confidence_invalid": Remedy(
+        FIXABLE,
+        "`confidence` is `low`, `medium` or `high`, written exactly so — the "
+        "mapping pass's own confidence in that line.",
+    ),
+    "status_invalid": Remedy(
+        FIXABLE,
+        "`status` is `mapped` or `needs-human`, written exactly so. A line that "
+        "cannot be mapped is `needs-human` with a note, never left blank.",
+    ),
+    "needs_human_without_reason": Remedy(
+        FIXABLE,
+        "A `needs-human` line says why in `note`, so the operator knows what to "
+        "decide. Write the reason; do not change the status to clear this.",
+    ),
+    # --- K5 · mapping files: the whole batch -------------------------------
+    "element_dominates": Remedy(
+        PLANNER,
+        "One APQC element is on more than 30 % of the batch's rows. A human reads "
+        "a sample of those rows before the batch is accepted. Do not spread rows "
+        "across other elements to clear this.",
+    ),
+})
+
 DEFAULT_REMEDY = Remedy(FIXABLE, "See the finding message.")
 
 KIND_HEADING = {
@@ -461,6 +651,81 @@ KIND_HEADING = {
 }
 
 KIND_ORDER = (STRUCTURAL, PLANNER, FIXABLE)
+
+
+# K6 · rows shown to the operator per report, chosen with a seed derived from
+# the staging file's own hash: the same bytes always give the same sample, and
+# a changed file gives a new one. The seed is printed so anyone can redraw it.
+SAMPLE_SIZE = 10
+
+NOT_CHECKED = "NOT CHECKED"
+PARKED = "PARKED"
+
+
+def fix_round(log: Optional[Path], batch: str, staging_sha: Optional[str]) -> Tuple[Optional[int], int]:
+    """K3 · Which check round this is, from the log's recorded staging hashes.
+
+    Round 1 is the first set of bytes ever checked; each later, different set
+    of bytes is one more round. Re-running on unchanged bytes is the same round.
+    Returns (round or None without a log, earlier runs that carried no hash).
+    """
+    if log is None or staging_sha is None:
+        return None, 0
+    shas: List[str] = []
+    unhashed = 0
+    if log.exists():
+        for line in log.read_text(encoding="utf-8").splitlines():
+            try:
+                d = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if d.get("batch") != batch or d.get("gate") != "g2_conformance":
+                continue
+            sha = (d.get("inputs") or {}).get("staging")
+            if not sha:
+                unhashed += 1
+            elif sha not in shas:
+                shas.append(sha)
+    if staging_sha not in shas:
+        shas.append(staging_sha)
+    return shas.index(staging_sha) + 1, unhashed
+
+
+def operator_sample(vendor_dir: Path, batch: str, staging: Path) -> dict:
+    """K6 · A fixed-seed random sample of rows: quote, claim and mapping.
+
+    The gates check that a quote is real and on its page; they cannot check
+    that it supports the claim. These rows are for the operator's eye.
+    """
+    if not staging.exists():
+        return {"seed": None, "size": 0, "rows": []}
+    sha = sha256_file(staging)
+    seed = int(sha[:8], 16)
+    objs = [r.obj for r in parse_staging(staging).rows if r.obj and r.obj.get("id")]
+    picked = sorted(random.Random(seed).sample(range(len(objs)), min(SAMPLE_SIZE, len(objs))))
+    maps: Dict[str, Dict[str, dict]] = {}
+    for letter in ("A", "B"):
+        mp = vendor_dir / f"_map-{batch}-{letter}.jsonl"
+        if mp.exists():
+            maps[letter] = {}
+            for line in mp.read_text(encoding="utf-8").splitlines():
+                try:
+                    o = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(o, dict) and o.get("id"):
+                    maps[letter][str(o["id"])] = o
+    rows = []
+    for i in picked:
+        o = objs[i]
+        rows.append({
+            "id": o.get("id"), "vendor_term": o.get("vendor_term"),
+            "claim": o.get("what_it_does"), "source_quote": o.get("source_quote"),
+            "source_url": o.get("source_url"),
+            "mapping": {k: m.get(str(o.get("id"))) for k, m in maps.items()},
+        })
+    return {"seed": seed, "seed_from": f"sha256(staging)[:8] = {sha[:8]}",
+            "size": len(rows), "of_rows": len(objs), "maps": sorted(maps), "rows": rows}
 
 
 def _run(mod, argv: List[str]) -> Tuple[Verdict, int]:
@@ -478,6 +743,7 @@ def build(
     batch: str,
     denominator: Optional[Path] = None,
     stops: Optional[Path] = None,
+    log: Optional[Path] = None,
 ) -> Tuple[str, List[Tuple[Verdict, int]], int, dict]:
     """Run the batch gates and render a report.
 
@@ -500,11 +766,19 @@ def build(
             argv += ["--stops", str(stops)]
         results.append(_run(g4_completeness, argv))
     else:
+        # K2 · coverage belongs to a SURFACE, not to one window of it. A batch
+        # holding window 2 of 5 legitimately cites a fifth of the index; judged
+        # alone against the whole denominator it could never be CLEAR, and so
+        # could never merge. Coverage is therefore measured once per surface,
+        # over all its batches — and this line says where, so its absence here
+        # is never read as coverage measured.
         not_run.append((
             "g4_completeness",
-            "no --denominator given, so coverage against the vendor's own index "
-            "was not measured. This batch may be internally consistent and still "
-            "miss most of the surface.",
+            "no --denominator given, so coverage against the subject's own index "
+            "was not measured for this batch. Coverage is a surface-level measure: "
+            "`kbqa g4 --denominator <surface denominator> --rows <every batch of "
+            "the surface>`. This batch may be internally consistent and still miss "
+            "most of the surface.",
         ))
     not_run.append((
         "g5_bundles",
@@ -517,6 +791,12 @@ def build(
 
     worst = max(code for _, code in results)
     blocked = any(v.verdict == "FAIL" for v, _ in results)
+
+    # K7 · a gate that ran over nothing has not checked anything.
+    not_checked = [v.gate for v, _ in results if v.counts.get("scanned") == 0]
+    staging_sha = sha256_file(staging) if staging.exists() else None
+    round_no, unhashed_runs = fix_round(log, batch, staging_sha)
+    sample = operator_sample(vendor_dir, batch, staging)
 
     # Collect findings with their provenance and classification.
     items: List[dict] = []
@@ -537,10 +817,30 @@ def build(
     lines: List[str] = []
     a = lines.append
 
+    fixable_n = len([i for i in items if i["kind"] == FIXABLE])
+    if not_checked:
+        status = NOT_CHECKED
+    elif blocked and round_no is not None and round_no >= 2 and fixable_n:
+        status = PARKED
+    elif blocked:
+        status = "BLOCKED"
+    else:
+        status = "CLEAR"
+
     a(f"# QA report — {vendor_dir.name} / {batch}")
     a("")
-    a(f"**{'BLOCKED' if blocked else 'CLEAR'}** · {len(items)} finding(s)")
+    a(f"**{status}** · {len(items)} finding(s) · round "
+      f"{round_no if round_no is not None else 'unknown (no --log)'}")
     a("")
+    if not_checked:
+        a(f"⚠ **NOT CHECKED** — scanned 0 items: {', '.join(f'`{g}`' for g in not_checked)}. "
+          "An empty check is not a pass, and this batch is not CLEAR.")
+        a("")
+    if status == PARKED:
+        a(f"⛔ **PARKED** — round {round_no} still has {fixable_n} fixable finding(s). "
+          "The one fix round is used. Nothing goes back to the row-writer without "
+          "the operator; the finding list below is theirs.")
+        a("")
     a("| | |")
     a("|---|---|")
     a(f"| generated | `{utc_now_iso()}` |")
@@ -570,16 +870,22 @@ def build(
 
     a("## Coverage — what was and was not checked")
     a("")
-    a("| gate | module | verdict | rows | failed |")
-    a("|---|---|---|---|---|")
+    a("| gate | module | verdict | scanned | rows | failed |")
+    a("|---|---|---|---|---|---|")
     for verdict, _ in results:
         c = verdict.counts
+        shown = NOT_CHECKED if verdict.gate in not_checked else verdict.verdict
         a(
             f"| `{verdict.gate}` | `{_gate_sha(verdict.gate)}` | "
-            f"**{verdict.verdict}** | {c.get('rows', '–')} | {c.get('failed', '–')} |"
+            f"**{shown}** | {c.get('scanned', '–')} | {c.get('rows', '–')} | {c.get('failed', '–')} |"
         )
     for gate, why in not_run:
-        a(f"| `{gate}` | – | _not run_ | – | – |")
+        a(f"| `{gate}` | – | _not run_ | – | – | – |")
+    g2c = next((v.counts for v, _ in results if v.gate == "g2_conformance"), {})
+    if g2c:
+        a("")
+        a(f"K1 rules for new batches: **{g2c.get('strict_rules', 'unknown')}** "
+          f"(surface `{g2c.get('surface', '?')}`, {g2c.get('strict_checked', 0)} row(s)).")
     a("")
     for gate, why in not_run:
         a(f"- **`{gate}` did not run** — {why}")
@@ -651,6 +957,32 @@ def build(
           "it stops appearing — not when it is explained.")
         a("")
 
+    a("## Operator sample — quote, claim, mapping")
+    a("")
+    if sample["size"]:
+        a(f"{sample['size']} of {sample['of_rows']} rows, seed `{sample['seed']}` "
+          f"({sample['seed_from']}). Mapping files read: "
+          f"{', '.join(sample['maps']) or 'none yet'}. The gates cannot see whether a "
+          "quote supports its claim; these rows are for a human to read.")
+        a("")
+        for n, s in enumerate(sample["rows"], 1):
+            a(f"**{n}. `{s['id']}`** — {s['vendor_term']}")
+            a(f"- claim: {s['claim']}")
+            a(f"- quote: \"{s['source_quote']}\"")
+            a(f"- source: {s['source_url']}")
+            for letter, m in sorted(s["mapping"].items()):
+                if m is None:
+                    a(f"- mapper {letter}: _no line for this id_")
+                else:
+                    pcf = "; ".join(f"{p.get('pcf_id')} {p.get('name')}" for p in (m.get("pcf_ids") or [])
+                                    if isinstance(p, dict)) or "—"
+                    a(f"- mapper {letter}: {m.get('status')} · theme {m.get('theme')} · {pcf} · "
+                      f"\"{m.get('user_story')}\"")
+            a("")
+    else:
+        a("No rows to sample.")
+        a("")
+
     a("## Provenance")
     a("")
     a(f"- kbqa `{__version__}`, manifest `{MANIFEST_SHA256}`")
@@ -668,7 +1000,13 @@ def build(
         "manifest_sha256": MANIFEST_SHA256,
         "batch": batch,
         "generated": utc_now_iso(),
-        "status": "BLOCKED" if blocked else "CLEAR",
+        "status": status,
+        "round": round_no,
+        "earlier_runs_without_hash": unhashed_runs,
+        "not_checked": not_checked,
+        "staging_sha256": staging_sha,
+        "sample": {**{k: v for k, v in sample.items() if k != "rows"},
+                   "ids": [s["id"] for s in sample["rows"]]},
         "exit_code": worst,
         "gates_run": [
             {
@@ -722,7 +1060,7 @@ def run(argv: List[str]) -> int:
         print(f"report: not a directory: {vendor_dir}")
         return 1
 
-    markdown, results, code, machine = build(vendor_dir, batch, denominator, stops)
+    markdown, results, code, machine = build(vendor_dir, batch, denominator, stops, log)
 
     for verdict, _ in results:
         write_verdict(verdict, vendor_dir, batch, log)
@@ -740,6 +1078,10 @@ def run(argv: List[str]) -> int:
     for verdict, _ in results:
         print(f"  {verdict.gate:<16} {verdict.verdict}")
     c = machine["counts"]
+    print(f"  status={machine['status']}  round={machine['round']}  "
+          f"sample_seed={machine['sample'].get('seed')}")
+    if machine["not_checked"]:
+        print(f"  NOT CHECKED (scanned 0): {', '.join(machine['not_checked'])}")
     print(
         f"  findings={c['findings']}  gaps={c['gaps']}  issues={c['issues']}  "
         f"structural={c['structural']}  planner={c['planner']}  fixable={c['fixable']}"

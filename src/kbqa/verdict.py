@@ -107,6 +107,13 @@ def write_verdict(
             "failed": verdict.counts.get("failed"),
             "kbqa": d["kbqa_version"],
             "manifest": d["manifest_sha256"],
+            # K3 · which bytes were checked. A fix round is a change to the
+            # staging file between two checks, so the round number is derived
+            # from these hashes rather than kept as a counter someone types.
+            "inputs": {
+                k: v.get("sha256") for k, v in (verdict.inputs or {}).items()
+                if isinstance(v, dict) and v.get("sha256")
+            },
         }
         Path(log_path).parent.mkdir(parents=True, exist_ok=True)
         with open(log_path, "a", encoding="utf-8") as fh:

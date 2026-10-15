@@ -40,6 +40,20 @@ def _conv():
 NAIVE_ROW_RE = re.compile(r'^\{"id"')
 NAIVE_KEY_RE = re.compile(r'^\s*"id"\s*:')
 
+# K1 · One naive count for every format: every `"id":` key on a row line, at
+# any position. The per-format counts above each saw only one way of writing a
+# row, and picked by format they disagreed with correct parses: a fenced array
+# written one object per line (`{"id": …},`) matched neither `^\s*"id":` nor —
+# because the fence decoded as an array — was counted with `^{"id"`, so 16
+# correctly parsed rows read as "naive count 0". An escaped `\"id\"` inside a
+# quoted string is not a key and is not counted.
+NAIVE_ANY_KEY_RE = re.compile(r'(?<!\\)"id"\s*:')
+
+
+def naive_id_keys(lines: List[str], start: int, stop: int) -> int:
+    """Count `"id":` keys on lines [start, stop) — 1-based, any position."""
+    return sum(len(NAIVE_ANY_KEY_RE.findall(lines[n - 1])) for n in range(start, stop))
+
 
 
 FRONTMATTER_DELIM = "---"
@@ -419,10 +433,10 @@ def parse_staging(path: Path) -> StagingParse:
     how a parser starts disagreeing with the file it claims to have read, so the
     format is reported rather than inferred and forgotten.
 
-    The naive cross-check (§G2) is per-format: `^{"id"` counts nothing in a
-    pretty-printed array, and `^\\s*"id":` counts nothing in JSONL. Using the
-    wrong one would make the cross-check disagree with a correct parse and fail
-    the batch for a reason that is not true of it.
+    The naive cross-check (§G2) counts every `"id":` key on a row line, in any
+    format (K1). The earlier per-format regexes each saw one way of writing a
+    row; chosen by format, they disagreed with correct parses on 152 of 246
+    files in one estate, which made the cross-check noise.
     """
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
@@ -432,12 +446,8 @@ def parse_staging(path: Path) -> StagingParse:
     if fences:
         rows, fence_errors, fmt = _parse_fences(lines)
         pages, pages_src = _declared_pages(fm, lines, fences)
-        naive_re = NAIVE_ROW_RE if fmt == "fenced-jsonl" else NAIVE_KEY_RE
         naive_count = sum(
-            1
-            for open_at, close_at in fences
-            for n in range(open_at, close_at)
-            if naive_re.match(lines[n - 1])
+            naive_id_keys(lines, open_at + 1, close_at) for open_at, close_at in fences
         )
         if fence_errors and not rows:
             rows = [RowParse(fences[0][0], "", None, e) for e in fence_errors]
@@ -454,7 +464,7 @@ def parse_staging(path: Path) -> StagingParse:
                 body_start = i + 1
                 break
     rows = _parse_jsonl_lines(lines, body_start, len(lines) + 1)
-    naive_count = sum(1 for line in lines if NAIVE_ROW_RE.match(line))
+    naive_count = naive_id_keys(lines, body_start, len(lines) + 1)
 
     pages, pages_src = _declared_pages(fm, lines, [])
     return StagingParse(fm, rows, naive_count, fm_err, "jsonl", pages, pages_src)
