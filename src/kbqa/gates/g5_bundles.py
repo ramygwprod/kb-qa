@@ -63,6 +63,8 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
             )
 
     counts = {
+        # K7: every gate states what it scanned, so 0 reads as NOT CHECKED.
+        "scanned": total_rows,
         "rows": total_rows,
         "distinct_terms": len(term_urls),
         "terms_at_multiple_urls": repeated,

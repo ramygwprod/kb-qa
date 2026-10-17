@@ -80,6 +80,9 @@ for surf in product docs help; do
   fi
   python3 -m kbqa g4 --rows "${ROWS[@]}" ${SARG[@]+"${SARG[@]}"} \
     --vendor-dir "$D" --batch "_surface-$surf-windows" --log "$LOG" | summ
+  # Advisory: always exit 0. A repeated term is a question for the operator.
+  python3 -m kbqa g5 --rows "${ROWS[@]}" \
+    --vendor-dir "$D" --batch "_surface-$surf-bundles" --log "$LOG" | summ
 done
 
 LEGACY=()

@@ -515,6 +515,36 @@ def test_unreadable_rows_are_not_folded_into_any_tier(estate):
     assert after["unreadable_rows"] == 1
 
 
+WRAPPED = (
+    "---\nbatch: wrapped\n---\n\n```json\n{\n  \"nodes\": [\n"
+    "    {\"id\": \"acme.a\", \"vendor_term\": \"A\"},\n"
+    "    {\"id\": \"acme.b\", \"vendor_term\": \"B\"},\n"
+    "    {\"id\": \"acme.c\", \"vendor_term\": \"C\"}\n"
+    "  ]\n}\n```\n"
+)
+
+
+def test_a_wrapper_object_counts_as_unreadable_in_the_totals_too(estate):
+    """A8, from the estate's cleaning audit: the totals said 0 unreadable rows
+    while the re-collection list of the same run named two batches.
+
+    `{"nodes": [...]}` parses as one object and no failure, so only the naive
+    count disagrees. Totals and list must apply the same test.
+    """
+    root = estate(Acme="good")
+    (root / "Competitors" / "Acme" / "_collect-wrapped-staging.md").write_text(WRAPPED, encoding="utf-8")
+    from kbqa.sweep import recollect_items
+
+    machine = _audit(root)
+    b = next(x for x in machine["batches"] if x["batch"] == "wrapped")
+    assert b["rows"] == 1 and b["rows_unparseable"] == 0 and b["naive_rows"] == 3, b
+    assert machine["totals"]["unreadable_batches"] == 1
+    assert machine["totals"]["unreadable_rows"] == 2
+
+    listed = recollect_items(machine)
+    assert [i["path"] for i in listed if i["kind"] == "batch-rows-unreadable"] == [b["path"]]
+
+
 def test_a_clean_estate_says_nothing_about_unreadable_rows(estate, capsys):
     """A line that always prints is a line nobody reads."""
     root = estate(Acme="good")

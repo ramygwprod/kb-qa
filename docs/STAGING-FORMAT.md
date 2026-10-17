@@ -176,7 +176,10 @@ Rules the parser enforces:
   is valid; v1 permitted `-` but not `_`, which cost 857 rows over an arbitrary
   distinction, and required two segments, which cost another 47 top-level nodes.
 - `depth_level` accepts the named levels **or** the vendor's own numeric depth,
-  as an integer or a string. Some hierarchies do not fit five names.
+  as an integer or a string. Some hierarchies do not fit five names. It accepts
+  `unknown` only for a page that shows no hierarchy: in a current-convention
+  batch, `unknown` beside a real `parent_path` is `depth_unknown_with_breadcrumb`,
+  because a breadcrumb's levels can be counted.
 - Fields outside the core contract must be registered in `vendor_fields.py` by
   name. Their values are never constrained — see docs/DECISIONS.md D-005.
 

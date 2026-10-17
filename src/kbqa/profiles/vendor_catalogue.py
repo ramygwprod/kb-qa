@@ -72,6 +72,13 @@ class DepthLevel(str, Enum):
     sub_feature = "sub-feature"
 
 
+# Every feature has a position in its subject's hierarchy, so `unknown` means
+# the page does not show it — never that nobody looked. A page that shows a
+# breadcrumb gives a depth by counting it; `strict_row_check` refuses `unknown`
+# there. (PIPELINE-SPEC §3: `unknown` when the page is silent.)
+DEPTH_UNKNOWN = "unknown"
+
+
 class Row(CoreRow):
     """A universal grounded claim, plus this framework's analytical fields."""
 
@@ -97,11 +104,12 @@ class Row(CoreRow):
         distinction the data does not draw.
         """
         s = str(v).strip()
-        if s in {d.value for d in DepthLevel} or s.isdigit():
+        if s in {d.value for d in DepthLevel} or s.isdigit() or s == DEPTH_UNKNOWN:
             return s
         raise ValueError(
             f"depth_level {v!r} is neither a named level "
-            f"({', '.join(d.value for d in DepthLevel)}) nor a numeric depth"
+            f"({', '.join(d.value for d in DepthLevel)}), a numeric depth, "
+            f"nor `{DEPTH_UNKNOWN}`"
         )
 
 
@@ -248,6 +256,13 @@ def strict_row_check(obj: dict) -> List[Tuple[str, str]]:
             "parent_path_empty",
             f"parent_path is {pp!r}; write the page's own breadcrumb verbatim, "
             "or `unknown` when the page shows none — never empty",
+        ))
+    if (str(obj.get("depth_level", "")).strip() == DEPTH_UNKNOWN
+            and isinstance(pp, str) and pp.strip() and pp.strip() != "unknown"):
+        out.append((
+            "depth_unknown_with_breadcrumb",
+            f"depth_level is `unknown` but the page shows the breadcrumb {pp!r}; "
+            "count its levels for a numeric depth, or use the level the page states",
         ))
     grade = obj.get("evidence_grade")
     if grade not in SCHEMA_EVIDENCE_GRADES:

@@ -1,6 +1,6 @@
 # kbqa — user manual
 
-**Version 6.15.1** · for operators and for maker agents
+**Version 6.16.0** · for operators and for maker agents
 
 Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -10,7 +10,7 @@ Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.15.1"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.16.0"
 # Day to day, the pipeline is two commands with a human between them:
 #
 #   /kbqa-collect <Subject Name>     collect until the source runs out
@@ -18,7 +18,7 @@ pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.15.1"
 #
 # Everything below is what those do, and what to run when you want it by hand.
 
-python -m kbqa --version          # must print 6.15.1
+python -m kbqa --version          # must print 6.16.0
 ```
 
 **Audit a corpus** — needs no captures, changes nothing, answers "what here can
@@ -101,7 +101,7 @@ python3 -m venv .venv
 For an estate or CI, install from the pinned tag rather than a branch:
 
 ```bash
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.15.1"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.16.0"
 ```
 
 **Always a tag, never a branch.** A branch would let the gates and the data they
@@ -131,7 +131,7 @@ python -m kbqa --manifest      # SHA-256 of every gate module
 
 | gate | checks | exit codes |
 |---|---|---|
-| **G0** permission | robots.txt allows our agent | 0 allowed · **2 DECLINED** · 1 unreachable |
+| **G0** permission | robots.txt allows both our agents — `Claude-User` (a fetch a person asked for) and `ClaudeBot` — each by its own group, else `*` | 0 allowed · **2 DECLINED** · 1 unreachable |
 | **G1** capture integrity | capture exists, markers balanced, hash matches, capture predates staging | 0 / 1 |
 | **G2** conformance | every row validates against the contract; no duplicate ids; **zero rows is a FAIL** | 0 / 1 |
 | **G3** grounding | every quote is a substring of **its own page's block** | 0 / 1 |
@@ -312,10 +312,11 @@ edit toward it.
 /kbqa-collect <Subject Name>
 ```
 
-It cannot fetch and it cannot write — it delegates to the `fetcher` and
-`row-writer` subagents, window by window, until the fetcher reports the source
-exhausted or stops on budget and parks with an offset. It returns a receipt per
-window and **no verdict**.
+It cannot fetch and it cannot write — it delegates to the `kbqa-fetcher` and
+`kbqa-row-writer` subagents, window by window, until the fetcher reports the
+source exhausted or stops on budget and parks with an offset, then to two
+independent `kbqa-mapper` passes per batch. It returns a receipt per window and
+**no verdict**.
 
 **Check**, once it returns:
 
@@ -495,15 +496,18 @@ appearing — not when it is explained.
 
 ### 5.8 · Role separation — enforced by capability
 
-Attestation is not proof. **Deny the tool instead.** Copy both definitions into
-the estate:
+Attestation is not proof. **Deny the tool instead.** `bash skills/install.sh
+<tag>` installs the collector's three agents into `~/.claude/agents/` and
+records them; the pre-flight STOPs on any difference, and on an agent of the
+same name in the estate's own `.claude/agents/`, which would override them:
 
 ```
-<estate>/.claude/agents/fetcher.md      tools: WebFetch, Write, Read
-<estate>/.claude/agents/row-writer.md   tools: Read, Write, Bash
+~/.claude/agents/kbqa-fetcher.md      tools: WebFetch, Write, Read, Bash
+~/.claude/agents/kbqa-row-writer.md   tools: Read, Write
+~/.claude/agents/kbqa-mapper.md       tools: Read, Write
 ```
 
-The row-writer has **no `WebFetch`**. Role separation becomes a fact about the
+The row-writer has **no `WebFetch` and no `Bash`**. Role separation becomes a fact about the
 environment rather than an instruction that can be forgotten under pressure. Its
 only input is a capture file, so no capture means no rows — which is what stops
 ungroundable rows being produced in the first place.
@@ -725,7 +729,7 @@ edit a recorded manifest.
 ---
 
 **Routing.** A failed gate goes back to the **planner**, never to the executor
-as "try again". The row-writer has `Bash` to write files, not to grade its own
+as "try again". The row-writer has no shell: it cannot run a gate on its own
 output.
 
 **Read Coverage first.** The report names gates that did *not* run. A gate that
@@ -739,9 +743,9 @@ did not run has found nothing — not the same as having found nothing wrong.
 | check | `/kbqa-check <subject folder>` | runs the gates per batch and per surface; reports CLEAR · BLOCKED · PARKED · NOT CHECKED | edit a row, collect, merge |
 | merge | `/kbqa-merge <subject folder> <batch>` | appends one CLEAR batch to `feature-tree.md` | merge on its own, edit a row, renumber an id |
 
-Each runs in its own session. `/kbqa-check` and `/kbqa-merge` ship with this
-package and are installed with `bash skills/install.sh <tag>`; `/kbqa-collect`
-is built and installed from the collection repository.
+Each runs in its own session. All three skills and the collector's agents ship
+with this package and are installed together with `bash skills/install.sh <tag>`,
+so one tag pins both sides of the contract between them.
 
 **Merging.** Only a batch `/kbqa-check` reported CLEAR, on the staging file's
 current bytes, with G1–G3 PASS from the installed gate code. The skill shows a
@@ -845,7 +849,7 @@ Two ways a script gets this wrong:
 
 ## 7 · Findings reference
 
-91 codes. Every one carries a remedy, enforced by `tests/test_report.py` — a
+92 codes. Every one carries a remedy, enforced by `tests/test_report.py` — a
 report that falls back to "see the message" for its most important findings is
 not a report.
 
@@ -869,6 +873,7 @@ not a report.
 | `completeness_unassessable` | planner | gap | No denominator and no windows — coverage is unknown, not complete |
 | `confidence_invalid` | fixable | issue | Mapping line: `confidence` is low, medium or high |
 | `denominator_missing` | structural | gap | Coverage unmeasurable |
+| `depth_unknown_with_breadcrumb` | fixable | issue | The page shows a breadcrumb: count its levels for the depth, or use the level the page names (current-convention batches) |
 | `duplicate_id` | fixable | issue | Two rows share an id; establish which is which |
 | `duplicate_page_block` | structural | issue | A URL captured twice; re-fetch cleanly |
 | `element_dominates` | planner | issue | One APQC element on > 30 % of rows — a human reads a sample first |
@@ -994,7 +999,7 @@ and the data they judge change in the same push.
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.15.1"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.16.0"
 ```
 
 > `pip < 21.3` cannot read this project's metadata and installs an empty package

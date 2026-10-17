@@ -1,9 +1,17 @@
 # Skills — the pipeline as capability, not instruction
 
-Canonical, version-controlled copies of the two skills that run the pipeline.
-Like `agents/`, they are **not active in this repository** — `kb-qa/` is the
-validator, and these are for the sessions that collect into an estate and check
-it.
+Canonical, version-controlled copies of the three skills that run the pipeline,
+and (in `../agents/`) the collector's three subagents. They are **not active in
+this repository** — `kb-qa/` is the validator, and these are for the sessions
+that collect into an estate, check it and merge it.
+
+| skill | the operator types | does |
+|---|---|---|
+| `kbqa-collect` | `/kbqa-collect <Subject>` | plan → approval → captures → rows → two classification passes |
+| `kbqa-check` | `/kbqa-check <subject folder>` | the gates per batch and per surface; CLEAR · BLOCKED · PARKED · NOT CHECKED |
+| `kbqa-merge` | `/kbqa-merge <subject folder> <batch>` | appends one CLEAR batch to `feature-tree.md` |
+
+Each runs in its own session, in the estate.
 
 ## The principle
 
@@ -11,70 +19,65 @@ A markdown file that says "delegate to the fetcher" is a request. Under time
 pressure, in a long context, or when delegating is inconvenient, it is skipped —
 and nothing notices, because the output looks the same either way.
 
-So the roles are separated by **what each session can do**, not by what it is
-asked to do. Every rule below that matters is enforced by an absent tool or a
-denied permission. Where something cannot be enforced, it is named as a limit
+So the roles are separated by **what each can do**, not by what it is asked to
+do, wherever the runtime allows it — and where it does not, the limit is named
 rather than rewritten as a stronger instruction.
 
-## The two roles
-
-| | `kbqa-collect` | `kbqa-check` |
-|---|---|---|
-| tools | `Task`, `Agent`, `Read` | `Bash`, `Read` |
-| can fetch | **no** — must delegate to `fetcher` | no |
-| can write | **no** — must delegate to `row-writer` | no |
-| can run commands | **no** | yes, to run the gates |
-| can read verdicts | **no** — denied | yes |
-| runs the mapping guards (`freeze`, `mappings`) | no | yes |
-
-`kbqa-collect` holds no `WebFetch`, no `Write` and no `Bash`. It physically
-cannot collect; it can only delegate to the `fetcher` and `row-writer`
-subagents, which hold complementary halves of the job — the fetcher has the
-network and no reason to interpret, the row-writer has the capture and no
-network. Role separation stops being a rule the orchestrator must remember and
-becomes a fact about its tool list.
-
-`kbqa-check` holds no `Edit` and no `Write`. It cannot modify a gate, a capture
-or a row.
+- **A subagent's `tools:` list is an allowlist.** The row-writer and the mapper
+  hold `Read` and `Write` only: no network, no shell. The fetcher holds the
+  network and writes captures, never rows.
+- **A skill's `allowed-tools` is not.** It pre-approves tools and takes none
+  away, so the collecting orchestrator's "delegate every step" is a rule it
+  keeps, not a wall.
+- **The collector never sees a verdict.** The check runs in a separate session;
+  a collecting session can also be started with
+  `kbqa-collect/collect-session-settings.json`, which denies reading `_qa/`.
+- **`kbqa-check` holds no `Edit` and no `Write`.** It cannot modify a gate, a
+  capture or a row. `kbqa-merge` is `disable-model-invocation`: only the
+  operator runs it.
 
 ## Install
 
-**`kbqa-check`** and **`kbqa-merge`** are installed globally, from a tag, by the
-operator in their own terminal (PIPELINE-SPEC §5):
+All three skills and the three agents, from one tag, by the operator in their
+own terminal (PIPELINE-SPEC §5):
 
 ```bash
-bash skills/install.sh v6.15.1
+bash skills/install.sh v6.16.0
 ```
 
-It clones the tag, copies each skill to `~/.claude/skills/<skill>/`, and writes
-`INSTALLED-FROM-<skill>` there — the tag, the commit and the sha256 of every
-installed file. An existing install is moved to `~/.kbqa-check-backups/`,
-outside the skills folder, never deleted. The pre-flight compares the installed
-files with each record and STOPs on any difference
-(`preflight.sh kbqa-check kbqa-merge` checks both). The script then prints the
-`pip` command for the validator itself, which the operator also runs.
+It clones the tag, copies each skill to `~/.claude/skills/<skill>/` and the
+agents to `~/.claude/agents/`, and writes `INSTALLED-FROM-<skill>` in each
+skill's folder — the tag, the commit and the sha256 of every installed file; the
+collector's record also lists its agents as `agents/<file>`. Anything replaced
+is moved to `~/.kbqa-check-backups/`, outside the skills folder, never deleted.
+The script then prints the `pip` command for the validator itself, which the
+operator also runs, and the pre-flight:
 
-The collecting side:
-
-```
-<estate>/.claude/skills/kbqa-collect/SKILL.md
-<estate>/.claude/agents/fetcher.md
-<estate>/.claude/agents/row-writer.md
+```bash
+bash ~/.claude/skills/kbqa-check/scripts/preflight.sh kbqa-check kbqa-merge kbqa-collect
 ```
 
-## Settings — the two snippets are mutually exclusive
+It STOPs on any installed file that differs from its record, and on an agent of
+the same name in the project's own `.claude/agents/` (a project agent overrides
+a user one). Each skill runs it for itself before anything else.
 
-Each skill ships a `settings-snippet.json`, and **they cannot both be active in
-one settings file**: the collecting role is denied reading `_qa/`, and the
-checking role must read it.
+## Settings — one snippet for the estate, one file for a collecting session
 
-Permission denies are session-wide, so pick per session:
+- **`kbqa-check/settings-snippet.json`** goes into the estate's
+  `.claude/settings.json`. It closes the bypass routes — writes into an
+  installed `kbqa`, `pip` in any form, `.git/hooks`, `.github/workflows`,
+  `--no-verify` — the settings file itself, the installed skills and agents
+  (`~/.claude/skills/**`, `~/.claude/agents/**`) and the project's own
+  `.claude/agents/**`.
+- **`kbqa-collect/collect-session-settings.json`** denies reading `_qa/` and the
+  QA logs. **Never merge it into the estate's settings**: the check runs in the
+  same project and must read `_qa/`. Load it only for a collecting session:
 
-- a machine or checkout used for collecting merges
-  `kbqa-collect/settings-snippet.json`
-- one used for checking merges `kbqa-check/settings-snippet.json`
+  ```bash
+  claude --settings ~/.claude/skills/kbqa-collect/collect-session-settings.json
+  ```
 
-**Substitute the checkout placeholder.** Both snippets carry
+**Substitute the checkout placeholder.** The snippet carries
 
 ```
 Edit(//ABSOLUTE/PATH/TO/YOUR/kb-qa/CHECKOUT/**)
@@ -92,27 +95,20 @@ can edit the gates through your working copy while every other route is closed.
 A placeholder left unsubstituted denies a path that does not exist, which is
 harmless and useless.
 
-Both deny the same bypass classes — writes into an installed `kbqa`, `pip` in
-any form, `.git/hooks`, `.github/workflows`, and `--no-verify` — plus the
-settings file itself, so the boundary cannot rewrite itself. The collecting
-snippet adds the `_qa/` read denies.
-
-If you keep one settings file and a human carries findings between sessions,
-use the **checking** snippet and rely on the human. Say that is what you are
-doing; do not describe the read-deny as being in force when it is not.
-
 ## What capability cannot reach
 
 Three limits, named so the enforcement is not mistaken for completeness.
 
-**A subagent's tools are its own.** The `fetcher` holds `WebFetch` because its
-definition grants it. Whether a session-level restriction also suppresses a
-subagent's declared tools depends on the runtime, not on this package. **Verify
-once** on your setup: ask a collecting session to fetch a URL directly and
-confirm it cannot, then confirm the `fetcher` subagent still can.
+**The orchestrator can still fetch.** `allowed-tools` pre-approves; it does
+not remove. A collecting session that ignores its skill can fetch and write
+itself, and the rows would then be grounded in that context's memory of a page.
+What catches it afterwards: the staging file must cite a capture whose sha256
+the fetcher recorded, and every quote must be in that capture (G1, G3). What
+cannot: a capture the orchestrator wrote itself, hashed by itself. **Verify
+once** on your setup that the `kbqa-row-writer` subagent cannot fetch.
 
-**The capture is what the fetcher's tool returned, not necessarily what the
-server sent.** A fetch tool that converts or summarises produces a capture whose
+**The capture is what the fetch tool returned, not necessarily what the server
+sent.** A fetch tool that converts or summarises produces a capture whose
 text differs from the page. Quotes then match the capture, G3 passes, and the
 text is not what a reader sees. Verify once per fetch mechanism by comparing one
 captured sentence against the live page. No gate can detect this.
@@ -134,8 +130,9 @@ level 3½ and why a human reading the verdicts is load-bearing.
 
 `kbqa-check/scripts/preflight.sh` pins the version (`PINNED`) and the manifest
 SHA (`EXPECTED_MANIFEST`) — the values the pre-flight actually compares.
-`tests/test_skill_pin.py` fails the release if either goes stale, if either
-skill gains a writing tool, or if a deny rule is dropped.
+`tests/test_skill_pin.py` fails the release if either goes stale, if the
+check skill gains a writing tool, if an agent's tools change, or if a deny rule
+is dropped.
 
 ```bash
 python3 -m kbqa --version

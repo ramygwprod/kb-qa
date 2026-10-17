@@ -203,33 +203,35 @@ to make a gate pass is the exact failure mode this package exists to catch.
 ## Skills — the pipeline as capability, not instruction
 
 ```
-skills/kbqa-collect/SKILL.md   the collecting role
-skills/kbqa-check/SKILL.md     the checking role
+skills/kbqa-collect/SKILL.md   collect: plan, capture, rows, two classification passes
+skills/kbqa-check/SKILL.md     check: the gates, per batch and per surface
+skills/kbqa-merge/SKILL.md     merge: append one CLEAR batch to the tree
+agents/kbqa-*.md               the collector's three subagents
 ```
 
 A markdown file saying "delegate to the fetcher" is a request, and a request is
-skipped under pressure with nothing noticing. So each role is defined by what
-its session **cannot** do.
+skipped under pressure with nothing noticing. So where it can be, each role is
+defined by what it **cannot** do — and where it cannot be, the limit is named.
 
-| | `kbqa-collect` | `kbqa-check` |
-|---|---|---|
-| tools | `Task`, `Agent`, `Read` | `Bash`, `Read` |
-| can fetch | **no** — must delegate | no |
-| can write | **no** — must delegate | no |
-| can read verdicts | **no** — denied | yes |
+| | tools | can fetch | can write | can run commands |
+|---|---|---|---|---|
+| `kbqa-fetcher` | `WebFetch`, `Write`, `Read`, `Bash` | yes | captures, indexes, stops | four named commands |
+| `kbqa-row-writer` | `Read`, `Write` | **no** | staging only | **no** |
+| `kbqa-mapper` | `Read`, `Write` | **no** | map files only | **no** |
 
-The collector holds no `WebFetch`, no `Write` and no `Bash`, so it cannot
-collect — only delegate to the `fetcher` and `row-writer` subagents, which hold
-complementary halves of the job. A session holding both the network and a
-writing tool will use both, and rows written that way are grounded in a
-context's memory of a page rather than in a capture.
+A subagent's `tools:` list is an allowlist: the row-writer has no network, so
+its only source is the capture on disk. A skill's `allowed-tools` is not — it
+pre-approves tools and takes none away — so the orchestrator's "delegate every
+step, never fetch or write" is a rule it keeps, not a wall. The collector never
+sees a verdict: the check runs in its own session, and a collecting session
+started with `kbqa-collect/collect-session-settings.json` is denied `_qa/`.
 
-Each ships a `settings-snippet.json` closing the routes around the boundary.
-**They are mutually exclusive** — permission denies are session-wide, and the
-checker must read the `_qa/` the collector must not. `tests/test_skill_pin.py`
-fails the build if a skill gains a writing tool, a deny rule is dropped, or the
-pinned manifest goes stale. See [skills/README.md](skills/README.md) for what
-this does and does not close.
+`bash skills/install.sh <tag>` installs all three skills and the three agents
+from one tag and records every file; the pre-flight STOPs on any difference.
+The estate's settings take one snippet, `kbqa-check/settings-snippet.json`.
+`tests/test_skill_pin.py` fails the build if an agent's tools change, a deny
+rule is dropped, or the pinned manifest goes stale. See
+[skills/README.md](skills/README.md) for what this does and does not close.
 
 ## How this was built
 

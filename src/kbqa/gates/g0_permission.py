@@ -19,8 +19,12 @@ from . import EXIT_DECLINED, EXIT_FAIL, EXIT_PASS
 
 GATE = "g0_permission"
 
-# The agents whose permission actually governs this project.
-OUR_AGENTS = ("claudebot", "*")
+# The agents whose permission governs this project. Claude-User is the agent a
+# site owner addresses for a fetch a person asked for — which every collection
+# is (Anthropic, "Does Anthropic crawl data from the web…"). ClaudeBot is the
+# training crawler, the only one G0 read before v6.16.0. Each is governed by its
+# own group, else by `*` (RFC 9309 §2.2.1); the host is refused if either is.
+OUR_AGENTS = ("claude-user", "claudebot")
 
 _USER_AGENT = "ClaudeBot"
 _TIMEOUT = 30
@@ -83,12 +87,19 @@ def _parse_groups(text: str) -> Dict[str, Dict[str, List[str]]]:
     return groups
 
 
-def _applicable_group(groups: Dict[str, Dict[str, List[str]]]) -> Tuple[Optional[str], Dict[str, List[str]]]:
-    """RFC 9309 §2.2.1: the most specific matching user-agent group wins."""
-    for agent in OUR_AGENTS:
-        if agent in groups:
-            return agent, groups[agent]
+def _applicable_group(agent: str, groups: Dict[str, Dict[str, List[str]]]) -> Tuple[Optional[str], Dict[str, List[str]]]:
+    """RFC 9309 §2.2.1: the agent's own group if one names it, else `*`."""
+    for name in (agent, "*"):
+        if name in groups:
+            return name, groups[name]
     return None, {"allow": [], "disallow": [], "crawl_delay": []}
+
+
+def _delay_seconds(value: str) -> float:
+    try:
+        return float(value)
+    except ValueError:
+        return 0.0
 
 
 def _is_site_wide_disallow(group: Dict[str, List[str]]) -> bool:
@@ -130,17 +141,25 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int, Optional[Path]]
     artifact.write_text(text, encoding="utf-8")
 
     groups = _parse_groups(text)
-    agent, group = _applicable_group(groups)
-    declined = _is_site_wide_disallow(group)
+    applied = {a: _applicable_group(a, groups) for a in OUR_AGENTS}
+    refused = [a for a, (_, g) in applied.items() if _is_site_wide_disallow(g)]
+    declined = bool(refused)
 
     findings: List[Finding] = []
-    if declined:
+    for a in refused:
+        matched = applied[a][0]
         findings.append(
             Finding(
                 "site_wide_disallow",
-                f"user-agent {agent!r} is disallowed site-wide; vendor is closed",
+                f"user-agent {a!r} (group {matched!r}) is disallowed site-wide; vendor is closed",
             )
         )
+    # The stricter reading of the two: every rule that applies to either agent,
+    # and the longest crawl delay.
+    agent = applied[(refused or list(OUR_AGENTS))[0]][0]
+    group = {k: sorted({v for _, g in applied.values() for v in g[k]})
+             for k in ("allow", "disallow", "crawl_delay")}
+    group["crawl_delay"].sort(key=_delay_seconds, reverse=True)
 
     v = Verdict(
         gate=GATE,

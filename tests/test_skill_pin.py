@@ -31,7 +31,14 @@ SNIPPET = SKILL_DIR / "settings-snippet.json"
 PREFLIGHT = SKILL_DIR / "scripts" / "preflight.sh"
 
 COLLECT = SKILLS / "kbqa-collect" / "SKILL.md"
-COLLECT_SNIPPET = SKILLS / "kbqa-collect" / "settings-snippet.json"
+# The collecting session's own deny file, loaded with `claude --settings`. It is
+# never merged into the estate's settings: the check runs in the same project
+# and must read _qa/.
+COLLECT_SNIPPET = SKILLS / "kbqa-collect" / "collect-session-settings.json"
+AGENTS = SKILLS.parent / "agents"
+COLLECT_AGENTS = {"kbqa-fetcher.md": {"WebFetch", "Write", "Read", "Bash"},
+                  "kbqa-row-writer.md": {"Read", "Write"},
+                  "kbqa-mapper.md": {"Read", "Write"}}
 
 # The collecting role is defined by what it cannot do. Granting any of these
 # back would let one session fetch AND write, which is rows grounded in a
@@ -248,19 +255,53 @@ def test_a_collector_granted_a_forbidden_tool_is_caught(collect_text, tool):
     assert granted_tools(mutated) & COLLECT_FORBIDDEN
 
 
-def test_both_snippets_carry_a_checkout_placeholder():
+def test_the_project_snippet_carries_a_checkout_placeholder():
     """`**/kb-qa/**` only matches a directory literally named kb-qa.
 
     A working copy can be called anything. Without a path the operator
     substitutes, a session can edit the gates through the checkout while every
     other route to them is closed — the one hole that makes the rest decorative.
     """
-    for snippet in (SNIPPET, COLLECT_SNIPPET):
-        deny = " ".join(json.loads(snippet.read_text())["permissions"]["deny"])
-        assert "CHECKOUT" in deny, (
-            f"{snippet.parent.name} has no checkout placeholder, so a kb-qa "
-            "working copy under any other name is writable"
-        )
+    deny = " ".join(json.loads(SNIPPET.read_text())["permissions"]["deny"])
+    assert "CHECKOUT" in deny, (
+        "the project snippet has no checkout placeholder, so a kb-qa working "
+        "copy under any other name is writable"
+    )
+
+
+def test_the_project_snippet_protects_the_installed_skills_and_agents():
+    """verify-by-record catches an edit at the NEXT run; the deny stops it now.
+
+    A project-level agent overrides the installed one of the same name, so the
+    project's own .claude/agents/ is closed too.
+    """
+    deny = " ".join(json.loads(SNIPPET.read_text())["permissions"]["deny"])
+    for path in ("~/.claude/skills/**", "~/.claude/agents/**", ".claude/agents/**"):
+        assert f"Edit({path})" in deny and f"Write({path})" in deny, path
+
+
+def test_there_is_one_project_snippet():
+    """Two snippets for one project drift apart; the collector has none of its own."""
+    assert not (SKILLS / "kbqa-collect" / "settings-snippet.json").exists()
+
+
+@pytest.mark.parametrize("name", sorted(COLLECT_AGENTS))
+def test_each_collector_agent_holds_exactly_its_tools(name):
+    """A subagent's `tools:` list is a real allowlist — the one wall here.
+
+    The row-writer without the network and the mapper without the shell are the
+    separations everything downstream relies on.
+    """
+    text = (AGENTS / name).read_text(encoding="utf-8")
+    m = re.search(r"^tools:\s*(.+)$", text, re.MULTILINE)
+    assert m, f"{name} declares no tools"
+    assert {t.strip() for t in m.group(1).split(",")} == COLLECT_AGENTS[name]
+
+
+def test_only_the_three_collector_agents_ship():
+    """The superseded `fetcher.md` / `row-writer.md` loaded beside the new ones once."""
+    shipped = {p.name for p in AGENTS.glob("*.md") if p.name != "README.md"}
+    assert shipped == set(COLLECT_AGENTS)
 
 
 def test_a_malformed_pin_is_caught_at_any_length(pin_text):
