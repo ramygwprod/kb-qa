@@ -7,6 +7,8 @@ disable-model-invocation: true
 
 # Collecting a subject
 
+**This copy is kbqa-collect v6.17.1**, installed with kb-qa v6.17.1.
+
 **Invoked as**, by the operator, in a session opened at the estate root:
 
 | command | does |
@@ -43,11 +45,18 @@ Three more rules for running the session:
   opening the URL themselves and telling you what it shows. What the operator
   reports is their ruling (a scope decision or a stop reason), never a capture.
   Never wait on a step in silence.
+- **Three tries of a step, then the operator.** Delegate the same step at most
+  three times. If it still has not worked, it is a blocker: bring it to the
+  operator with the options. Nothing is retried without limit — the commands
+  bound their own attempts, and you bound yours.
 
 ## 0 · Pre-flight and configuration
 
 1. Delegate to `kbqa-fetcher` its pre-flight (its §0). On any `STOP`, stop and
-   give the operator the printed command.
+   give the operator the printed command. **Then compare versions:** the
+   pre-flight prints `kbqa: v<version>`; if that is not the version this copy
+   states at the top, stop — this session loaded an older copy of the skill than
+   is installed. Tell the operator to close this session and start a new one.
 2. Read `kbqa-estate.json` at the estate root. It must name, relative to the
    estate root: `subjects_dir`, `logic_sheet`, `themes_codebook`,
    `apqc_elements`. If the file or any key is missing, or a named file does not
@@ -108,20 +117,23 @@ what the pages show; recording it is the operator's.
 
 ## 2 · Collect each approved surface, window by window
 
-Batch names: `<surface>-<YYYY-MM-DD>-wNN` (`w01`, `w02`, …), the date being the
-fetcher's access date from the plan. Before each window, find the next free
-number by Read alone (`Read` cannot list a folder): from `w01` upward, Read
-`<subject folder>/_capture-<batch>.raw.txt` and
-`<subject folder>/_collect-<batch>-staging.md` with `limit: 1`; the first number
-for which **both** Reads fail as absent is the next batch. **A batch name is never
-reused.**
+**Where a surface stands is read from disk, never remembered.** Before the first
+window of a surface — in every run — have `kbqa-fetcher` report its status
+(`kbqa capture --status`, its §3). If windows are already recorded, show the
+operator: the windows so far, where collection stopped (`resume_from`), whether
+the surface is `exhausted`, the failed pages that can be retried, and the pages
+that need the operator. Continue only on the operator's word; never start a
+surface again from the beginning.
+
+Batch names (`<surface>-<YYYY-MM-DD>-wNN`) are chosen by `kbqa capture`; a batch
+name is never reused.
 
 Per window:
 
-1. `kbqa-fetcher`: one window — batch, surface, the denominator path, the
-   approved selection of its lines, and the offset (0 for the first window, then
-   the previous receipt's `next_offset`). `kbqa capture` slices and sizes the
-   window; the fetcher returns its receipt (its §6).
+1. `kbqa-fetcher`: one window — surface, the denominator path, and either the
+   approved selection (the surface's first window) or `--resume` (every later
+   window, in this run or a later one). `kbqa capture` names the batch, slices and
+   sizes the window, and records it; the fetcher returns its receipt (its §6).
 2. `kbqa-row-writer`: the capture **path** and the receipt values, including
    each page's `lines` and `parts`, so it reads one part at a time with its
    context. It returns
@@ -130,10 +142,22 @@ Per window:
 3. `kbqa-fetcher` again, only if step 2 named pages with no row: it records
    `no feature: <what the page is>` for each (its §4).
 4. Read `window_end` — set by `kbqa capture`, never by an agent: `exhausted` —
-   no selected item remains, the surface is done; `budget` — next window from
-   `next_offset`; `error` — report and stop this surface.
+   no selected item remains, the surface is done; `budget` — next window, with
+   `--resume`; `error` — nothing in this window could be captured: stop this
+   surface and bring the receipt's failures to the operator. The window is
+   recorded, so the next run continues after it.
    A host that will not load is never worked around: stop that surface and ask
    the operator.
+5. Bring every `needs_operator` item to the operator — a page no attempt can fix
+   (a 404, a page failing in three runs) with its suggested stop line. On the
+   operator's word, `kbqa-fetcher` adds that exact line, or the operator opens
+   the URL and rules on it.
+
+**Failed pages.** When a surface's windows are done, if its receipts list failed
+pages that may still pass (a timeout, a network error, throttling), offer the
+operator one retry run: on a yes, `kbqa-fetcher` runs `--retry-failed`, which
+retries each such page in at most three runs in all and then hands it to the
+operator. The retry batch is written and classified like any other.
 
 ## 3 · Coverage is measured, not re-read
 

@@ -1,6 +1,6 @@
 # kbqa — user manual
 
-**Version 6.17.0** · for operators and for maker agents
+**Version 6.17.1** · for operators and for maker agents
 
 Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -10,7 +10,7 @@ Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.17.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.17.1"
 # Day to day, the pipeline is two commands with a human between them:
 #
 #   /kbqa-collect <Subject Name>     collect until the source runs out
@@ -18,7 +18,7 @@ pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.17.0"
 #
 # Everything below is what those do, and what to run when you want it by hand.
 
-python -m kbqa --version          # must print 6.17.0
+python -m kbqa --version          # must print 6.17.1
 ```
 
 **Audit a corpus** — needs no captures, changes nothing, answers "what here can
@@ -101,7 +101,7 @@ python3 -m venv .venv
 For an estate or CI, install from the pinned tag rather than a branch:
 
 ```bash
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.17.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.17.1"
 ```
 
 **Always a tag, never a branch.** A branch would let the gates and the data they
@@ -810,7 +810,7 @@ receipt with the exact stop lines to add.
 | action | fetches | writes | exit |
 |---|---|---|---|
 | `index --out <d> --surface <s> --rung <n> --url <u> [--html] [--path-prefix <p>]` | the subject's `llms.txt`, sitemap (indexes and gzip followed) or HTML index page | `_denominator-<surface>-<date>.md`, in the index's own order and words; `--path-prefix` (operator-approved) is recorded in its header; the receipt's `sections` summarise it by path with line ranges | 0 written · 1 refused |
-| `capture --out <d> --batch <b> --denominator <f> [--select <lines>] [--offset <n>] [--max-pages <n>] [--max-chars <n>]` (or `--url <u>…`) | one window, sliced from the approved selection and sized by budget (20 pages / ~150,000 characters by default) | `_capture-<batch>.raw.txt` — each page's text by a fixed rendering, a breadcrumb as one ` > ` line — and `_raw/<batch>/` | 0 if any page was captured · 1 otherwise; the receipt sets `window_end` (`exhausted` only when no selected item remains), `next_offset`, and each page's line range; a 429/503 ends the window (`stopped: throttled`) |
+| `capture --out <d> --surface <s> --denominator <f> --select <lines> \| --resume` · `--retry-failed` · `--status` (or `--url <u>…`) | one window, sliced from the approved selection and sized by budget (20 pages / ~150,000 characters by default) | `_capture-<batch>.raw.txt` — each page's text by a fixed rendering, a breadcrumb as one ` > ` line — and `_raw/<batch>/` | 0 if any page was captured · 1 otherwise; names the next free batch; records every window's state in `_raw/<batch>/WINDOW.json`, even when nothing was captured; `--resume` continues at the recorded `next_offset` and refuses a gap, another denominator or another selection; a failure that may pass gets 3 attempts in a run and `--retry-failed` at most 3 runs, then goes to `needs_operator` with a suggested stop line; the receipt sets `window_end` (`exhausted` only when no selected item remains), `next_offset`, and each page's line range; a 429/503 ends the window (`stopped: throttled`) |
 
 Each page in a capture receipt also lists its `parts`: a page over ~20,000
 characters is split at headings (at line ends where a section has none), and
@@ -1031,7 +1031,7 @@ and the data they judge change in the same push.
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.17.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.17.1"
 ```
 
 > `pip < 21.3` cannot read this project's metadata and installs an empty package

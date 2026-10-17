@@ -534,3 +534,165 @@ def test_the_element_outline_gives_each_group_its_line_ranges(tmp_path):
     first = text
     assert elements.run(["--outline", str(lst)]) == 0
     assert (tmp_path / "apqc.outline.md").read_text() == first, "the same list gives the same outline"
+
+
+# ── never stuck: bounded attempts, a recorded way on, a fallback ───────────
+
+class SeqWeb(Web):
+    """A URL may answer differently on each request: a list is consumed in
+    order, its last answer repeating. Status 0 is a transport failure."""
+
+    def __call__(self, req, timeout=None):
+        url = req.full_url
+        self.asked.append(url)
+        answers = self.pages.get(url)
+        if answers is None:
+            raise urllib.error.HTTPError(url, 404, "not found", {}, io.BytesIO(b""))
+        if isinstance(answers, list):
+            status, body, ctype = answers.pop(0) if len(answers) > 1 else answers[0]
+        else:
+            status, body, ctype = answers
+        if status == 0:
+            raise urllib.error.URLError("connection reset")
+        if status >= 400:
+            raise urllib.error.HTTPError(url, status, "err", {}, io.BytesIO(b""))
+        return _Resp(url, status, body, ctype)
+
+
+@pytest.fixture
+def seqweb(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(fetch, "_sleep", sleeps.append)
+
+    def install(pages):
+        w = SeqWeb(pages)
+        monkeypatch.setattr(fetch, "_open", w)
+        return w
+    install.sleeps = sleeps
+    return install
+
+
+OK = (200, PAGE.encode(), "text/html")
+
+
+def _cap(subject, *args):
+    import contextlib
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = capture.run(["--out", str(subject), "--date", DAY, *args])
+    return code, json.loads(out.getvalue())
+
+
+def test_a_failure_that_may_pass_gets_three_attempts_then_stops(subject, seqweb):
+    a = f"https://{HOST}/flaky"
+    w = seqweb({a: [(0, b"", ""), (502, b"", ""), (500, b"", "")]})
+    code, r = _cap(subject, "--surface", "docs", "--url", a)
+    assert code == 1
+    assert w.asked == [a, a, a], "three attempts, never more"
+    assert seqweb.sleeps == [2.0, 5.0]
+    assert r["failures"] == [{"url": a, "reason": "HTTP 500", "class": "transient", "attempts": 3}]
+
+
+def test_a_failure_that_passes_on_a_later_attempt_is_captured(subject, seqweb):
+    a = f"https://{HOST}/flaky"
+    seqweb({a: [(0, b"", ""), OK]})
+    code, r = _cap(subject, "--surface", "docs", "--url", a)
+    assert code == 0 and [p["url"] for p in r["pages"]] == [a]
+
+
+def test_a_final_error_is_not_retried_and_goes_to_the_operator(subject, seqweb):
+    a = f"https://{HOST}/gone"
+    w = seqweb({a: (404, b"", "")})
+    code, r = _cap(subject, "--surface", "docs", "--url", a)
+    assert w.asked == [a], "retrying a 404 cannot help"
+    assert r["needs_operator"] == [{"url": a, "reason": "HTTP 404", "runs": 1,
+                                    "suggested_stop_line": f"- {a} | unreachable: HTTP 404"}]
+
+
+def test_batches_are_numbered_by_code(subject, seqweb):
+    seqweb({f"https://{HOST}/p": OK, f"https://{HOST}/q": OK})
+    assert _cap(subject, "--surface", "docs", "--url", f"https://{HOST}/p")[1]["batch"] == f"docs-{DAY}-w01"
+    assert _cap(subject, "--surface", "docs", "--url", f"https://{HOST}/q")[1]["batch"] == f"docs-{DAY}-w02"
+
+
+def test_a_window_that_captured_nothing_is_recorded_and_never_repeated(subject, seqweb):
+    den = _den(subject, n=4)
+    seqweb({f"https://{HOST}/p1": (0, b"", ""), f"https://{HOST}/p2": (0, b"", ""),
+            f"https://{HOST}/p3": OK, f"https://{HOST}/p4": OK})
+    code, r = _cap(subject, "--surface", "docs", "--denominator", str(den), "--max-pages", "2")
+    assert code == 1 and r["window_end"] == "error" and r["next_offset"] == 2
+    assert (subject / "_raw" / f"docs-{DAY}-w01" / "WINDOW.json").exists()
+    code, r = _cap(subject, "--surface", "docs", "--denominator", str(den), "--resume")
+    assert code == 0 and r["batch"] == f"docs-{DAY}-w02"
+    assert [p["url"] for p in r["pages"]] == [f"https://{HOST}/p3", f"https://{HOST}/p4"]
+    assert r["window_end"] == "exhausted"
+
+
+def test_resume_continues_exactly_where_the_recorded_windows_stopped(subject, seqweb):
+    den = _den(subject, n=5)
+    seqweb({f"https://{HOST}/p{i}": OK for i in range(1, 6)})
+    _cap(subject, "--surface", "docs", "--denominator", str(den), "--select", "2-6", "--max-pages", "2")
+    code, r = _cap(subject, "--surface", "docs", "--denominator", str(den), "--resume", "--max-pages", "2")
+    assert r["offset"] == 2 and [p["url"] for p in r["pages"]] == [f"https://{HOST}/p3", f"https://{HOST}/p4"]
+    code, r = _cap(subject, "--surface", "docs", "--denominator", str(den), "--resume")
+    assert r["window_end"] == "exhausted"
+    code, r = _cap(subject, "--surface", "docs", "--denominator", str(den), "--resume")
+    assert code == 1 and "exhausted" in r["refused"]
+
+
+def test_resume_refuses_a_changed_denominator_or_a_different_scope(subject, seqweb):
+    den = _den(subject, n=4)
+    seqweb({f"https://{HOST}/p{i}": OK for i in range(1, 5)})
+    _cap(subject, "--surface", "docs", "--denominator", str(den), "--select", "2-5", "--max-pages", "1")
+    code, r = _cap(subject, "--surface", "docs", "--denominator", str(den), "--resume", "--select", "2-3")
+    assert code == 1 and "scope would drift" in r["refused"]
+    den.write_text(den.read_text() + f"- [P9](https://{HOST}/p9)\n")
+    code, r = _cap(subject, "--surface", "docs", "--denominator", str(den), "--resume")
+    assert code == 1 and "another denominator" in r["refused"]
+
+
+def test_resume_refuses_a_gap_in_the_recorded_windows(subject, seqweb):
+    den = _den(subject, n=5)
+    seqweb({f"https://{HOST}/p{i}": OK for i in range(1, 6)})
+    _cap(subject, "--surface", "docs", "--denominator", str(den), "--max-pages", "1")
+    _cap(subject, "--surface", "docs", "--denominator", str(den), "--offset", "3", "--max-pages", "1")
+    code, r = _cap(subject, "--surface", "docs", "--denominator", str(den), "--resume")
+    assert code == 1 and "gap or overlap" in r["refused"]
+
+
+def test_failed_pages_are_retried_in_at_most_three_runs_then_go_to_the_operator(subject, seqweb):
+    den = _den(subject, n=2)
+    bad = f"https://{HOST}/p2"
+    seqweb({f"https://{HOST}/p1": OK, bad: (0, b"", "")})
+    _cap(subject, "--surface", "docs", "--denominator", str(den))          # run 1: p2 fails
+    code, r = _cap(subject, "--surface", "docs", "--retry-failed")        # run 2
+    assert r["kind"] == "retry" and r["failures"][0]["url"] == bad
+    _cap(subject, "--surface", "docs", "--retry-failed")                  # run 3
+    code, r = _cap(subject, "--surface", "docs", "--retry-failed")        # no run 4
+    assert code == 1 and "no failed page is left to retry" in r["refused"]
+    line = r["needs_operator"][0]["suggested_stop_line"]
+    assert line.startswith(f"- {bad} | unreachable: ") and "connection reset" in line and line.endswith("in 3 runs")
+
+
+def test_a_failed_page_captured_on_retry_is_never_retried_again(subject, seqweb):
+    den = _den(subject, n=1)
+    a = f"https://{HOST}/p1"
+    seqweb({a: [(0, b"", ""), (0, b"", ""), (0, b"", ""), OK]})
+    _cap(subject, "--surface", "docs", "--denominator", str(den))
+    code, r = _cap(subject, "--surface", "docs", "--retry-failed")
+    assert code == 0 and [p["url"] for p in r["pages"]] == [a]
+    code, r = _cap(subject, "--surface", "docs", "--retry-failed")
+    assert code == 1 and r["needs_operator"] == []
+
+
+def test_status_reports_where_a_surface_stopped_and_fetches_nothing(subject, seqweb):
+    den = _den(subject, n=4)
+    w = seqweb({f"https://{HOST}/p1": OK, f"https://{HOST}/p2": (0, b"", ""),
+                f"https://{HOST}/p3": (404, b"", ""), f"https://{HOST}/p4": OK})
+    _cap(subject, "--surface", "docs", "--denominator", str(den), "--max-pages", "3")
+    asked = len(w.asked)
+    code, r = _cap(subject, "--surface", "docs", "--status")
+    assert code == 0 and len(w.asked) == asked, "status fetches nothing"
+    assert r["resume_from"] == 3 and r["exhausted"] is False
+    assert r["retryable_failed_pages"] == [f"https://{HOST}/p2"]
+    assert [x["url"] for x in r["needs_operator"]] == [f"https://{HOST}/p3"]

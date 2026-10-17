@@ -29,6 +29,11 @@ USER_AGENT = f"Mozilla/5.0 (compatible; kbqa-capture/{__version__}; +https://git
 TIMEOUT = 30
 MAX_BYTES = 20 * 1024 * 1024
 THROTTLE_STATUSES = (429, 503)
+# A failure that may pass gets this many attempts in one run, with these waits
+# between them; nothing is ever retried without limit.
+ATTEMPTS = 3
+BACKOFF = (2.0, 5.0)
+TRANSIENT_STATUSES = (408, 500, 502, 504)
 
 # Patched by tests; the network is never reached from the test suite.
 _open = urllib.request.urlopen
@@ -36,7 +41,11 @@ _sleep = time.sleep
 
 
 class FetchError(Exception):
-    pass
+    """A request that failed in transport — it may pass on another attempt."""
+
+
+class TooLarge(FetchError):
+    """A response over the size limit — another attempt cannot help."""
 
 
 @dataclass
@@ -61,8 +70,42 @@ def get(url: str, max_bytes: int = MAX_BYTES) -> Response:
     except Exception as exc:  # noqa: BLE001 — any transport failure is a failed fetch
         raise FetchError(f"{type(exc).__name__}: {exc}") from exc
     if len(body) > max_bytes:
-        raise FetchError(f"larger than {max_bytes} bytes")
+        raise TooLarge(f"larger than {max_bytes} bytes")
     return Response(url, served, status, ctype, body)
+
+
+def classify(status: int) -> str:
+    if status == 200:
+        return "ok"
+    if status in THROTTLE_STATUSES:
+        return "throttled"
+    if status in TRANSIENT_STATUSES:
+        return "transient"
+    return "final"
+
+
+def get_patiently(url: str, max_bytes: int = MAX_BYTES) -> Tuple[Optional[Response], str, int, str]:
+    """(response, class, attempts, reason) — at most ATTEMPTS tries, and only a
+    failure that may pass is tried again. Throttling is never retried here: it
+    ends the window, and the next run resumes at that page."""
+    reason = ""
+    for attempt in range(1, ATTEMPTS + 1):
+        try:
+            r = get(url, max_bytes)
+        except TooLarge as exc:
+            return None, "final", attempt, str(exc)
+        except FetchError as exc:
+            reason = str(exc)
+        else:
+            cls = classify(r.status)
+            if cls == "ok":
+                return r, "ok", attempt, ""
+            reason = f"HTTP {r.status}"
+            if cls != "transient":
+                return r, cls, attempt, reason
+        if attempt < ATTEMPTS:
+            _sleep(BACKOFF[attempt - 1])
+    return None, "transient", ATTEMPTS, reason
 
 
 # ── robots ────────────────────────────────────────────────────────────────

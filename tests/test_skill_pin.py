@@ -331,3 +331,19 @@ def test_the_old_pattern_would_have_missed_it():
     malformed = f'EXPECTED_MANIFEST="${{KBQA_EXPECTED_MANIFEST:-{MANIFEST_SHA256}4}}"'
     assert re.findall(r"KBQA_EXPECTED_MANIFEST:-([0-9a-f]{64})", malformed) == [MANIFEST_SHA256]
     assert pinned_manifests(malformed) == [MANIFEST_SHA256 + "4"]
+
+
+def collect_states_version(text: str):
+    m = re.search(r"\*\*This copy is kbqa-collect v(\d+\.\d+\.\d+)\*\*", text)
+    return m.group(1) if m else None
+
+
+def test_the_collect_skill_states_the_version_it_ships_with(collect_text):
+    """The stale-session guard: a session compares this line with the version
+    the pre-flight prints. A stale line here would stop every collection."""
+    assert collect_states_version(collect_text) == __version__
+
+
+def test_a_stale_collect_version_is_caught(collect_text):
+    mutated = re.sub(r"(This copy is kbqa-collect v)\d+\.\d+\.\d+", r"\g<1>0.0.1", collect_text)
+    assert collect_states_version(mutated) != __version__
