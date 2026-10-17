@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from . import fetch
-from .htmltext import html_to_text, visible_chars
+from .htmltext import render, visible_chars
 
 BATCH_RE = re.compile(r"^(product|docs|help)-\d{4}-\d{2}-\d{2}-w\d{2}$")
 MARKER_RE = re.compile(r"^=====(BEGIN|END) ")
@@ -55,6 +55,57 @@ MOUNT_RE = re.compile(r"""<div[^>]+id=["'](root|app|__next|__nuxt|svelte)["']"""
 TEXT_TYPES = ("text/plain", "text/markdown", "text/x-markdown")
 MAX_PAGES = 20
 MAX_CHARS = 150_000
+# A page is read in parts no larger than this; each part keeps its context.
+PART_CHARS = 20_000
+OVERLAP_LINES = 3      # lines of the previous part repeated for context …
+OVERLAP_SHARE = 0.10   # … but never more than a tenth of a part
+MD_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
+
+
+def parts_of(lines: List[str], headings: List[Tuple[int, int, str]],
+             breadcrumb: Optional[int], part_chars: int = PART_CHARS) -> List[Dict[str, object]]:
+    """Split one page's text lines into parts for reading — at headings where
+    possible, at line ends otherwise, never inside a line.
+
+    Each part says which lines are its own (rows come only from those), where to
+    start reading so a few lines of the previous part give context, and the
+    context that is not in its lines: the page's breadcrumb and the headings it
+    sits under. Indexes are 0-based into `lines`.
+    """
+    head_at = {i: (lvl, txt) for i, lvl, txt in headings}
+    parts, start, size = [], 0, 0
+    last_head = None  # the latest heading line after `start`: the preferred cut
+    for i, ln in enumerate(lines):
+        add = len(ln) + 1
+        if size and size + add > part_chars and i > start:
+            cut = last_head if last_head is not None and last_head > start else i
+            parts.append((start, cut - 1))
+            start, size = cut, sum(len(x) + 1 for x in lines[cut:i])
+            last_head = None
+        if i in head_at and i > start:
+            last_head = i
+        size += add
+    if lines:
+        parts.append((start, len(lines) - 1))
+    out = []
+    for a, b in parts:
+        stack: List[Tuple[int, str]] = []
+        for i in sorted(head_at):
+            if i >= a:
+                break
+            lvl, txt = head_at[i]
+            stack = [h for h in stack if h[0] < lvl] + [(lvl, txt)]
+        if a in head_at:  # a part that opens on a heading sits under that heading's parents only
+            stack = [h for h in stack if h[0] < head_at[a][0]]
+        read_from = a
+        budget = int(part_chars * OVERLAP_SHARE)
+        while read_from > 0 and a - read_from < OVERLAP_LINES and \
+                sum(len(x) + 1 for x in lines[read_from - 1:a]) <= budget:
+            read_from -= 1
+        out.append({"own": [a, b], "read_from": read_from,
+                    "breadcrumb": lines[breadcrumb] if breadcrumb is not None else None,
+                    "headings": [t for _, t in stack]})
+    return out
 
 
 def _kind(content_type: str) -> Optional[str]:
@@ -114,6 +165,7 @@ def run(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--offset", type=int, default=0, help="where in the selection this window begins")
     ap.add_argument("--max-pages", type=int, default=MAX_PAGES)
     ap.add_argument("--max-chars", type=int, default=MAX_CHARS)
+    ap.add_argument("--part-chars", type=int, default=PART_CHARS)
     ap.add_argument("--url", action="append", default=[])
     ap.add_argument("--urls-file")
     ap.add_argument("--date", default=None, help="access date (tests)")
@@ -223,7 +275,14 @@ def run(argv: Optional[List[str]] = None) -> int:
             failures.append({"url": url, "reason": f"content type {r.content_type or 'unknown'} is not a page — not captured"})
             continue
         text_in = fetch.decode(r.body, r.content_type)
-        text = html_to_text(text_in) if kind == "html" else text_in.replace("\r\n", "\n").rstrip("\n")
+        if kind == "html":
+            rendered = render(text_in)
+            text, heads, crumb = rendered.text, rendered.headings, rendered.breadcrumb
+        else:
+            text = text_in.replace("\r\n", "\n").rstrip("\n")
+            heads = [(i, len(m.group(1)), m.group(2)) for i, ln in enumerate(text.split("\n"))
+                     if (m := MD_HEADING_RE.match(ln))]
+            crumb = None
         shown = visible_chars(text)
         scripted = "<script" in text_in.lower()
         if kind == "html" and scripted and (shown < JS_EMPTY_CHARS
@@ -246,7 +305,8 @@ def run(argv: Optional[List[str]] = None) -> int:
         pages.append({"url": r.url, "fetch_method": "direct", "status": r.status,
                       "content_type": r.content_type, "bytes": len(r.body),
                       "raw": f"_raw/{b}/{raw_name}", "raw_sha256": raw_sha,
-                      "text_chars": shown, "oversize": len(text) > args.max_chars})
+                      "text_chars": shown, "oversize": len(text) > args.max_chars,
+                      "_parts": parts_of(text.split("\n"), heads, crumb, args.part_chars)})
 
     receipt: Dict[str, object] = {"batch": b, "access_date": day}
     if args.denominator:
@@ -280,6 +340,11 @@ def run(argv: Optional[List[str]] = None) -> int:
     for page, block in zip(pages, blocks):  # where each page sits, so it can be read alone
         n_lines = block.count("\n")
         page["lines"] = [line, line + n_lines - 1]
+        first = line + 1  # the page's first text line, after its BEGIN marker
+        page["parts"] = [{"lines": [first + pt["own"][0], first + pt["own"][1]],
+                          "read_from": first + pt["read_from"],
+                          "breadcrumb": pt["breadcrumb"], "headings": pt["headings"]}
+                         for pt in page.pop("_parts")]
         line += n_lines
     data = "".join(blocks).encode("utf-8")
     _write_atomic(capture, data)

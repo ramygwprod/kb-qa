@@ -20,8 +20,9 @@ Links, images and attributes are not text and are not rendered.
 """
 
 import re
+from dataclasses import dataclass, field
 from html.parser import HTMLParser
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 SKIP = {"head", "script", "style", "noscript", "template", "svg", "iframe", "object"}
 BLOCK = {
@@ -36,6 +37,16 @@ VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "met
 CELL = {"td", "th"}
 BREADCRUMB_ITEM = {"li", "a", "span"}
 SEPARATOR_ONLY = re.compile(r"^[\s>/›»|·•\-–—]*$")
+HEADINGS = {"h1": 1, "h2": 2, "h3": 3, "h4": 4, "h5": 5, "h6": 6}
+
+
+@dataclass
+class Rendered:
+    """A page's capture text, and where its structure sits in it — kept beside
+    the text, never written into it, so quotes still match the page's words."""
+    text: str
+    headings: List[Tuple[int, int, str]] = field(default_factory=list)  # (line index, level, text)
+    breadcrumb: Optional[int] = None  # line index of the breadcrumb line
 
 
 def _is_breadcrumb(attrs) -> bool:
@@ -59,6 +70,8 @@ class _Renderer(HTMLParser):
         self.crumb_depth = 0          # depth inside a breadcrumb container
         self.crumbs: List[str] = []
         self.crumb_item: Optional[List[str]] = None
+        self.headings: List[Tuple[int, int, str]] = []
+        self.breadcrumb: Optional[int] = None
 
     # ── line handling ──────────────────────────────────────────────────────
     def _text(self, s: str) -> None:
@@ -75,7 +88,10 @@ class _Renderer(HTMLParser):
         self.current = []
         if self.pre_depth:
             for ln in raw.split("\n"):
-                self.lines.append(ln.rstrip())
+                ln = ln.rstrip()
+                if ln == "" and (not self.lines or self.lines[-1] == ""):
+                    continue  # never two blank lines, never a blank first line
+                self.lines.append(ln)
             return
         line = re.sub(r"[ \t\r\n\f\v]+", " ", raw).strip()
         if line:
@@ -165,7 +181,10 @@ class _Renderer(HTMLParser):
             self.in_row = False
             self.cells = []
         elif tag in BLOCK:
+            before = len(self.lines)
             self._flush()
+            if tag in HEADINGS and len(self.lines) > before:
+                self.headings.append((len(self.lines) - 1, HEADINGS[tag], self.lines[-1]))
 
     def _end_breadcrumb(self) -> None:
         items = [c[1:] for c in self.crumbs if c.startswith("\x00")]
@@ -173,8 +192,10 @@ class _Renderer(HTMLParser):
             text = re.sub(r"\s+", " ", "".join(c for c in self.crumbs if not c.startswith("\x00"))).strip()
             if text:
                 self.lines.append(text)
+                self.breadcrumb = len(self.lines) - 1
         else:
             self.lines.append(" > ".join(items))
+            self.breadcrumb = len(self.lines) - 1
         self.crumbs = []
         self.crumb_item = None
 
@@ -189,22 +210,28 @@ class _Renderer(HTMLParser):
             self.crumb_depth = 0
             self._end_breadcrumb()
         self._flush()
+        while self.lines and self.lines[-1] == "":
+            self.lines.pop()
+
+
+def render(html: str) -> Rendered:
+    """The capture text of one HTML page, with its headings and breadcrumb
+    located. Deterministic: same input, same output."""
+    r = _Renderer()
+    r.feed(html)
+    r.close()
+    # A heading in a table header, say, is not counted twice; keep the first.
+    seen, heads = set(), []
+    for h in r.headings:
+        if h[0] not in seen:
+            seen.add(h[0])
+            heads.append(h)
+    return Rendered("\n".join(r.lines), heads, r.breadcrumb)
 
 
 def html_to_text(html: str) -> str:
     """The capture text of one HTML page. Deterministic: same input, same output."""
-    r = _Renderer()
-    r.feed(html)
-    r.close()
-    # Drop runs of blank lines a <pre> may leave; keep single blank lines in it.
-    out: List[str] = []
-    for ln in r.lines:
-        if ln == "" and (not out or out[-1] == ""):
-            continue
-        out.append(ln)
-    while out and out[-1] == "":
-        out.pop()
-    return "\n".join(out)
+    return render(html).text
 
 
 def visible_chars(text: str) -> int:

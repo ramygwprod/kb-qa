@@ -71,6 +71,7 @@ The test for which layer something belongs in:
 | `htmltext.py` | HTML to capture text — a fixed rendering, same bytes in, same text out |
 | `capture.py` | `kbqa capture`: one window verbatim, raw bytes kept in `_raw/<batch>/` |
 | `index.py` | `kbqa index`: a surface's denominator from `llms.txt`, a sitemap or an HTML index page |
+| `elements.py` | `kbqa elements --outline`: the APQC list's top two levels with line ranges, so mapping reads parts |
 | `cli.py` | dispatch, `--profile`, recording flags |
 
 ### Data flow, end to end

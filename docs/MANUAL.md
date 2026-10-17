@@ -812,6 +812,19 @@ receipt with the exact stop lines to add.
 | `index --out <d> --surface <s> --rung <n> --url <u> [--html] [--path-prefix <p>]` | the subject's `llms.txt`, sitemap (indexes and gzip followed) or HTML index page | `_denominator-<surface>-<date>.md`, in the index's own order and words; `--path-prefix` (operator-approved) is recorded in its header; the receipt's `sections` summarise it by path with line ranges | 0 written · 1 refused |
 | `capture --out <d> --batch <b> --denominator <f> [--select <lines>] [--offset <n>] [--max-pages <n>] [--max-chars <n>]` (or `--url <u>…`) | one window, sliced from the approved selection and sized by budget (20 pages / ~150,000 characters by default) | `_capture-<batch>.raw.txt` — each page's text by a fixed rendering, a breadcrumb as one ` > ` line — and `_raw/<batch>/` | 0 if any page was captured · 1 otherwise; the receipt sets `window_end` (`exhausted` only when no selected item remains), `next_offset`, and each page's line range; a 429/503 ends the window (`stopped: throttled`) |
 
+Each page in a capture receipt also lists its `parts`: a page over ~20,000
+characters is split at headings (at line ends where a section has none), and
+each part carries its own lines, where to start reading for a few lines of
+overlap, and its context — the page's breadcrumb and the headings above it — so
+a part read alone loses nothing. Rows come only from a part's own lines.
+
+| action | reads | writes | exit |
+|---|---|---|---|
+| `elements --outline <elements.jsonl>` | the APQC element list | `<list>.outline.md` beside it: the top two levels, each with its group's line ranges, and the list's sha256 | 0 / 1 |
+
+The mapping pass reads that outline, then only the groups it needs — never the
+whole list (about 2,000 elements). Run it once per element list.
+
 They replace WebFetch for captures and indexes: WebFetch returns a model's
 summary of a page and refuses to reproduce more than a short quote, so nothing
 written through it was verbatim.

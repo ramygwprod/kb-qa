@@ -51,7 +51,11 @@ Three more rules for running the session:
 2. Read `kbqa-estate.json` at the estate root. It must name, relative to the
    estate root: `subjects_dir`, `logic_sheet`, `themes_codebook`,
    `apqc_elements`. If the file or any key is missing, or a named file does not
-   exist, stop and name exactly what is missing. Never guess a path. The row
+   exist, stop and name exactly what is missing. Never guess a path.
+   The element list must have its outline beside it, `<list>.outline.md` (the
+   list's name with `.outline.md` for `.jsonl`). If it is missing, stop and give
+   the operator the command, run at the estate root:
+   `python3 -m kbqa elements --outline <apqc_elements>`. The row
    fields are not configured: they are the row-writer's table, which the check's
    rules enforce.
 
@@ -119,7 +123,8 @@ Per window:
    the previous receipt's `next_offset`). `kbqa capture` slices and sizes the
    window; the fetcher returns its receipt (its §6).
 2. `kbqa-row-writer`: the capture **path** and the receipt values, including
-   each page's `lines` in the capture, so it reads one page at a time. It returns
+   each page's `lines` and `parts`, so it reads one part at a time with its
+   context. It returns
    the rows written and the **pages that produced no row**. Never pass page
    content through you.
 3. `kbqa-fetcher` again, only if step 2 named pages with no row: it records
@@ -144,8 +149,8 @@ parked at which `next_offset`.
 
 For every batch written in this run, spawn `kbqa-mapper` **twice, separately**:
 once with pass `A`, once with pass `B`. Give each the staging file path, its
-letter, the three configured paths (`logic_sheet`, `themes_codebook`,
-`apqc_elements`), and — for finding a role only — the subject's
+letter, the configured paths (`logic_sheet`, `themes_codebook`,
+`apqc_elements`) and the element list's outline, and — for finding a role only — the subject's
 `feature-tree.md` path and the path of every staging file this run wrote.
 
 The passes are independent: never give one pass the other's file or output,

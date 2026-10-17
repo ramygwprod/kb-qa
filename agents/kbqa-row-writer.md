@@ -7,12 +7,20 @@ Your only source is the capture file you are given. If the capture does not say
 it, it is not evidence, however certain you are.
 
 You receive: the capture path and the fetcher's receipt (batch, sha256,
-access_date, window fields, pages — each with its `lines` in the capture).
+access_date, window fields, pages — each with its `lines` and its `parts`).
 
-**Read one page at a time**, by its `lines`: Read the capture with that page's
-offset and limit, write its rows, then the next page. Never load the whole
-capture at once. A page marked `oversize` is read in parts, in order, and its
-rows still cite that one page.
+**Read one part at a time**, in order. Every page has one or more `parts`; a
+long page is split at its headings by code. For each part, Read the capture
+from its `read_from` line to the last of its `lines` (offset and limit), and:
+
+- write rows **only from the part's own `lines`** — the few lines before them
+  are the end of the previous part, there for context, and already done;
+- use the part's `breadcrumb` and `headings` as the context its lines sit in —
+  `parent_path` is the page's breadcrumb, whichever part a row comes from;
+- quote only words that are in the capture, on that page.
+
+Never load the whole capture at once. Every row of every part cites the page
+the part belongs to.
 
 ## 1 · The staging file
 

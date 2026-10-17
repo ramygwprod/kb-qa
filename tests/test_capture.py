@@ -447,3 +447,90 @@ def test_a_tiny_page_without_scripts_is_captured_not_called_a_shell(subject, web
     web({a: (200, b"<html><body><p>Coming soon.</p></body></html>", "text/html")})
     code, r = run_capture(subject, a)
     assert code == 0 and r["pages"][0]["text_chars"] < 50
+
+
+# ── a long page is read in parts, each with its context ────────────────────
+
+def _long_page(sections=5, paras=20):
+    body = "".join(
+        f"<h2>Section {s}</h2>" + "".join(f"<p>Section {s} paragraph {p} explains one more thing about it in plain words.</p>"
+                                           for p in range(paras))
+        for s in range(1, sections + 1))
+    return (f'<html><body><nav aria-label="breadcrumb"><ol><li>Docs</li><li>Guide</li></ol></nav>'
+            f"<h1>The Guide</h1>{body}</body></html>").encode()
+
+
+def test_a_long_page_is_split_at_headings_and_every_line_is_read_once(subject, web):
+    a = f"https://{HOST}/guide"
+    web({a: (200, _long_page(), "text/html")})
+    import contextlib
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        assert capture.run(["--out", str(subject), "--batch", B, "--date", DAY, "--url", a,
+                            "--part-chars", "4000"]) == 0
+    page = json.loads(out.getvalue())["pages"][0]
+    lines = (subject / f"_capture-{B}.raw.txt").read_text().splitlines()
+    parts = page["parts"]
+    assert len(parts) > 1
+    # own lines: contiguous, no gap, no overlap, exactly the page's text lines
+    first_text, last_text = page["lines"][0] + 1, page["lines"][1] - 1
+    assert parts[0]["lines"][0] == first_text and parts[-1]["lines"][1] == last_text
+    for prev, nxt in zip(parts, parts[1:]):
+        assert nxt["lines"][0] == prev["lines"][1] + 1
+    # every later part starts on a heading, keeps its context, and overlaps a little
+    for pt in parts[1:]:
+        assert lines[pt["lines"][0] - 1].startswith("Section ") and "paragraph" not in lines[pt["lines"][0] - 1]
+        assert pt["breadcrumb"] == "Docs > Guide"
+        assert pt["headings"] == ["The Guide"]
+        assert 0 < pt["lines"][0] - pt["read_from"] <= 3
+
+
+def test_a_section_with_no_headings_is_cut_at_a_line_end(subject, web):
+    a = f"https://{HOST}/flat"
+    flat = "<html><body>" + "".join(f"<p>Line {i} of a page with no headings at all.</p>" for i in range(400)) + "</body></html>"
+    web({a: (200, flat.encode(), "text/html")})
+    import contextlib
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        assert capture.run(["--out", str(subject), "--batch", B, "--date", DAY, "--url", a,
+                            "--part-chars", "3000"]) == 0
+    parts = json.loads(out.getvalue())["pages"][0]["parts"]
+    lines = (subject / f"_capture-{B}.raw.txt").read_text().splitlines()
+    assert len(parts) > 1
+    for pt in parts:
+        own = lines[pt["lines"][0] - 1: pt["lines"][1]]
+        assert all(ln.startswith("Line ") for ln in own), "a part never begins or ends inside a line"
+        assert sum(len(x) + 1 for x in own) <= 3000
+
+
+def test_an_ordinary_page_is_one_part(subject, web):
+    a = f"https://{HOST}/hooks/retries"
+    web({a: (200, PAGE.encode(), "text/html")})
+    code, r = run_capture(subject, a)
+    page = r["pages"][0]
+    assert page["parts"] == [{"lines": [page["lines"][0] + 1, page["lines"][1] - 1],
+                              "read_from": page["lines"][0] + 1,
+                              "breadcrumb": "Docs > Webhooks > Retries", "headings": []}]
+
+
+# ── the APQC outline ───────────────────────────────────────────────────────
+
+def test_the_element_outline_gives_each_group_its_line_ranges(tmp_path):
+    from kbqa import elements
+    rows = [("1.0", "Develop strategy"), ("1.1", "Define the concept"), ("1.1.1", "Assess"),
+            ("1.2", "Develop the strategy"), ("1.2.1", "Plan"), ("2.0", "Develop products"),
+            ("2.1", "Manage products"), ("2.1.1", "Design")]
+    lst = tmp_path / "apqc.jsonl"
+    lst.write_text("".join(json.dumps({"pcf_id": str(10000 + i), "hierarchy_id": h, "name": n}) + "\n"
+                           for i, (h, n) in enumerate(rows)))
+    assert elements.run(["--outline", str(lst)]) == 0
+    text = (tmp_path / "apqc.outline.md").read_text()
+    assert "| 1.0 | Develop strategy | 1-5 |" in text
+    assert "| 1.1 | Define the concept | 2-3 |" in text
+    assert "| 1.2 | Develop the strategy | 4-5 |" in text
+    assert "| 2.1 | Manage products | 7-8 |" in text
+    import hashlib
+    assert hashlib.sha256(lst.read_bytes()).hexdigest() in text.splitlines()[0]
+    first = text
+    assert elements.run(["--outline", str(lst)]) == 0
+    assert (tmp_path / "apqc.outline.md").read_text() == first, "the same list gives the same outline"

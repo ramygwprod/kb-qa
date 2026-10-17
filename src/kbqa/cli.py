@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from . import __version__, capture, freeze, index, mappings, probe, profile, report, sweep
+from . import __version__, capture, elements, freeze, index, mappings, probe, profile, report, sweep
 from .gates import g0_permission, g1_capture, g2_conformance
 from .gates import g3_grounding, g4_completeness, g5_bundles, g6_integrity
 from .gates import mapcheck, surfaces
@@ -71,6 +71,11 @@ collection (the fetcher runs these; permission from today's g0 record):
   capture --out <d> --batch <name> --url <u>... | --urls-file <f>
                                                capture one window verbatim: raw
                                                bytes kept, text by a fixed rendering
+
+reference:
+  elements --outline <elements.jsonl>         write <list>.outline.md: the top two
+                                               levels with their line ranges, so a
+                                               mapping pass reads only what it needs
 
 diagnostics:
   probe --staging <f> [--capture <f>]          report file SHAPE, not content
@@ -191,6 +196,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         return index.run(argv[1:])
     if argv[0] == "capture":
         return capture.run(argv[1:])
+    # Derived reference: the APQC list's outline, so a mapping pass reads parts.
+    if argv[0] == "elements":
+        return elements.run(argv[1:])
 
     # Mapping statements: about rows, stored outside rows, keyed by id.
     # Checks that the file is well-formed. Never that a mapping is right.

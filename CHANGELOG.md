@@ -71,6 +71,20 @@ now captures by code.
   line ranges, so scope is proposed without reading every item. The fetcher no
   longer re-reads the denominator against the captures: the check measures
   coverage.
+- **A long page is read in parts that keep their context.** The converter
+  locates a page's headings and breadcrumb beside the text (the text is
+  unchanged, so quotes still match). A page over ~20,000 characters is split at
+  headings — at line ends where a section has none, never inside a line — and
+  each part in the receipt carries its own lines, a few lines of overlap
+  (at most a tenth of a part) to read from, and its context: the breadcrumb and
+  the headings above it. Rows come only from a part's own lines, so nothing is
+  written twice. (Chunking guidance: split on the document's structure, carry a
+  chunk's context with it — Anthropic, *Contextual Retrieval* — and keep inputs
+  short, since long contexts lose what sits in the middle — Liu et al. 2023.)
+- **`kbqa elements --outline`** writes the APQC list's top two levels with their
+  line ranges. The mapper read the whole list — about 2,000 elements, ~670 KB —
+  before classifying a row; it now reads the outline and only the groups it
+  needs. `/kbqa-collect` stops with the command when the outline is missing.
 - **Denominators written through WebFetch are not to be trusted:** re-capture
   them with `kbqa index` as new dated files.
 
