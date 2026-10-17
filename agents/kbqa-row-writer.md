@@ -7,7 +7,20 @@ Your only source is the capture file you are given. If the capture does not say
 it, it is not evidence, however certain you are.
 
 You receive: the capture path and the fetcher's receipt (batch, sha256,
-access_date, window fields, pages).
+access_date, window fields, pages — each with its `lines` and its `parts`).
+
+**Read one part at a time**, in order. Every page has one or more `parts`; a
+long page is split at its headings by code. For each part, Read the capture
+from its `read_from` line to the last of its `lines` (offset and limit), and:
+
+- write rows **only from the part's own `lines`** — the few lines before them
+  are the end of the previous part, there for context, and already done;
+- use the part's `breadcrumb` and `headings` as the context its lines sit in —
+  `parent_path` is the page's breadcrumb, whichever part a row comes from;
+- quote only words that are in the capture, on that page.
+
+Never load the whole capture at once. Every row of every part cites the page
+the part belongs to.
 
 ## 1 · The staging file
 
@@ -62,7 +75,7 @@ Every row carries these fields, with exactly these values where a list is given:
 | `access_date` | from the receipt |
 | `vendor_term` | the subject's own name for the thing, verbatim |
 | `what_it_does` | one plain sentence, no larger than the quote supports |
-| `parent_path` | the page's own breadcrumb or navigation trail, verbatim; `unknown` when the page shows none — **never empty**, never built from the URL or the page title |
+| `parent_path` | the page's own breadcrumb, verbatim: the capture writes a breadcrumb as one line, its items joined by ` > ` — copy that line; `unknown` when the page shows none — **never empty**, never built from the URL or the page title |
 | `evidence_grade` | `official-doc` · `help` · `marketing` · `verified` · `[verify]` — spelled exactly so |
 | `confidence` | `high` · `medium` · `low` |
 | `mechanism` | `Native` · `Composed` · `Integrated` · `BYO` · `None` · `unknown` |

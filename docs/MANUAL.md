@@ -1,6 +1,6 @@
 # kbqa — user manual
 
-**Version 6.16.3** · for operators and for maker agents
+**Version 6.17.0** · for operators and for maker agents
 
 Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -10,7 +10,7 @@ Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.16.3"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.17.0"
 # Day to day, the pipeline is two commands with a human between them:
 #
 #   /kbqa-collect <Subject Name>     collect until the source runs out
@@ -18,7 +18,7 @@ pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.16.3"
 #
 # Everything below is what those do, and what to run when you want it by hand.
 
-python -m kbqa --version          # must print 6.16.3
+python -m kbqa --version          # must print 6.17.0
 ```
 
 **Audit a corpus** — needs no captures, changes nothing, answers "what here can
@@ -101,7 +101,7 @@ python3 -m venv .venv
 For an estate or CI, install from the pinned tag rather than a branch:
 
 ```bash
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.16.3"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.17.0"
 ```
 
 **Always a tag, never a branch.** A branch would let the gates and the data they
@@ -773,9 +773,11 @@ file.
 
 ## 6 · All available actions
 
-Thirteen actions. **Ten are read-only by default; three write, and only ever to
-`_qa/`, the log, or a robots artifact.** No action mutates collected data — if
-something in a pipeline appears to "fix" a row, it is not kbqa doing it.
+Thirteen checking actions. **Ten are read-only by default; three write, and
+only ever to `_qa/`, the log, or a robots artifact.** No action mutates
+collected data — if something in a pipeline appears to "fix" a row, it is not
+kbqa doing it. Two more actions collect (§6, Collection): they create a
+denominator or a capture, and never overwrite one.
 
 ### Gates — check one thing, emit a verdict
 
@@ -796,6 +798,36 @@ nothing: the report marks the batch **NOT CHECKED**, which is never CLEAR.
 
 `g0` is the only gate that writes unasked: it must store the robots.txt it
 judged, or its verdict cites nothing.
+
+### Collection — fetch and write; never a verdict
+
+The fetcher agent runs these. Both refuse a host without a robots record from
+`g0` dated today, apply the rules of `Claude-User`, `ClaudeBot` and `*` (the
+stricter reading) path by path, honour the longest crawl delay, keep every
+fetched byte in `_raw/` with its sha256, never overwrite, and print a JSON
+receipt with the exact stop lines to add.
+
+| action | fetches | writes | exit |
+|---|---|---|---|
+| `index --out <d> --surface <s> --rung <n> --url <u> [--html] [--path-prefix <p>]` | the subject's `llms.txt`, sitemap (indexes and gzip followed) or HTML index page | `_denominator-<surface>-<date>.md`, in the index's own order and words; `--path-prefix` (operator-approved) is recorded in its header; the receipt's `sections` summarise it by path with line ranges | 0 written · 1 refused |
+| `capture --out <d> --batch <b> --denominator <f> [--select <lines>] [--offset <n>] [--max-pages <n>] [--max-chars <n>]` (or `--url <u>…`) | one window, sliced from the approved selection and sized by budget (20 pages / ~150,000 characters by default) | `_capture-<batch>.raw.txt` — each page's text by a fixed rendering, a breadcrumb as one ` > ` line — and `_raw/<batch>/` | 0 if any page was captured · 1 otherwise; the receipt sets `window_end` (`exhausted` only when no selected item remains), `next_offset`, and each page's line range; a 429/503 ends the window (`stopped: throttled`) |
+
+Each page in a capture receipt also lists its `parts`: a page over ~20,000
+characters is split at headings (at line ends where a section has none), and
+each part carries its own lines, where to start reading for a few lines of
+overlap, and its context — the page's breadcrumb and the headings above it — so
+a part read alone loses nothing. Rows come only from a part's own lines.
+
+| action | reads | writes | exit |
+|---|---|---|---|
+| `elements --outline <elements.jsonl>` | the APQC element list | `<list>.outline.md` beside it: the top two levels, each with its group's line ranges, and the list's sha256 | 0 / 1 |
+
+The mapping pass reads that outline, then only the groups it needs — never the
+whole list (about 2,000 elements). Run it once per element list.
+
+They replace WebFetch for captures and indexes: WebFetch returns a model's
+summary of a page and refuses to reproduce more than a short quote, so nothing
+written through it was verbatim.
 
 ### Cycle — several gates plus an artifact
 
@@ -999,7 +1031,7 @@ and the data they judge change in the same push.
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.16.3"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.17.0"
 ```
 
 > `pip < 21.3` cannot read this project's metadata and installs an empty package

@@ -8,9 +8,9 @@ batch without seeing your work, and you never see theirs: two passes agreeing
 measures consistency only when neither saw the other. Classification never
 writes into rows.
 
-You are given: the staging file, your letter, three paths — the logic sheet,
-the themes codebook, the APQC element list — and, for finding a role only, the
-subject's `feature-tree.md` and this run's staging files.
+You are given: the staging file, your letter, four paths — the logic sheet,
+the themes codebook, the APQC element list and its outline — and, for finding a
+role only, the subject's `feature-tree.md` and this run's staging files.
 
 ## 1 · Read first, in full
 
@@ -20,8 +20,14 @@ subject's `feature-tree.md` and this run's staging files.
    this file and the logic sheet differ, the logic sheet wins.
 2. **The themes codebook.** Theme codes are the `I` codes in its table (`| I01 |`).
    Use no code that is not there.
-3. **The APQC element list**, one JSON object per line with `pcf_id`,
-   `hierarchy_id` and `name`. Every element you use is copied from it.
+3. **The APQC element list — by its outline, never whole.** First Read the
+   outline you were given (`<list>.outline.md`): every top-level and
+   second-level element with the line range of its group in the list. Then Read
+   only the line ranges of the groups that could fit this batch's rows (offset
+   and limit), and more groups if a row needs them. The list is about 2,000
+   elements; held whole, it buries the rows you classify. Every element you use
+   is copied from the lines you read: `pcf_id`, `hierarchy_id` and `name`,
+   exactly.
 4. **The staging file's rows** — every one. Each row's `vendor_term`,
    `what_it_does`, `source_quote` and `parent_path` are what you classify.
 5. **The subject's roles and permissions rows**, when the logic sheet's

@@ -1,6 +1,6 @@
 # kbqa — developer guide
 
-**Version 6.16.3** · for anyone extending or maintaining the package
+**Version 6.17.0** · for anyone extending or maintaining the package
 
 For *using* the tool, see [MANUAL.md](MANUAL.md). This document covers
 architecture, how to extend it, what must not break, and how to release.
@@ -67,6 +67,11 @@ The test for which layer something belongs in:
 | `freeze.py` | fingerprints `Profile.verbatim_fields`; answers *did interpreting the data change it* |
 | `mappings.py` | checks mapping statements — about rows, stored outside rows, keyed by `id` |
 | `probe.py` | shape-only diagnostic |
+| `fetch.py` | the one request path for collection: permission from today's G0 record, path rules for `Claude-User`, `ClaudeBot` and `*`, crawl delay |
+| `htmltext.py` | HTML to capture text — a fixed rendering, same bytes in, same text out |
+| `capture.py` | `kbqa capture`: one window verbatim, raw bytes kept in `_raw/<batch>/` |
+| `index.py` | `kbqa index`: a surface's denominator from `llms.txt`, a sitemap or an HTML index page |
+| `elements.py` | `kbqa elements --outline`: the APQC list's top two levels with line ranges, so mapping reads parts |
 | `cli.py` | dispatch, `--profile`, recording flags |
 
 ### Data flow, end to end

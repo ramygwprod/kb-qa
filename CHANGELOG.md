@@ -16,6 +16,80 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.17.0] — 2026-10-17
+
+The first live collection (one subject, two surfaces) captured nothing:
+WebFetch returns a model's summary of a page and refuses to reproduce more than
+a short quote, so no capture written through it could be verbatim. Collection
+now captures by code.
+
+### Added
+
+- **`kbqa capture`** — one window of pages, verbatim and reproducible. Each
+  page's raw bytes are kept in `_raw/<batch>/` with their sha256, and its text —
+  a fixed rendering of the served HTML (`kbqa.htmltext`): visible text in order,
+  a breadcrumb as one ` > ` line, table cells joined by ` | ` — goes between the
+  usual markers, keyed by the URL that served it. It never overwrites, refuses a
+  used batch name, ends the window on a 429 or 503, leaves a redirect off the
+  host and a JavaScript-only shell uncaptured, and prints the receipt with the
+  exact stop lines to add.
+- **`kbqa index`** — a surface's denominator by code, in the index's own order
+  and words: `llms.txt` link lines unchanged, a sitemap's URLs (sitemap indexes
+  and gzip followed, whatever the size), or an HTML index page's same-host links.
+  `--path-prefix`, operator-approved, keeps one language of a help centre and
+  says so in the header. Written once.
+- **Permission in code** (`kbqa.fetch`): both commands refuse a host without a
+  robots record from `g0` dated today, apply the rules of `Claude-User`,
+  `ClaudeBot` and `*` path by path (RFC 9309 longest match, the stricter reading
+  of the three), and honour the longest crawl delay. The fetcher no longer
+  judges a robots rule.
+
+### Changed
+
+- **The fetcher** captures and indexes only through these two commands; its
+  shell holds four: the pre-flight, `g0`, `index`, `capture`. WebFetch is only
+  for looking at a page to decide something. The row-writer copies `parent_path`
+  from the capture's breadcrumb line.
+- **The collector's orchestrator** offers the operator only options an agent
+  can carry out; proposes scope in chat by the denominator's line numbers and
+  never delegates it; after an interrupted or failed delegation, reads the files
+  that step was to write before reporting; and gives the exact `mkdir` command
+  when the subject folder is missing — each a slip in the first live session.
+- **Fail fast, never loop.** The first live session ran one planning step for
+  14 minutes without a word: the old rule said to fetch a summarised page
+  "again", with no limit. The fetcher now returns a refusal or failure at once,
+  word for word; gives a failure that may pass at most three attempts per URL; and lets no failing
+  item hold up the rest. The orchestrator brings every blocker to the operator
+  at once, with the options — including the operator opening the URL themselves.
+- **Large content is sliced and sized by code, so no agent reads more than it
+  needs.** `kbqa capture --denominator <f> --select <lines> --offset <n>` takes
+  the window from the approved selection itself and ends it by budget (20 pages,
+  or once the text passes ~150,000 characters; a larger page is captured alone);
+  the receipt sets `window_end` — `exhausted` only when nothing selected remains
+  — and `next_offset`, and gives each page's line range so the row-writer reads
+  one page at a time. `kbqa index` summarises a denominator by path section with
+  line ranges, so scope is proposed without reading every item. The fetcher no
+  longer re-reads the denominator against the captures: the check measures
+  coverage.
+- **A long page is read in parts that keep their context.** The converter
+  locates a page's headings and breadcrumb beside the text (the text is
+  unchanged, so quotes still match). A page over ~20,000 characters is split at
+  headings — at line ends where a section has none, never inside a line — and
+  each part in the receipt carries its own lines, a few lines of overlap
+  (at most a tenth of a part) to read from, and its context: the breadcrumb and
+  the headings above it. Rows come only from a part's own lines, so nothing is
+  written twice. (Chunking guidance: split on the document's structure, carry a
+  chunk's context with it — Anthropic, *Contextual Retrieval* — and keep inputs
+  short, since long contexts lose what sits in the middle — Liu et al. 2023.)
+- **`kbqa elements --outline`** writes the APQC list's top two levels with their
+  line ranges. The mapper read the whole list — about 2,000 elements, ~670 KB —
+  before classifying a row; it now reads the outline and only the groups it
+  needs. `/kbqa-collect` stops with the command when the outline is missing.
+- **Denominators written through WebFetch are not to be trusted:** re-capture
+  them with `kbqa index` as new dated files.
+
+---
+
 ## [6.16.3] — 2026-10-17
 
 ### Added

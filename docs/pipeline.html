@@ -148,7 +148,7 @@
     <p class="lede">Every collected claim traces to a verbatim quote in a page capture stored before the claim was written — or it fails a gate. This is how that holds, end to end.</p>
     <div class="regimes">
       <span class="regime"><b>/kbqa-collect</b> &nbsp;owns collection and classification</span>
-      <span class="regime"><b>kbqa v6.16.3</b> &nbsp;owns verification · G0–G6</span>
+      <span class="regime"><b>kbqa v6.17.0</b> &nbsp;owns verification · G0–G6</span>
       <span class="regime"><b>agents/</b> &nbsp;make the role split structural</span>
     </div>
   </header>
@@ -440,8 +440,8 @@
         <p>It verifies the quote is real and on the cited page. A row whose description says far more than its quote warrants passes every gate. This is the largest gap and the one quote-shopping exploits.</p>
       </div>
       <div>
-        <h3>The capture is what the fetch tool returned</h3>
-        <p>Not necessarily what the server sent. A tool that converts or summarises yields quotes that match the capture while differing from what a reader sees on the page. Verify once per fetch mechanism, by hand.</p>
+        <h3>The capture is the served HTML</h3>
+        <p>kbqa capture keeps the raw bytes and renders them as text the same way every time, so any quote can be re-checked against the bytes. Text a page builds with JavaScript after loading is not in them: such a page is recorded js-only, never guessed at.</p>
       </div>
       <div>
         <h3>Coverage is measured against the denominator we captured</h3>
