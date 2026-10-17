@@ -37,11 +37,45 @@ from typing import Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from . import fetch
-from .capture import _write_atomic
+from .capture import _write_atomic, denominator_items
 
 MD_LINK_RE = re.compile(r"\[[^\]]+\]\([^)\s]+\)")
 SURFACES = ("product", "docs", "help")
 MAX_SITEMAPS = 200
+MAX_SECTIONS = 40
+
+
+def _ranges(lines: List[int]) -> str:
+    out, start, prev = [], None, None
+    for n in lines:
+        if start is None:
+            start = prev = n
+        elif n == prev + 1:
+            prev = n
+        else:
+            out.append(f"{start}-{prev}" if prev != start else str(start))
+            start = prev = n
+    if start is not None:
+        out.append(f"{start}-{prev}" if prev != start else str(start))
+    return ",".join(out)
+
+
+def sections(den: Path) -> List[Dict[str, object]]:
+    """The denominator in a few lines: items grouped by host and the first path
+    segments, with their line ranges — enough to propose a scope by line
+    numbers without reading every item. Grouped by two segments, or by one when
+    two would give more than MAX_SECTIONS groups."""
+    items = denominator_items(den)
+    for depth in (2, 1, 0):
+        groups: Dict[str, List[int]] = {}
+        for n, url in items:
+            parts = urlsplit(url)
+            segs = [x for x in parts.path.split("/") if x][:depth]
+            key = parts.netloc + ("/" + "/".join(segs) if segs else "/")
+            groups.setdefault(key, []).append(n)
+        if len(groups) <= MAX_SECTIONS or depth == 0:
+            return [{"section": k, "items": len(v), "lines": _ranges(v)} for k, v in groups.items()]
+    return []
 
 
 class _Links(HTMLParser):
@@ -203,7 +237,7 @@ def run(argv: Optional[List[str]] = None) -> int:
     _write_atomic(den, data)
     return finish({"surface": s, "denominator": str(den), "rung": args.rung, "items": len(items),
                    "sha256": hashlib.sha256(data).hexdigest(), "sources": [u for u, _, _ in sources],
-                   "raw": f"_raw/{raw_dir.name}/"}, 0)
+                   "raw": f"_raw/{raw_dir.name}/", "sections": sections(den)}, 0)
 
 
 def main() -> None:  # pragma: no cover

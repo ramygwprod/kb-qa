@@ -7,7 +7,12 @@ Your only source is the capture file you are given. If the capture does not say
 it, it is not evidence, however certain you are.
 
 You receive: the capture path and the fetcher's receipt (batch, sha256,
-access_date, window fields, pages).
+access_date, window fields, pages — each with its `lines` in the capture).
+
+**Read one page at a time**, by its `lines`: Read the capture with that page's
+offset and limit, write its rows, then the next page. Never load the whole
+capture at once. A page marked `oversize` is read in parts, in order, and its
+rows still cite that one page.
 
 ## 1 · The staging file
 

@@ -809,8 +809,8 @@ receipt with the exact stop lines to add.
 
 | action | fetches | writes | exit |
 |---|---|---|---|
-| `index --out <d> --surface <s> --rung <n> --url <u> [--html] [--path-prefix <p>]` | the subject's `llms.txt`, sitemap (indexes and gzip followed) or HTML index page | `_denominator-<surface>-<date>.md`, in the index's own order and words; `--path-prefix` (operator-approved) is recorded in its header | 0 written · 1 refused |
-| `capture --out <d> --batch <b> --url <u>… \| --urls-file <f>` | each page of one window | `_capture-<batch>.raw.txt` — each page's text by a fixed rendering, a breadcrumb as one ` > ` line — and `_raw/<batch>/` | 0 if any page was captured · 1 otherwise; a 429/503 ends the window (`stopped: throttled`) |
+| `index --out <d> --surface <s> --rung <n> --url <u> [--html] [--path-prefix <p>]` | the subject's `llms.txt`, sitemap (indexes and gzip followed) or HTML index page | `_denominator-<surface>-<date>.md`, in the index's own order and words; `--path-prefix` (operator-approved) is recorded in its header; the receipt's `sections` summarise it by path with line ranges | 0 written · 1 refused |
+| `capture --out <d> --batch <b> --denominator <f> [--select <lines>] [--offset <n>] [--max-pages <n>] [--max-chars <n>]` (or `--url <u>…`) | one window, sliced from the approved selection and sized by budget (20 pages / ~150,000 characters by default) | `_capture-<batch>.raw.txt` — each page's text by a fixed rendering, a breadcrumb as one ` > ` line — and `_raw/<batch>/` | 0 if any page was captured · 1 otherwise; the receipt sets `window_end` (`exhausted` only when no selected item remains), `next_offset`, and each page's line range; a 429/503 ends the window (`stopped: throttled`) |
 
 They replace WebFetch for captures and indexes: WebFetch returns a model's
 summary of a page and refuses to reproduce more than a short quote, so nothing

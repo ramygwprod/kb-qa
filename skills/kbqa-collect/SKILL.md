@@ -84,12 +84,19 @@ surface's own index as `_denominator-<surface>-<YYYY-MM-DD>.md`, and records a
 stop-condition for each surface not published (its §1–§2).
 
 Show the operator, per surface (`product`, `docs`, `help`): the index (rung, URL,
-item count) or its stop-condition; the hosts in scope, each with the page that
+item count, and its `sections` — groups of items with their line ranges) or its
+stop-condition; the hosts in scope, each with the page that
 links to it, and any host whose ownership is unclear; hosts whose robots.txt
 stayed unreachable; the crawl delay; PDFs found; the language version. **Then
 stop and wait for explicit approval.** No page content is fetched before it.
 PDFs, non-English pages and any host the plan did not name need their own
 approval.
+
+**Propose the scope from the sections, by line numbers** (e.g. "docs: lines
+2–813, `/hc/en-us/articles`"), never by reading every item of a large
+denominator. Read individual denominator lines only to answer the operator's
+question about them. The approved selection is what every window of that
+surface is given.
 
 **A subject that no longer operates** — the fetched pages show it closed, shut
 down or gone: stop here. No plan, no denominator, no tree. Tell the operator
@@ -107,27 +114,31 @@ reused.**
 
 Per window:
 
-1. `kbqa-fetcher`: one window — batch, surface, offset, approved scope. It
-   returns a receipt (its §6).
-2. `kbqa-row-writer`: the capture **path** and the receipt values. It returns
+1. `kbqa-fetcher`: one window — batch, surface, the denominator path, the
+   approved selection of its lines, and the offset (0 for the first window, then
+   the previous receipt's `next_offset`). `kbqa capture` slices and sizes the
+   window; the fetcher returns its receipt (its §6).
+2. `kbqa-row-writer`: the capture **path** and the receipt values, including
+   each page's `lines` in the capture, so it reads one page at a time. It returns
    the rows written and the **pages that produced no row**. Never pass page
    content through you.
 3. `kbqa-fetcher` again, only if step 2 named pages with no row: it records
    `no feature: <what the page is>` for each (its §4).
-4. Read `window_end`: `exhausted` — the surface is done; `budget` — next window;
-   `error` — report and stop this surface. **Never write or infer `exhausted`.**
+4. Read `window_end` — set by `kbqa capture`, never by an agent: `exhausted` —
+   no selected item remains, the surface is done; `budget` — next window from
+   `next_offset`; `error` — report and stop this surface.
    A host that will not load is never worked around: stop that surface and ask
    the operator.
 
-## 3 · Close the surface's coverage
+## 3 · Coverage is measured, not re-read
 
 When a surface is `exhausted`, every item in its denominator must be either
-cited by a row or covered by a stop-condition keyed by its URL — that is what
-`/kbqa-check` measures. Ask `kbqa-fetcher` to compare the denominator with the
-surface's captures and stop-conditions (its §5b) — give it the path of every
-capture this run wrote for the surface — and record the stop for any
-item that is neither. An item left out of scope on purpose needs the operator's
-word first.
+cited by a row or covered by a stop-condition keyed by its URL — `/kbqa-check`
+measures exactly that. Nobody re-reads the denominator against the captures:
+the fetcher records each window's stop lines as they come, and items the
+operator left out of the selection stay open in the check until they are
+collected or ruled on. Report which surfaces are `exhausted` and which are
+parked at which `next_offset`.
 
 ## 4 · Classify each new batch — two independent passes
 

@@ -61,6 +61,16 @@ now captures by code.
   word for word; gives a failure that may pass at most three attempts per URL; and lets no failing
   item hold up the rest. The orchestrator brings every blocker to the operator
   at once, with the options — including the operator opening the URL themselves.
+- **Large content is sliced and sized by code, so no agent reads more than it
+  needs.** `kbqa capture --denominator <f> --select <lines> --offset <n>` takes
+  the window from the approved selection itself and ends it by budget (20 pages,
+  or once the text passes ~150,000 characters; a larger page is captured alone);
+  the receipt sets `window_end` — `exhausted` only when nothing selected remains
+  — and `next_offset`, and gives each page's line range so the row-writer reads
+  one page at a time. `kbqa index` summarises a denominator by path section with
+  line ranges, so scope is proposed without reading every item. The fetcher no
+  longer re-reads the denominator against the captures: the check measures
+  coverage.
 - **Denominators written through WebFetch are not to be trusted:** re-capture
   them with `kbqa index` as new dated files.
 

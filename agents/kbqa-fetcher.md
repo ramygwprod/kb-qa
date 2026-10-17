@@ -122,21 +122,31 @@ closes, so the check counts the surface as accounted for, not missing:
 - https://help.example.test/ | js-only: not readable (surface help)
 ```
 
-Return the plan: per surface, the rung, URL and item count (from `kbqa index`'s
-output), or the stop line; the hosts in scope; the crawl delay; PDFs found; the
+Return the plan: per surface, the rung, URL and item count, and the
+`sections` summary `kbqa index` printed — groups of items with their line
+ranges, from which the operator's scope is proposed — or the stop line. Never
+read a whole denominator into the plan; the hosts in scope; the crawl delay; PDFs found; the
 language version. **Fetch no page content until the operator has approved the
 plan.** PDFs and non-English pages need their own approval; without it, add
 `not approved: pdf`.
 
-## 3 · The capture — one window, by code
+## 3 · The capture — one window, sliced by code
 
-The batch name is given to you: `<surface>-<YYYY-MM-DD>-wNN`, dated today. Pass
-the window's URLs — the approved denominator items, from the offset you were
-given — in order:
+The batch name is given to you: `<surface>-<YYYY-MM-DD>-wNN`, dated today, with
+the surface's denominator, the operator's approved selection of its lines, and
+the offset where this window begins (the previous window's `next_offset`; 0 for
+the first):
 
 ```bash
-python3 -m kbqa capture --out "<subject folder>" --batch <batch> --url <url> --url <url> ...
+python3 -m kbqa capture --out "<subject folder>" --batch <batch> \
+  --denominator "<subject folder>/_denominator-<surface>-<date>.md" --select <approved lines> --offset <n>
 ```
+
+**Never read the denominator to pick URLs, and never size a window yourself.**
+The command takes the selected items in order from the offset and ends the
+window by budget: at most 20 pages attempted, or once the captured text passes
+about 150,000 characters (`--max-pages`, `--max-chars` only if the operator asks
+for other limits). A page larger than the budget is captured alone.
 
 It writes `_capture-<batch>.raw.txt` — each page's text between
 `=====BEGIN <url>=====` / `=====END <url>=====`, keyed by the URL that served it,
@@ -147,11 +157,14 @@ capture yourself; a correction is a new batch.
 
 It prints a JSON receipt. Read it, and report it as §6 says:
 
-- `pages` — captured; `failures` — not captured, with the reason;
+- `pages` — captured, each with its `lines` in the capture (the row-writer reads
+  one page at a time by them); `failures` — not captured, with the reason;
 - `excluded` — paths robots closes to us, never fetched;
 - `redirects` — requested → served (a redirect off the host is not captured);
-- `stopped` — `throttled` means a 429 or 503 ended the window there: report
-  `window_end: budget` and the URLs not attempted. Never switch fetcher,
+- `window_end`, `next_offset`, `remaining` — set by the command: `exhausted`
+  only when no selected item remains; `budget` when more remain;
+- `stopped` — `throttled` means a 429 or 503 ended the window: it is `budget`,
+  and the next window starts again at that item. Never switch fetcher,
   user-agent or route to get round it;
 - `stop_lines_to_add` — the exact lines for §4, including `js-only` for a page
   that shows almost no text without JavaScript.
@@ -182,23 +195,14 @@ Copy the commands' `stop_lines_to_add` exactly. Add lines; never change or
 delete a line already there. The checker reads this file to decide which index
 items and surfaces are accounted for.
 
-## 5 · Windows — stop on a budget, not on completion
+## 5 · Windows and coverage — code measures, you record
 
-A large index is not captured in one pass. Take a window, stop while healthy,
-and say where you stopped. Each window is its own batch.
-
-## 5b · Closing a surface's coverage, when asked
-
-When a surface is `exhausted`, compare its denominator with what exists:
-
-- an item whose URL has a BEGIN marker in one of the surface's captures, or a
-  stop-condition keyed by its URL, is accounted for
-- an item that is neither: if one of the reasons in §4 is true of it, and you
-  saw that from a fetched page, record it; otherwise list it as **unaccounted**
-  in your answer — never invent a reason to close it
-
-Return the counts (items, captured, stopped, unaccounted) and the unaccounted
-URLs. An unaccounted item is unfinished work, and the check reports it as such.
+Each window is its own batch; `kbqa capture` sizes it and says where the next
+begins. Record every window's `stop_lines_to_add` (§4) as it comes. Coverage —
+every denominator item cited by a row or closed by a URL-keyed stop — is
+measured by `/kbqa-check`; you never re-read the denominator against the
+captures. Items the operator left out of the selection stay open there, by
+design, until they are collected or ruled on.
 
 ## 6 · The receipt — what you hand back
 
@@ -209,12 +213,13 @@ batch            : <surface>-<YYYY-MM-DD>-wNN
 capture          : <subject folder>/_capture-<batch>.raw.txt
 sha256           : <the receipt's sha256>
 access_date      : <the receipt's access_date>
-window_offset    : <where in the index this window began>
-window_requested : <items asked for>
-window_returned  : <items the SOURCE returned — not rows>
-window_end       : exhausted | budget | error
+window_offset    : <the receipt's window_offset>
+window_requested : <the receipt's window_requested>
+window_returned  : <the receipt's window_returned — pages captured, not rows>
+window_end       : <the receipt's window_end — exhausted | budget | error>
+next_offset      : <the receipt's next_offset> · remaining <the receipt's remaining>
 pages:
-  - <url> · fetch_method direct      # one per page captured, in file order
+  - <url> · fetch_method direct · lines <a>-<b>     # one per page captured, in file order
 failures:
   - <url> — <reason>
 redirects:
@@ -227,11 +232,11 @@ stop-conditions added:
 
 | value | means |
 |---|---|
-| `exhausted` | the source ran out: you asked again and got nothing |
-| `budget` | you stopped while healthy, or throttling stopped you, and more remains |
-| `error` | the attempt failed partway; the range beyond is unattempted |
+| `exhausted` | no selected item remains |
+| `budget` | the window's budget, or throttling, ended it, and more remain |
+| `error` | nothing could be captured in this window |
 
-**Never write `exhausted` unless you asked again and got nothing.**
+**Copy `window_end` from the receipt; never write it yourself.**
 
 ## 7 · Never
 

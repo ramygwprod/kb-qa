@@ -20,7 +20,7 @@
 # paths; empty = skip the copy check).
 
 PINNED="${KBQA_PINNED:-v6.17.0}"
-EXPECTED_MANIFEST="${KBQA_EXPECTED_MANIFEST:-ff45d906fa215c87fe84629c01d5c22c0894999d365f094302b44a6e2e2dc0e0}"
+EXPECTED_MANIFEST="${KBQA_EXPECTED_MANIFEST:-90725797ffe8616d57f8e34bcbf2b91b0b87a64d4ab99b96ba037ccc6fe07ebf}"
 REPO="${KBQA_REPO:-https://github.com/ramygwprod/kb-qa.git}"
 INSTALL="python3 -m pip install --force-reinstall \"git+${REPO}@${PINNED}\""
 SKILLS_HOME="${KBQA_SKILLS_HOME:-$HOME/.claude/skills}"

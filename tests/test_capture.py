@@ -225,7 +225,7 @@ def test_throttling_ends_the_window_there(subject, web):
     w = web({a: (200, PAGE.encode(), "text/html"), b: (429, b"", "text/html"), c: (200, PAGE.encode(), "text/html")})
     code, r = run_capture(subject, a, b, c)
     assert code == 0 and [p["url"] for p in r["pages"]] == [a]
-    assert r["stopped"] == {"reason": "throttled", "not_attempted": [c]}
+    assert r["stopped"] == {"reason": "throttled", "not_attempted": [b, c]}
     assert c not in w.asked, "never retried another way, never continued past it"
 
 
@@ -348,3 +348,102 @@ def test_a_denominator_is_written_once(subject, web):
     assert run_index(subject, *args)[0] == 0
     code, r = run_index(subject, *args)
     assert code == 1 and "written once" in r["refused"]
+
+
+# ── windows sliced by code ─────────────────────────────────────────────────
+
+def _den(subject, n=5):
+    den = subject / f"_denominator-docs-{DAY}.md"
+    den.write_text(f"Index: docs, rung 1 — https://{HOST}/llms.txt\n"
+                   + "".join(f"- [P{i}](https://{HOST}/p{i})\n" for i in range(1, n + 1)))
+    return den
+
+
+def _pages(n=5, size=1):
+    body = lambda i: f"<html><body><p>{('Page %d says something useful. ' % i) * size}</p></body></html>".encode()
+    return {f"https://{HOST}/p{i}": (200, body(i), "text/html") for i in range(1, n + 1)}
+
+
+def _window(subject, w, *args):
+    import contextlib
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = capture.run(["--out", str(subject), "--batch", f"docs-{DAY}-w{w:02d}", "--date", DAY, *args])
+    return code, json.loads(out.getvalue())
+
+
+def test_windows_walk_the_selection_until_code_says_exhausted(subject, web):
+    den = _den(subject)
+    web(_pages())
+    seen, offset, ends = [], 0, []
+    for w in (1, 2, 3):
+        code, r = _window(subject, w, "--denominator", str(den), "--offset", str(offset), "--max-pages", "2")
+        assert code == 0, r
+        seen += [p["url"] for p in r["pages"]]
+        ends.append((r["window_requested"], r["remaining"], r["window_end"]))
+        offset = r["next_offset"]
+    assert seen == [f"https://{HOST}/p{i}" for i in range(1, 6)]
+    assert ends == [(2, 3, "budget"), (2, 1, "budget"), (1, 0, "exhausted")]
+    code, r = _window(subject, 4, "--denominator", str(den), "--offset", str(offset))
+    assert code == 1 and "exhausted" in r["refused"]
+
+
+def test_a_selection_takes_only_the_approved_lines_in_order(subject, web):
+    den = _den(subject)
+    w = web(_pages())
+    code, r = _window(subject, 1, "--denominator", str(den), "--select", "6,2-3")
+    assert code == 0 and r["selected_items"] == 3 and r["window_end"] == "exhausted"
+    assert [p["url"] for p in r["pages"]] == [f"https://{HOST}/p5", f"https://{HOST}/p1", f"https://{HOST}/p2"]
+    assert f"https://{HOST}/p3" not in w.asked
+
+
+def test_a_selection_naming_a_line_with_no_item_is_refused(subject, web):
+    den = _den(subject)
+    web(_pages())
+    code, r = _window(subject, 1, "--denominator", str(den), "--select", "1-2")
+    assert code == 1 and "hold no item: [1]" in r["refused"]
+
+
+def test_the_text_budget_ends_a_window_after_the_page_that_passes_it(subject, web):
+    den = _den(subject)
+    web(_pages(size=40))  # about 1,300 characters a page
+    code, r = _window(subject, 1, "--denominator", str(den), "--max-chars", "2000")
+    assert code == 0 and len(r["pages"]) == 2
+    assert r["stopped"] == {"reason": "budget: max-chars"} and r["next_offset"] == 2 and r["window_end"] == "budget"
+
+
+def test_a_page_larger_than_the_budget_is_captured_alone(subject, web):
+    den = _den(subject, n=2)
+    web(_pages(n=2, size=200))
+    code, r = _window(subject, 1, "--denominator", str(den), "--max-chars", "1000")
+    assert code == 0 and len(r["pages"]) == 1 and r["pages"][0]["oversize"] is True
+    assert r["remaining"] == 1
+
+
+def test_each_page_can_be_read_alone_by_its_line_range(subject, web):
+    den = _den(subject, n=3)
+    web(_pages(n=3))
+    code, r = _window(subject, 1, "--denominator", str(den))
+    lines = (subject / f"_capture-docs-{DAY}-w01.raw.txt").read_text().splitlines()
+    for p in r["pages"]:
+        a, b = p["lines"]
+        assert lines[a - 1] == f"=====BEGIN {p['url']}=====" and lines[b - 1] == f"=====END {p['url']}====="
+
+
+def test_index_summarises_the_denominator_by_section(subject, web):
+    h = "help.example.test"
+    (subject / f"_robots-{h}-{DAY}.txt").write_text("User-agent: *\nAllow: /\n")
+    locs = [f"https://{h}/hc/en-us/a{i}" for i in range(3)] + [f"https://{h}/blog/b{i}" for i in range(2)]
+    web({f"https://{h}/sitemap.xml": (200, _sitemap(*locs), "application/xml")})
+    code, r = run_index(subject, "--surface", "help", "--rung", "3", "--url", f"https://{h}/sitemap.xml")
+    assert code == 0
+    assert r["sections"] == [{"section": f"{h}/hc/en-us", "items": 3, "lines": "2-4"},
+                             {"section": f"{h}/blog/b0", "items": 1, "lines": "5"},
+                             {"section": f"{h}/blog/b1", "items": 1, "lines": "6"}]
+
+
+def test_a_tiny_page_without_scripts_is_captured_not_called_a_shell(subject, web):
+    a = f"https://{HOST}/tiny"
+    web({a: (200, b"<html><body><p>Coming soon.</p></body></html>", "text/html")})
+    code, r = run_capture(subject, a)
+    assert code == 0 and r["pages"][0]["text_chars"] < 50
