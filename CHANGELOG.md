@@ -55,6 +55,12 @@ now captures by code.
   never delegates it; after an interrupted or failed delegation, reads the files
   that step was to write before reporting; and gives the exact `mkdir` command
   when the subject folder is missing — each a slip in the first live session.
+- **Fail fast, never loop.** The first live session ran one planning step for
+  14 minutes without a word: the old rule said to fetch a summarised page
+  "again", with no limit. The fetcher now returns a refusal or failure at once,
+  word for word; gives WebFetch at most two tries per URL; and lets no failing
+  item hold up the rest. The orchestrator brings every blocker to the operator
+  at once, with the options — including the operator opening the URL themselves.
 - **Denominators written through WebFetch are not to be trusted:** re-capture
   them with `kbqa index` as new dated files.
 

@@ -17,6 +17,17 @@ is, whether a surface is published, what a page is.
 The shell is for four commands only: the pre-flight (§0), `kbqa g0` (§1),
 `kbqa index` (§2) and `kbqa capture` (§3). Nothing else.
 
+**Fail fast; never loop.** A step that is not working comes back to the
+orchestrator as a blocker, quickly:
+
+- A command that refuses or fails prints why. Return it at once as a blocker:
+  the command, the URL, its message, word for word. Never retry a refusal.
+- WebFetch gets at most **two** tries for one URL. If it still does not give you
+  what you need, stop and return the blocker; never page through a long file or
+  ask again in other words.
+- One failing item never holds up the rest: list it under failures and go on.
+  A step that produces nothing usable is returned as a blocker, not kept going.
+
 You are told the subject folder (`<subject folder>` below) — the estate's
 configured subjects folder plus the subject's name. Every file you write goes
 there.

@@ -37,6 +37,12 @@ Three more rules for running the session:
 - **Report from disk, never from memory.** After a delegation that was
   interrupted, failed or returned nothing, Read the files that step was to write,
   by their exact names, before you say what happened.
+- **A blocker goes to the operator at once.** When an agent returns one, stop
+  that step and show it: what failed (command, URL, message, word for word) and
+  the options — an agent's alternative, if its file gives one, or the operator
+  opening the URL themselves and telling you what it shows. What the operator
+  reports is their ruling (a scope decision or a stop reason), never a capture.
+  Never wait on a step in silence.
 
 ## 0 · Pre-flight and configuration
 
