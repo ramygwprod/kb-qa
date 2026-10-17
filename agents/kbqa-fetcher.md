@@ -130,23 +130,37 @@ language version. **Fetch no page content until the operator has approved the
 plan.** PDFs and non-English pages need their own approval; without it, add
 `not approved: pdf`.
 
-## 3 · The capture — one window, sliced by code
+## 3 · The capture — one window, sliced, sized, numbered and resumed by code
 
-The batch name is given to you: `<surface>-<YYYY-MM-DD>-wNN`, dated today, with
-the surface's denominator, the operator's approved selection of its lines, and
-the offset where this window begins (the previous window's `next_offset`; 0 for
-the first):
+You are told the surface, its denominator and the operator's approved selection
+of its lines. Run one of four forms — never anything else:
 
 ```bash
-python3 -m kbqa capture --out "<subject folder>" --batch <batch> \
-  --denominator "<subject folder>/_denominator-<surface>-<date>.md" --select <approved lines> --offset <n>
+# what is recorded for a surface: windows, where to resume, failed pages — fetches nothing
+python3 -m kbqa capture --out "<subject folder>" --surface <surface> --status
+
+# the first window of a surface
+python3 -m kbqa capture --out "<subject folder>" --surface <surface> \
+  --denominator "<subject folder>/_denominator-<surface>-<date>.md" --select <approved lines>
+
+# every later window, in this run or a later one: continue where the recorded windows stopped
+python3 -m kbqa capture --out "<subject folder>" --surface <surface> \
+  --denominator "<subject folder>/_denominator-<surface>-<date>.md" --resume
+
+# only when the orchestrator says the operator approved it: pages that failed earlier
+python3 -m kbqa capture --out "<subject folder>" --surface <surface> --retry-failed
 ```
 
-**Never read the denominator to pick URLs, and never size a window yourself.**
-The command takes the selected items in order from the offset and ends the
-window by budget: at most 20 pages attempted, or once the captured text passes
-about 150,000 characters (`--max-pages`, `--max-chars` only if the operator asks
-for other limits). A page larger than the budget is captured alone.
+**Never read the denominator to pick URLs, never choose an offset, never size a
+window, never name a batch.** The command names the next free batch for today,
+takes the selected items in order, ends the window by budget (at most 20 pages,
+or once the text passes ~150,000 characters; a larger page alone), and records
+the window's state beside its raw bytes — even when nothing could be captured —
+so the next run continues after it instead of trying it again. `--resume`
+refuses, and says why, when the recorded windows leave a gap, were cut from
+another denominator, or used another selection: return that as a blocker.
+`--retry-failed` retries a failed page in at most three runs; after that the
+page is the operator's.
 
 It writes `_capture-<batch>.raw.txt` — each page's text between
 `=====BEGIN <url>=====` / `=====END <url>=====`, keyed by the URL that served it,
@@ -167,7 +181,13 @@ It prints a JSON receipt. Read it, and report it as §6 says:
   and the next window starts again at that item. Never switch fetcher,
   user-agent or route to get round it;
 - `stop_lines_to_add` — the exact lines for §4, including `js-only` for a page
-  that shows almost no text without JavaScript.
+  that shows almost no text without JavaScript;
+- `needs_operator` — pages no attempt can fix (a 404, a page failing in three
+  runs), each with a `suggested_stop_line`. **Never add these lines yourself:**
+  return them as blockers; the operator approves the line or opens the URL.
+
+A failure that may pass is already retried by the command — three attempts,
+with waits — so you never fetch a failed page again by any other route.
 
 ## 4 · Stop-conditions
 
@@ -209,7 +229,7 @@ design, until they are collected or ruled on.
 From `kbqa capture`'s JSON — never computed or retyped by you:
 
 ```
-batch            : <surface>-<YYYY-MM-DD>-wNN
+batch            : <the receipt's batch>
 capture          : <subject folder>/_capture-<batch>.raw.txt
 sha256           : <the receipt's sha256>
 access_date      : <the receipt's access_date>

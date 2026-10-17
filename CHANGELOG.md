@@ -16,6 +16,35 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.17.1] — 2026-10-17
+
+Collection resumes from disk and can never loop or dead-end.
+
+### Added
+
+- **Resume from disk.** Every window records its state beside its raw bytes —
+  denominator and its sha256, selection, offset, `next_offset`, `remaining`,
+  `window_end`, captured and failed pages — even a window that captured
+  nothing, so the next run moves on from it. `kbqa capture --resume` continues
+  at the recorded `next_offset`, and refuses, saying why, when the windows leave
+  a gap or overlap, were cut from another denominator, or used another
+  selection. `--status` reports where a surface stands and fetches nothing.
+  Batches are numbered by code.
+- **Bounded retries with a fallback at every end.** A failure that may pass
+  (timeout, network error, HTTP 408/500/502/504) gets three attempts in a run,
+  with waits; a final one (404, 403, …) none; throttling ends the window, and
+  the next run resumes at that page. `--retry-failed` retries a failed page in
+  at most three runs. A page no attempt can fix goes to `needs_operator` with a
+  suggested `unreachable:` stop line, which only the operator approves. The
+  orchestrator delegates a step at most three times, then brings it to the
+  operator.
+- **The stale-session guard.** The collect skill states its version; the
+  orchestrator compares it with the version the pre-flight prints and stops a
+  session that loaded an older copy. The pre-flight checks the files on disk;
+  this checks what the session is following.
+
+---
+
 ## [6.17.0] — 2026-10-17
 
 The first live collection (one subject, two surfaces) captured nothing:
