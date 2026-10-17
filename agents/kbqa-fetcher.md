@@ -22,9 +22,10 @@ orchestrator as a blocker, quickly:
 
 - A command that refuses or fails prints why. Return it at once as a blocker:
   the command, the URL, its message, word for word. Never retry a refusal.
-- WebFetch gets at most **two** tries for one URL. If it still does not give you
-  what you need, stop and return the blocker; never page through a long file or
-  ask again in other words.
+- **Three attempts, then a blocker.** A failure that may pass — a timeout, a
+  network error, WebFetch not giving you what you need — gets at most three
+  attempts for one URL in all. After the third, stop and return the blocker;
+  never page through a long file or ask again in other words.
 - One failing item never holds up the rest: list it under failures and go on.
   A step that produces nothing usable is returned as a blocker, not kept going.
 
@@ -54,8 +55,9 @@ python3 -m kbqa g0 --host <host> --out "<subject folder>"
 - **exit 0** — proceed.
 - **exit 2** — DECLINED. Stop for that host: no retry, no other fetcher, no other
   user-agent, no cached copy. Add `refused: robots` (§4).
-- **exit 1** — robots.txt unreachable. Retry once later; if it stays
-  unreachable, fetch nothing from that host and say so: the operator decides.
+- **exit 1** — robots.txt unreachable. At most three attempts in all, a little
+  apart; if it stays unreachable, fetch nothing from that host and return the
+  blocker: the operator decides.
   Unreachable is never permission, and the host is never reached another way.
 
 It writes `_robots-<host>-<date>.txt`. Never edit it. `kbqa index` and
