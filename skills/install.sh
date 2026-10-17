@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install this repository's skills from a tag, and record what was installed.
 #
-#   bash skills/install.sh v6.16.2
+#   bash skills/install.sh v6.16.3
 #
 # Installs kbqa-check, kbqa-merge and kbqa-collect into ~/.claude/skills/, and
 # the collector's three agents into ~/.claude/agents/. Run by the
@@ -28,7 +28,7 @@
 # KBQA_BACKUP_DIR.
 set -euo pipefail
 
-TAG="${1:?usage: bash skills/install.sh <tag, e.g. v6.16.2>}"
+TAG="${1:?usage: bash skills/install.sh <tag, e.g. v6.16.3>}"
 REPO="${KBQA_REPO:-https://github.com/ramygwprod/kb-qa.git}"
 HOME_SKILLS="${KBQA_SKILLS_HOME:-$HOME/.claude/skills}"
 BACKUPS="${KBQA_BACKUP_DIR:-$HOME/.kbqa-check-backups}"
@@ -70,6 +70,7 @@ for s in ${SKILLS}; do
   RECORD="INSTALLED-FROM-${s}"
   if [ -e "${DEST}" ]; then
     mkdir -p "${BACKUPS}"
+    chmod -R u+w "${DEST}"  # installs are read-only (below); writable only to move aside
     mv "${DEST}" "${BACKUPS}/${s}-${STAMP}"
     echo "previous ${s} moved to ${BACKUPS}/${s}-${STAMP}"
   fi
@@ -79,6 +80,7 @@ for s in ${SKILLS}; do
     mkdir -p "${AGENTS_HOME}"
     if [ -e "${AGENTS_HOME}/${a}" ]; then
       mkdir -p "${BACKUPS}"
+      chmod u+w "${AGENTS_HOME}/${a}"
       mv "${AGENTS_HOME}/${a}" "${BACKUPS}/${a%.md}-${STAMP}.md"
       echo "previous ${a} moved to ${BACKUPS}/${a%.md}-${STAMP}.md"
     fi
@@ -95,6 +97,10 @@ for s in ${SKILLS}; do
       printf '%s  agents/%s\n' "$(shasum -a 256 "${AGENTS_HOME}/${a}" | awk '{print $1}')" "${a}"
     done
   } > "${DEST}/${RECORD}"
+  # Read-only for every process, sessions' scripts included: a session can use
+  # the skill and its agents, not overwrite them. The pre-flight still checks.
+  chmod -R a-w "${DEST}"
+  for a in $(agents_of "${s}"); do chmod a-w "${AGENTS_HOME}/${a}"; done
   echo "installed ${s} ${TAG} (commit ${COMMIT}) into ${DEST} — $(grep -cE '^[0-9a-f]{64}  ' "${DEST}/${RECORD}") files recorded"
 
   # One copy per skill (PIPELINE-SPEC §5). Other copies are named, not touched.

@@ -1,6 +1,6 @@
 # kbqa — user manual
 
-**Version 6.16.2** · for operators and for maker agents
+**Version 6.16.3** · for operators and for maker agents
 
 Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -10,7 +10,7 @@ Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.16.2"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.16.3"
 # Day to day, the pipeline is two commands with a human between them:
 #
 #   /kbqa-collect <Subject Name>     collect until the source runs out
@@ -18,7 +18,7 @@ pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.16.2"
 #
 # Everything below is what those do, and what to run when you want it by hand.
 
-python -m kbqa --version          # must print 6.16.2
+python -m kbqa --version          # must print 6.16.3
 ```
 
 **Audit a corpus** — needs no captures, changes nothing, answers "what here can
@@ -101,7 +101,7 @@ python3 -m venv .venv
 For an estate or CI, install from the pinned tag rather than a branch:
 
 ```bash
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.16.2"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.16.3"
 ```
 
 **Always a tag, never a branch.** A branch would let the gates and the data they
@@ -999,7 +999,7 @@ and the data they judge change in the same push.
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.16.2"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.16.3"
 ```
 
 > `pip < 21.3` cannot read this project's metadata and installs an empty package

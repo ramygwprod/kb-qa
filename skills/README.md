@@ -42,14 +42,16 @@ All three skills and the three agents, from one tag, by the operator in their
 own terminal (PIPELINE-SPEC §5):
 
 ```bash
-bash skills/install.sh v6.16.2
+bash skills/install.sh v6.16.3
 ```
 
 It clones the tag, copies each skill to `~/.claude/skills/<skill>/` and the
 agents to `~/.claude/agents/`, and writes `INSTALLED-FROM-<skill>` in each
 skill's folder — the tag, the commit and the sha256 of every installed file; the
-collector's record also lists its agents as `agents/<file>`. Anything replaced
-is moved to `~/.kbqa-check-backups/`, outside the skills folder, never deleted.
+collector's record also lists its agents as `agents/<file>`. Every installed file is made read-only, so a session — its scripts included —
+can use the skills and agents but not overwrite them. Anything replaced is moved
+to `~/.kbqa-check-backups/`, outside the skills folder, never deleted (made
+writable only to move it; delete backups with `chmod -R u+w` first).
 The script then prints the `pip` command for the validator itself, which the
 operator also runs, and the pre-flight:
 
