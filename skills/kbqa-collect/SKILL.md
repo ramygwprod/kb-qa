@@ -1,130 +1,183 @@
 ---
 name: kbqa-collect
-description: Collect one subject into the estate — permission, capture, rows — by delegating to the fetcher and row-writer subagents, window by window until the source runs out. Use when the operator names a subject to collect, resumes a parked subject, or re-fetches one that has no capture. Cannot fetch, cannot write, cannot read verdicts; every step happens in a subagent.
+description: Collect one subject into the estate — plan, permission, capture, rows, then two independent classification passes — by delegating to the kbqa-fetcher, kbqa-row-writer and kbqa-mapper subagents. Also runs the one fix round for a batch the check blocked. Run by the operator as /kbqa-collect <Subject> [fix <batch>]. Never fetches or writes itself, never reads verdicts, never runs the gates.
 allowed-tools: Task, Agent, Read
+disable-model-invocation: true
 ---
 
 # Collecting a subject
 
-**Invoked as:** `/kbqa-collect <Subject Name>`
+**Invoked as**, by the operator, in a session opened at the estate root:
 
-You orchestrate. You do not collect.
+| command | does |
+|---|---|
+| `/kbqa-collect <Subject>` | plan → approval → collect every surface → classify every new batch |
+| `/kbqa-collect <Subject> fix <batch>` | the one fix round for a batch `/kbqa-check` reported BLOCKED (§6) |
 
-Notice what you have: `Task`/`Agent` and `Read`. **No `WebFetch`, no `Write`, no
-`Bash`.** You cannot fetch a page, create a file, or run a command. That is the
-design, not an obstacle — a session that can both fetch and write will do both,
-and rows written from the same context that fetched them are grounded in a
-memory of a page rather than in a stored capture.
+You orchestrate. Every step is a delegation:
 
-Every step below is a delegation. If a step seems blocked, the answer is always
-*delegate it* — never *do it directly*, and never *ask for the tool*.
+| subagent | holds | does |
+|---|---|---|
+| `kbqa-fetcher` | `WebFetch`, `Write`, `Read`, `Bash` | permission, indexes, captures, stop-conditions, receipts |
+| `kbqa-row-writer` | `Read`, `Write` | rows, from the capture on disk alone |
+| `kbqa-mapper` | `Read`, `Write` | one classification pass of one batch |
 
-## What a finished subject looks like
+**You do not fetch, write or run commands yourself, even if this session lets
+you.** The skill's tool list pre-approves `Task`, `Agent` and `Read`; it does not
+take the other tools away, so this is a rule you keep, not a wall.
 
-Aim at this. Do not aim at "the gates stop complaining" — the gates are a floor,
-and a batch can clear them while being poor work.
+## 0 · Pre-flight and configuration
 
-- **Every page a row cites is in the capture, verbatim**, including the
-  subject's typos, spacing and section order.
-- **Every row's quote comes from the page that row is about** — not from
-  elsewhere in the capture that happens to contain the words.
-- **Every row's claim is no larger than its quote supports.** No gate checks
-  this. It is the single most common way a clean-looking batch is wrong.
-- **Where the page is silent, the row says `unknown`** — not the industry-typical
-  value, not what the subject probably means.
-- **The subject's own vocabulary survives.** Their names for their things, their
-  nesting, their categories. Aliases are added later by someone else; nothing
-  here renames anything.
-- **The denominator is the subject's own index**, captured before scope was
-  decided, and not pruned to match what was fetched.
-- **The windows form an unbroken chain ending in `exhausted`** — or a deliberate
-  park with an offset, which is an honest stopping point and not a failure.
+1. Delegate to `kbqa-fetcher` its pre-flight (its §0). On any `STOP`, stop and
+   give the operator the printed command.
+2. Read `kbqa-estate.json` at the estate root. It must name, relative to the
+   estate root: `subjects_dir`, `logic_sheet`, `themes_codebook`,
+   `apqc_elements`, `field_schema`. If the file or any key is missing, or a named
+   file does not exist, stop and name exactly what is missing. Never guess a path.
 
-## 1 · Locate the subject
+The subject's folder is `<subjects_dir>/<Subject>/`. Read that path: an error
+saying it is a directory means it exists; any other error means it does not —
+say so and ask the operator to create it, before anything is delegated (G0
+creates the folder it is given, so a misspelt name would become a new folder).
+Never invent a location.
 
-One directory per subject, under the estate's existing container — the same
-layout every other subject uses. Read the estate to confirm it before delegating
-anything; if the subject has no directory yet, say so and ask rather than
-inventing a location.
+3. **A tree from before this pipeline.** Read `<subject folder>/feature-tree.md`
+   and `<subject folder>/_merge-log.jsonl` (`limit: 5` each; a Read error means
+   the file is absent). A tree with no merge log was not built by `/kbqa-merge`,
+   and `/kbqa-merge` only appends: new rows would sit beside the old rows for the
+   same features. **Stop** and tell the operator, before any plan:
 
-Batch names carry a date: `<surface>-<YYYY-MM-DD>`. A capture's filename is
-derived from the batch name, so re-using one overwrites a stored capture, which
-destroys evidence rather than updating it.
+   > `<Subject>` has a feature tree from before this pipeline and no merge log.
+   > Collecting now would put new rows beside its old ones. Either move the tree
+   > out of the subject folder (the first CLEAR batch then starts a new one with
+   > `/kbqa-merge … --new-tree`), or confirm in words that the new rows go into
+   > the old tree.
 
-## 2 · Permission and the index — delegate to `fetcher`
+   Go on only on the operator's answer. A tree with a merge log is this
+   pipeline's own; collect into it.
 
-Spawn the **fetcher** subagent. It holds `WebFetch`, `Write`, `Read`, `Bash`;
-you hold none of those.
+## 1 · Plan — delegate to `kbqa-fetcher`, then STOP for approval
 
-It checks `robots.txt` first (G0). On a refusal it stops for that host — no
-retry, no alternate fetcher, no rendering service — and records a stop-condition.
+The fetcher checks permission (G0) for every host it will touch, captures each
+surface's own index as `_denominator-<surface>-<YYYY-MM-DD>.md`, and records a
+stop-condition for each surface not published (its §1–§2).
 
-Before scope is decided, it captures the subject's **own index** as the
-denominator. That is what coverage is later measured against, so it must be the
-subject's list rather than a list of what anyone intends to fetch.
+Show the operator, per surface (`product`, `docs`, `help`): the index (rung, URL,
+item count) or its stop-condition; the hosts in scope, each with the page that
+links to it, and any host whose ownership is unclear; hosts whose robots.txt
+stayed unreachable; the crawl delay; PDFs found; the language version. **Then
+stop and wait for explicit approval.** No page content is fetched before it.
+PDFs, non-English pages and any host the plan did not name need their own
+approval.
 
-## 3 · Loop the windows until the source runs out
+**A subject that no longer operates** — the fetched pages show it closed, shut
+down or gone: stop here. No plan, no denominator, no tree. Tell the operator
+what the pages show; recording it is the operator's.
 
-This is the body of the job. Repeat until done:
+## 2 · Collect each approved surface, window by window
 
-1. Delegate one window to the **fetcher**. It captures pages and returns a
-   receipt: capture path, **sha256**, page list, per-page item counts, failures,
-   and `window_end`.
-2. Delegate that capture to the **row-writer**, passing the receipt values —
-   above all the sha256, which it must **copy, never recompute**. It holds
-   `Read`, `Write`, `Bash` and no network tool, so the capture on disk is its
-   only possible source.
-3. Read the `window_end`:
-   - **`exhausted`** — the source returned nothing. The subject is done. Stop.
-   - **`budget`** — the fetcher stopped while healthy and more remains. Loop
-     again from the next offset.
-   - **`error`** — the attempt failed partway. That range is unattempted, not
-     absent. Report it and stop; the operator decides whether to retry.
+Batch names: `<surface>-<YYYY-MM-DD>-wNN` (`w01`, `w02`, …), the date being the
+fetcher's access date from the plan. Before each window, find the next free
+number by Read alone (`Read` cannot list a folder): from `w01` upward, Read
+`<subject folder>/_capture-<batch>.raw.txt` and
+`<subject folder>/_collect-<batch>-staging.md` with `limit: 1`; the first number
+for which **both** Reads fail as absent is the next batch. **A batch name is never
+reused.**
 
-**Keep looping.** You can sustain many windows because the page content lives in
-the subagents' contexts, not yours — you hold only receipts and counts. Do not
-stop after one window because it felt like a complete unit of work.
+Per window:
 
-**Never write `exhausted` yourself, and never infer it.** It comes from the
-fetcher, and only after it asked again and got nothing. A short window is not
-the end of a list.
+1. `kbqa-fetcher`: one window — batch, surface, offset, approved scope. It
+   returns a receipt (its §6).
+2. `kbqa-row-writer`: the capture **path** and the receipt values. It returns
+   the rows written and the **pages that produced no row**. Never pass page
+   content through you.
+3. `kbqa-fetcher` again, only if step 2 named pages with no row: it records
+   `no feature: <what the page is>` for each (its §4).
+4. Read `window_end`: `exhausted` — the surface is done; `budget` — next window;
+   `error` — report and stop this surface. **Never write or infer `exhausted`.**
+   A host that will not load is never worked around: stop that surface and ask
+   the operator.
 
-## 4 · Report and stop
+## 3 · Close the surface's coverage
+
+When a surface is `exhausted`, every item in its denominator must be either
+cited by a row or covered by a stop-condition keyed by its URL — that is what
+`/kbqa-check` measures. Ask `kbqa-fetcher` to compare the denominator with the
+surface's captures and stop-conditions (its §5b) — give it the path of every
+capture this run wrote for the surface — and record the stop for any
+item that is neither. An item left out of scope on purpose needs the operator's
+word first.
+
+## 4 · Classify each new batch — two independent passes
+
+For every batch written in this run, spawn `kbqa-mapper` **twice, separately**:
+once with pass `A`, once with pass `B`. Give each the staging file path, its
+letter, the three configured paths (`logic_sheet`, `themes_codebook`,
+`apqc_elements`), and — for finding a role only — the subject's
+`feature-tree.md` path and the path of every staging file this run wrote.
+
+The passes are independent: never give one pass the other's file or output,
+never summarise one to the other, and never start B with anything A said.
+Agreement between two passes that saw each other measures nothing. Each writes
+`_map-<batch>-<A|B>.jsonl`.
+
+Rows a pass cannot map are `needs-human`, with a note. They are questions for
+the operator, never forced.
+
+## 5 · Report and stop
 
 Return:
 
-- subject and directory
-- one line per window: offset, requested, returned, `window_end`, row count
-- the capture paths and their sha256 values
-- total pages, total rows
-- fetch failures, redirects, stop-conditions
-- **whether the subject reached `exhausted`, or is parked at an offset**
+- subject and folder
+- per surface: the index or its stop-condition; one line per window — batch,
+  offset, requested, returned, `window_end`, rows; then `exhausted` or parked at
+  which offset
+- capture paths and sha256 values; fetch failures; redirects; every
+  stop-condition added
+- per batch: rows and distinct `vendor_term`s; **evidence not captured** and
+  **role stated elsewhere**, as the row-writer listed them
+- per batch: map files written, and each pass's `needs-human` ids with their notes
+- the next command: `/kbqa-check <subjects_dir>/<Subject>`, run by the operator
+  in a new session
 
-**Do not run the gates and do not report a verdict.** You cannot — you have no
-`Bash` — and you should not want to. A collecting context that sees its own
-verdict will iterate against it, and *edit until green* is the loop this
-separation exists to break. The operator runs `/kbqa-check` when ready.
+**Do not run the gates and do not report a verdict.** A collecting context that
+sees its own verdict edits toward it.
 
-## 5 · Never
+## 6 · The fix round — `/kbqa-collect <Subject> fix <batch>`
 
-- Ask for `WebFetch`, `Write` or `Bash`, or suggest the operator grant them
-- Reconstruct a page from memory, training data, or another session
-- Pass a page's *content* to the row-writer — pass the capture **path**, because
-  content routed through you has been through a summarising context
-- Compute a capture's sha256 anywhere but in the fetcher
-- Read `_qa/` verdicts or reports
-- Re-use a batch name that already has a capture
-- Prune the denominator to match what was fetched
-- Declare a subject complete on anything but `exhausted`
+Run only when the operator brings the `fixable` findings of a batch that
+`/kbqa-check` reported BLOCKED in round 1. The operator pastes them; you never
+open `_qa/` to find them.
 
-## The limits, so a clean run is not read as more than it is
+1. Delegate to `kbqa-row-writer` in fix mode (its §5): the staging path, the
+   capture path, and the findings, word for word.
+2. If rows changed ids or were added or dropped, re-run both `kbqa-mapper` passes
+   for that batch (§4). Otherwise the map files stand.
+3. Report what changed, and stop. The operator runs `/kbqa-check` again: round 2.
+   If it is still BLOCKED, it is PARKED with the operator — there is no third
+   round, and you never start one.
 
-**Nothing checks that a quote supports its claim.** G3 verifies the quote is
-real and on the cited page. That is all it verifies.
+Only `fixable` findings come through here. `structural` and `planner` findings
+mean re-fetching or re-planning: a new batch, never an edit.
 
-**The capture is what the fetch tool returned**, not necessarily what the server
-sent. A tool that converts or summarises yields quotes matching the capture and
-differing from the page.
+## 7 · Never
 
-**Coverage is measured against the index we captured.** A selective index goes
-unnoticed, which is why the fetcher captures it before scope is decided.
+- fetch, write a file, or run a command yourself
+- read `_qa/`, `_qa-log.jsonl` or any report or verdict
+- reconstruct a page from memory, training data or another session
+- compute a capture's sha256 anywhere but in `kbqa-fetcher`
+- re-use a batch name, or prune a denominator to match what was fetched
+- fetch content before the operator approved the plan
+- let one classification pass see the other's work
+- run a second fix round, or a fix round for a batch that is not BLOCKED
+
+## Limits, so a clean run is not read as more than it is
+
+- **WebFetch is lossy by design** (Claude Code docs): Claude receives a model's
+  rendering of the page, not its raw text, so a capture can differ from the
+  live page. The operator sample in each `/kbqa-check` report is where a human
+  compares them.
+- **Nothing checks that a quote supports its claim**, and two passes agreeing is
+  consistency, not correctness.
+- **Coverage is measured against the index we captured.** A selective index goes
+  unnoticed, which is why it is captured before scope is decided.

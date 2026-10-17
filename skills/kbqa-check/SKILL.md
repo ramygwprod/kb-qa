@@ -24,7 +24,7 @@ It prints **PASS** or **STOP** and never installs anything. Its first line names
 the `python3` it used — the interpreter every gate below runs under. It checks,
 in order:
 
-1. the installed kbqa is the version this copy pins (`v6.15.1`)
+1. the installed kbqa is the version this copy pins (`v6.16.0`)
 2. its manifest is the one this copy expects
 3. the installed skill is the tagged skill: every file matches
    `INSTALLED-FROM-kbqa-check`, the record `skills/install.sh` wrote — none changed,
@@ -75,6 +75,7 @@ Run it from the project root. It runs, in order:
 | mappings | `kbqa mapcheck` — when `_map-<batch>-A/B.jsonl` exist | batch |
 | coverage | `kbqa g4 --denominator <surface denominator> --rows <every batch of that surface>` | surface |
 | windows | `kbqa g4 --rows <every batch of that surface>` — did the chain reach `exhausted`? | surface |
+| bundles | `kbqa g5 --rows <every batch of that surface>` — the same term at several URLs. **Advisory**: never blocks, never resolved; report each as an open question for the operator | surface |
 | legacy | batches whose name has no surface: coverage against the legacy denominator | subject |
 
 **Coverage is measured per surface, never per batch.** A batch that holds

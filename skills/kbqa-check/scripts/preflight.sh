@@ -16,14 +16,15 @@
 # PASS against one interpreter says nothing about another.
 #
 # Overrides (for tests and fixtures only): KBQA_PINNED, KBQA_EXPECTED_MANIFEST,
-# KBQA_REPO, KBQA_SKILLS_HOME, KBQA_SKILL_COPIES (newline-separated paths; empty =
-# skip the copy check).
+# KBQA_REPO, KBQA_SKILLS_HOME, KBQA_AGENTS_HOME, KBQA_SKILL_COPIES (newline-separated
+# paths; empty = skip the copy check).
 
-PINNED="${KBQA_PINNED:-v6.15.1}"
-EXPECTED_MANIFEST="${KBQA_EXPECTED_MANIFEST:-a4ccacd72b5bf87849a6859dff6d738c371893fec8f7572167c680059c0367b7}"
+PINNED="${KBQA_PINNED:-v6.16.0}"
+EXPECTED_MANIFEST="${KBQA_EXPECTED_MANIFEST:-2b36dd10ca63d9d79b8afc01cae00bb844c1df50f88195353151de751324bc72}"
 REPO="${KBQA_REPO:-https://github.com/ramygwprod/kb-qa.git}"
 INSTALL="python3 -m pip install --force-reinstall \"git+${REPO}@${PINNED}\""
 SKILLS_HOME="${KBQA_SKILLS_HOME:-$HOME/.claude/skills}"
+AGENTS_HOME="${KBQA_AGENTS_HOME:-$HOME/.claude/agents}"
 INSTALLER="bash skills/install.sh ${PINNED} (in the kb-qa repository)"
 [ $# -gt 0 ] && SKILLS="$*" || SKILLS="kbqa-check"
 
@@ -73,7 +74,7 @@ check_installed() {
     || stop "the installed ${name} came from ${rec_tag:-an unknown tag}; this pre-flight pins ${PINNED}." \
             "Operator: reinstall the skills — ${INSTALLER}."
   local expected actual
-  expected=$(grep -E '^[0-9a-f]{64}  ' "${record}" | sort -k2)
+  expected=$(grep -E '^[0-9a-f]{64}  ' "${record}" | grep -vE '^[0-9a-f]{64}  agents/' | sort -k2)
   actual=$(cd "${dir}" && find . -type f ! -name "${record_name}" ! -name '.DS_Store' \
     | sed 's|^\./||' | sort | while IFS= read -r f; do
         printf '%s  %s\n' "$(shasum -a 256 "$f" | awk '{print $1}')" "$f"
@@ -83,6 +84,29 @@ check_installed() {
          "$(diff <(printf '%s\n' "${expected}") <(printf '%s\n' "${actual}") | grep -E '^[<>]' | sed 's/^</  recorded:/; s/^>/  on disk: /')
 Operator: reinstall the skills — ${INSTALLER}. Never edit an installed copy."
   fi
+
+  # The subagents this skill installed, recorded as `agents/<file>`. They live in
+  # the agents folder, not the skill's, and a project agent of the same name
+  # overrides them (Claude Code docs, Subagents) — so both are checked.
+  local agents_expected agents_actual
+  agents_expected=$(grep -E '^[0-9a-f]{64}  agents/' "${record}" | sort -k2)
+  [ -n "${agents_expected}" ] || return 0
+  agents_actual=$(printf '%s\n' "${agents_expected}" | while read -r _ path; do
+      a="${path#agents/}"
+      [ -f "${AGENTS_HOME}/${a}" ] && printf '%s  agents/%s\n' "$(shasum -a 256 "${AGENTS_HOME}/${a}" | awk '{print $1}')" "${a}"
+    done | sort -k2)
+  if [ "${agents_expected}" != "${agents_actual}" ]; then
+    stop "the installed agents of ${name} differ from what install.sh recorded for ${PINNED}." \
+         "$(diff <(printf '%s\n' "${agents_expected}") <(printf '%s\n' "${agents_actual}") | grep -E '^[<>]' | sed 's/^</  recorded:/; s/^>/  on disk: /')
+Operator: reinstall the skills — ${INSTALLER}. Never edit an installed copy."
+  fi
+  local a
+  for a in $(printf '%s\n' "${agents_expected}" | awk '{sub(/^agents\//, "", $2); print $2}'); do
+    [ -f ".claude/agents/${a}" ] \
+      && stop "this project defines .claude/agents/${a}, which overrides the installed one." \
+              "Operator: move it out of the project's .claude/agents/, then re-run."
+  done
+  return 0
 }
 
 # 3 · one skill, one text ----------------------------------------------------

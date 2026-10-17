@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(**/_qa/**)",
+      "Read(**/_qa-log.jsonl)",
+      "Read(**/_qa-estate-audit.md)",
+      "Read(**/_qa-estate-audit.json)"
+    ]
+  }
+}

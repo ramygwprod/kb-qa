@@ -278,7 +278,8 @@ REMEDIES: Dict[str, Remedy] = {
     ),
     "site_wide_disallow": Remedy(
         STRUCTURAL,
-        "robots.txt disallows our agent site-wide. This is terminal for the "
+        "robots.txt disallows one of our agents (Claude-User or ClaudeBot) "
+        "site-wide. This is terminal for the "
         "vendor: no retry, no alternate fetcher, no different user-agent. "
         "Record the stop reason and close the vendor.",
     ),
@@ -469,6 +470,12 @@ REMEDIES.update({
         "Copy the page's own breadcrumb or navigation trail verbatim from that "
         "page's block in the capture. If the page shows none, write `unknown`. "
         "Never build one from the URL or the title, and never leave it empty.",
+    ),
+    "depth_unknown_with_breadcrumb": Remedy(
+        FIXABLE,
+        "The page shows a breadcrumb, so its depth is known: count the "
+        "breadcrumb's levels and write that number, or the level the page names. "
+        "`unknown` is for a page that shows no hierarchy at all.",
     ),
     "evidence_grade_spelling": Remedy(
         FIXABLE,

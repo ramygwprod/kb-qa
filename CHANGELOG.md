@@ -16,6 +16,79 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.16.0] — 2026-10-17
+
+The collector joins this repository, so one tag pins both sides of the contract
+between the three commands. Found by checking the collector for safe use after
+the estate's cleaning audit, and by comparing the retired collection skill and
+the build specs with the three commands.
+
+### Added
+
+- **`/kbqa-collect` and its three agents ship here.** `skills/kbqa-collect/`
+  and `agents/kbqa-fetcher.md`, `kbqa-row-writer.md`, `kbqa-mapper.md` replace
+  the superseded `agents/fetcher.md`, `agents/row-writer.md` and the collector's
+  old settings snippet, which this repository still carried beside a newer
+  collector kept elsewhere. `skills/install.sh <tag>` installs all three skills
+  and the agents, and records the agents in the collector's install record.
+- **The pre-flight checks the agents.** `preflight.sh kbqa-check kbqa-collect`
+  STOPs when an installed agent differs from its record, and when the project a
+  session runs in defines an agent of the same name — a project agent overrides
+  a user one, so the recorded agent would silently not be the one used.
+- **One settings snippet for the estate.** `kbqa-check/settings-snippet.json`
+  now also denies edits to the installed skills and agents and to the
+  project's own `.claude/agents/`. A collecting session's `_qa/` read-deny moved
+  to `kbqa-collect/collect-session-settings.json`, loaded with
+  `claude --settings`, never merged into the estate's settings.
+- **Tests:** the collector's formats end to end through `check_subject.sh` and
+  the merge (`test_pipeline_end_to_end.py`); the v6.15.0 contract fixtures for
+  the K1 row rules, the K2 surfaces, the K5 mapping files and K7, which until
+  now lived outside the repository and were run by hand
+  (`test_contract_fixtures.py`) — nothing in the suite exercised the `surfaces`
+  or `mapcheck` codes before.
+
+### Fixed
+
+- **The README said the collector cannot fetch or write.** A skill's
+  `allowed-tools` pre-approves tools and removes none; the walls are the
+  subagents' `tools:` lists. The README, `skills/README.md` and MANUAL §5.8 now
+  say which is which. MANUAL §5.8 also told the operator to copy the agents into
+  the estate's `.claude/agents/` — the override the pre-flight now stops on.
+
+- **G0 read only the training crawler's robots group.** It decided permission
+  from `ClaudeBot`'s group, else `*`. A collection is a fetch a person asked
+  for, which site owners address as `Claude-User` (Anthropic's crawler help
+  page), so a site refusing `Claude-User` alone passed G0. G0 now reads both
+  agents, each by its own group or else `*`, and declines if either is refused
+  site-wide. This only tightens: every host G0 declined before, it still
+  declines. The verdict's `disallow`, `allow` and `crawl_delay` are now the
+  stricter union of both agents' rules.
+- **The sweep's totals and its re-collection list disagreed on unreadable
+  rows.** The totals counted only rows that failed to parse; the list also
+  named batches whose parse disagreed with the naive count. A wrapper object
+  such as `{"nodes": [...]}` parses as one object with no failure, so the
+  estate audit reported 0 unreadable rows while its own list named two batches.
+  One test (`is_unreadable`) now serves the totals, the report body and the
+  list, and the rows counted are the parser's failures or its shortfall against
+  the naive count, whichever is larger.
+- **`/kbqa-check` never ran G5.** The retired collection skill routed bundles
+  (one term at several URLs) to G5 as advisory; the check script ran every other
+  gate and not that one. It now runs G5 per surface, advisory as before: it never
+  changes a status. G5 also states `scanned`, as every other gate does (K7).
+
+### Changed
+
+- **`depth_level` accepts `unknown` for a page that shows no hierarchy.**
+  PIPELINE-SPEC §3 says `unknown` when the page is silent; G2 rejected it for
+  depth alone, which left a writer facing a page with no breadcrumb a blocked
+  batch, a dropped row, or a guessed level that passes unseen. The new K1 rule
+  `depth_unknown_with_breadcrumb` (fixable) refuses `unknown` beside a real
+  `parent_path` in current-convention batches: a breadcrumb's levels can be
+  counted, so `unknown` there means nobody looked. Every row valid before is
+  still valid.
+
+---
+
 ## [6.15.1] — 2026-10-16
 
 Found by running the collector's output, end to end, through `/kbqa-check` and

@@ -1,7 +1,7 @@
 """install.sh and the pre-flight, run the way the operator runs them.
 
-`skills/install.sh` installs this repository's skills (kbqa-check, kbqa-merge)
-from a tag and records what it installed; the pre-flight refuses to run a gate when the installed skill, the
+`skills/install.sh` installs this repository's skills (kbqa-check, kbqa-merge,
+kbqa-collect) and the collector's agents from a tag and records what it installed; the pre-flight refuses to run a gate when the installed skill, the
 validator or the interpreter is not what was pinned (PIPELINE-SPEC §5). Both are
 shell, so both are run as subprocesses against a real git repository with a
 real tag — a local one, so nothing reaches the network.
@@ -45,6 +45,8 @@ def world(tmp_path):
     origin = tmp_path / "origin"
     shutil.copytree(SKILLS_SRC, origin / "skills",
                     ignore=shutil.ignore_patterns(".DS_Store", "__pycache__"))
+    shutil.copytree(REPO_ROOT / "agents", origin / "agents",
+                    ignore=shutil.ignore_patterns(".DS_Store"))
     _git("init", "-q", cwd=origin)
     _git("-c", "user.name=t", "-c", "user.email=t@example.test", "add", "-A", cwd=origin)
     _git("-c", "user.name=t", "-c", "user.email=t@example.test", "commit", "-qm", "skill", cwd=origin)
@@ -60,6 +62,9 @@ def world(tmp_path):
         "skills": home / ".claude" / "skills",
         "dest": home / ".claude" / "skills" / "kbqa-check",
         "merge": home / ".claude" / "skills" / "kbqa-merge",
+        "collect": home / ".claude" / "skills" / "kbqa-collect",
+        "agents": home / ".claude" / "agents",
+        "project": tmp_path / "project",
         "backups": home / ".kbqa-check-backups",
     }
 
@@ -70,6 +75,7 @@ def _env(world, path=None, **extra):
         "PATH": path or f"{VENV_BIN}:/usr/bin:/bin",
         "KBQA_REPO": world["repo"],
         "KBQA_SKILLS_HOME": str(world["skills"]),
+        "KBQA_AGENTS_HOME": str(world["agents"]),
         "KBQA_BACKUP_DIR": str(world["backups"]),
         "KBQA_PINNED": TAG,
         "KBQA_EXPECTED_MANIFEST": MANIFEST_SHA256,
@@ -86,10 +92,14 @@ def install(world, ref=TAG):
                           env=_env(world), capture_output=True, text=True)
 
 
-def preflight(world, *skills, path=None, **extra):
+def preflight(world, *skills, path=None, cwd=None, **extra):
+    """Run from a project folder, as a session would: the override check reads
+    the project's .claude/agents/."""
     script = world["dest"] / "scripts" / "preflight.sh"
+    project = cwd or world["project"]
+    project.mkdir(parents=True, exist_ok=True)
     return subprocess.run(["bash", str(script), *skills], env=_env(world, path, **extra),
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, cwd=project)
 
 
 # ── install.sh ──────────────────────────────────────────────────────────────
@@ -118,10 +128,11 @@ def test_install_moves_a_previous_install_outside_the_skills_folder(world):
     (world["dest"] / "SKILL.md").write_text("edited by hand\n")
     assert install(world).returncode == 0
     backups = sorted(p.name for p in world["backups"].iterdir())
-    assert [b.split("-2")[0] for b in backups] == ["kbqa-check", "kbqa-merge"]
+    assert [b.split("-2")[0] for b in backups] == [
+        "kbqa-check", "kbqa-collect", "kbqa-fetcher", "kbqa-mapper", "kbqa-merge", "kbqa-row-writer"]
     check_backup = next(p for p in world["backups"].iterdir() if p.name.startswith("kbqa-check"))
     assert (check_backup / "SKILL.md").read_text() == "edited by hand\n"
-    assert sorted(p.name for p in world["skills"].iterdir()) == ["kbqa-check", "kbqa-merge"]
+    assert sorted(p.name for p in world["skills"].iterdir()) == ["kbqa-check", "kbqa-collect", "kbqa-merge"]
 
 
 def test_install_installs_the_merge_skill_with_its_own_record(world):
@@ -132,6 +143,21 @@ def test_install_installs_the_merge_skill_with_its_own_record(world):
     assert files == ["SKILL.md", "scripts/merge.py"]
     assert (world["merge"] / "scripts" / "merge.py").read_bytes() == \
         (SKILLS_SRC / "kbqa-merge" / "scripts" / "merge.py").read_bytes()
+
+
+COLLECT_AGENTS = ["kbqa-fetcher.md", "kbqa-mapper.md", "kbqa-row-writer.md"]
+
+
+def test_install_installs_the_collector_and_records_its_agents(world):
+    assert install(world).returncode == 0
+    record = (world["collect"] / "INSTALLED-FROM-kbqa-collect").read_text().splitlines()
+    assert record[0] == f"tag {TAG}"
+    files = sorted(line.split("  ", 1)[1] for line in record if "  " in line)
+    assert files == ["SKILL.md", "agents/kbqa-fetcher.md", "agents/kbqa-mapper.md",
+                     "agents/kbqa-row-writer.md", "collect-session-settings.json"]
+    for a in COLLECT_AGENTS:
+        assert (world["agents"] / a).read_bytes() == (REPO_ROOT / "agents" / a).read_bytes()
+    assert not (world["collect"] / "agents").exists(), "agents are installed once, not in the skill too"
 
 
 # ── the pre-flight ──────────────────────────────────────────────────────────
@@ -225,3 +251,42 @@ def test_preflight_stops_on_a_wrong_manifest(world):
     assert install(world).returncode == 0
     r = preflight(world, KBQA_EXPECTED_MANIFEST="0" * 64)
     assert r.returncode == 1 and "its manifest is" in r.stdout
+
+
+def test_preflight_passes_with_the_collector_and_its_agents(world):
+    assert install(world).returncode == 0
+    r = preflight(world, "kbqa-check", "kbqa-collect")
+    assert r.returncode == 0, r.stdout
+
+
+@pytest.mark.parametrize("change", ["edited", "removed"])
+def test_preflight_stops_when_an_installed_agent_differs(world, change):
+    """The agents are the collector's rules as much as its SKILL.md is."""
+    assert install(world).returncode == 0
+    a = world["agents"] / "kbqa-row-writer.md"
+    if change == "edited":
+        a.write_text(a.read_text() + "\nYou may also fetch.\n")
+    else:
+        a.unlink()
+    r = preflight(world, "kbqa-check", "kbqa-collect")
+    assert r.returncode == 1
+    assert "the installed agents of kbqa-collect differ" in r.stdout
+
+
+def test_preflight_stops_on_a_project_agent_of_the_same_name(world):
+    """A project-level agent overrides a user-level one: the recorded agent
+    would silently not be the one a session uses."""
+    assert install(world).returncode == 0
+    (world["project"] / ".claude" / "agents").mkdir(parents=True)
+    (world["project"] / ".claude" / "agents" / "kbqa-fetcher.md").write_text("---\nname: kbqa-fetcher\n---\n")
+    r = preflight(world, "kbqa-check", "kbqa-collect")
+    assert r.returncode == 1
+    assert "this project defines .claude/agents/kbqa-fetcher.md" in r.stdout
+
+
+def test_an_agent_check_only_applies_to_the_skill_that_installed_it(world):
+    """kbqa-check alone records no agents, so a project agent does not stop it."""
+    assert install(world).returncode == 0
+    (world["project"] / ".claude" / "agents").mkdir(parents=True)
+    (world["project"] / ".claude" / "agents" / "kbqa-fetcher.md").write_text("x\n")
+    assert preflight(world, "kbqa-check").returncode == 0

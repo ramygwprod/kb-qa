@@ -1,0 +1,20 @@
+=====BEGIN https://example.test/docs/inbox=====
+Docs > Inbox
+# Inbox
+The shared inbox lets agents reply to every customer message in one place. Admins can assign conversations to teams.
+=====END https://example.test/docs/inbox=====
+=====BEGIN https://example.test/docs/reports=====
+Docs > Reports
+# Reports
+Reports show how many conversations each team closed this week.
+=====END https://example.test/docs/reports=====
+=====BEGIN https://example.test/docs/roles=====
+Docs > Settings > Roles
+# Roles
+Admins create custom roles so only the right people can change settings.
+=====END https://example.test/docs/roles=====
+=====BEGIN https://example.test/docs/api=====
+Docs > Developers > API
+# Messages API
+Developers send messages from their own systems with the Messages API.
+=====END https://example.test/docs/api=====

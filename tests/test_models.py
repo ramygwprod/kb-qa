@@ -113,6 +113,32 @@ def test_depth_level_still_rejects_nonsense():
     assert "neither a named level" in str(e.value)
 
 
+def test_unknown_depth_is_accepted_for_a_page_with_no_hierarchy():
+    """PIPELINE-SPEC §3: `unknown` when the page is silent.
+
+    Rejecting it left a writer facing a page with no breadcrumb three choices:
+    a blocked batch, a dropped row (a coverage hole), or a guessed level that
+    passes every check unseen. Only the guess was invisible.
+    """
+    assert row(depth_level="unknown", parent_path="unknown").depth_level == "unknown"
+
+
+def test_unknown_depth_beside_a_breadcrumb_is_flagged():
+    """`unknown` means the page shows no hierarchy, never that nobody looked.
+
+    A breadcrumb's levels can be counted, so `unknown` beside one is a fixable
+    finding in a current-convention batch.
+    """
+    from kbqa.profiles.vendor_catalogue import strict_row_check
+
+    looked = {**CORE, "depth_level": "unknown", "parent_path": "unknown"}
+    skipped = {**CORE, "depth_level": "unknown", "parent_path": "Docs > Webhooks > Retries"}
+    counted = {**CORE, "depth_level": "3", "parent_path": "Docs > Webhooks > Retries"}
+    assert "depth_unknown_with_breadcrumb" not in {c for c, _ in strict_row_check(looked)}
+    assert "depth_unknown_with_breadcrumb" in {c for c, _ in strict_row_check(skipped)}
+    assert "depth_unknown_with_breadcrumb" not in {c for c, _ in strict_row_check(counted)}
+
+
 def test_both_evidence_grade_spellings_are_accepted():
     """Our field, our enum — but rejecting rows over brackets taught nothing."""
     assert row(evidence_grade="verify").evidence_grade == EvidenceGrade.verify

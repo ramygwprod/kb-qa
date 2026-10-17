@@ -169,6 +169,25 @@ def audit_batch(staging: Path, root: Optional[Path] = None, depth: int = 2) -> d
     return rec
 
 
+def is_unreadable(b: dict) -> bool:
+    """One test for "the parser did not read this batch's rows", used by the
+    totals, the report body and the re-collection list alike.
+
+    A failed object is one sign; a parse that disagrees with the naive count is
+    the other. A wrapper such as `{"nodes": [...]}` parses as a single object
+    with no failure at all, so the first sign alone counted two batches of 609
+    rows as 0 unreadable while the re-collection list named both.
+    """
+    naive = b.get("naive_rows")
+    return bool(b.get("rows_unparseable")) or (naive is not None and naive != b["rows"])
+
+
+def rows_unread(b: dict) -> int:
+    """Rows the parser did not read as rows: its failures, or the shortfall
+    against the naive count, whichever is larger."""
+    return max(b.get("rows_unparseable") or 0, (b.get("naive_rows") or 0) - b["rows"])
+
+
 def field_distribution(stagings: List[Path], cap: int = 40) -> Dict[str, dict]:
     """Observed value sets per field — evidence for constraining schema v3.
 
@@ -301,8 +320,8 @@ def build(
     # Rows nothing could parse are in no tier and in no total — `rec["rows"]`
     # counts only what came back as an object. Reported in the body but never in
     # the summary, so 962 of them sat inside figures that looked accounted for.
-    unreadable = [b for b in batches if b["rows_unparseable"]]
-    rows_unreadable = sum(b["rows_unparseable"] for b in unreadable)
+    unreadable = [b for b in batches if is_unreadable(b)]
+    rows_unreadable = sum(rows_unread(b) for b in unreadable)
 
     rows_v = sum(b["rows"] for b in verifiable)
     rows_x = sum(b["rows"] for b in unassessable)
@@ -425,14 +444,14 @@ def build(
               "remediation plan on any of these.")
             a("")
 
-    problems = [b for b in batches if b["error"] or b["rows_unparseable"]]
+    problems = [b for b in batches if b["error"] or is_unreadable(b)]
     if problems:
         a("## Batches that could not be read")
         a("")
-        a("| vendor | batch | rows unparseable | error |")
+        a("| vendor | batch | rows not read | error |")
         a("|---|---|---|---|")
         for b in problems[:30]:
-            a(f"| {b['vendor']} | {b['batch']} | {b['rows_unparseable']} | {b['error'] or '–'} |")
+            a(f"| {b['vendor']} | {b['batch']} | {rows_unread(b)} | {b['error'] or '–'} |")
         a("")
         a("An unreadable batch is not a passing batch. Its rows were never "
           "checked by anything.")
@@ -520,7 +539,7 @@ def recollect_items(machine: dict) -> List[dict]:
             items.append({"kind": b["tier"], "subject": b["vendor"], "path": b["path"],
                           "rows": b["rows"], "reason": RECOLLECT_REASON[b["tier"]]})
         naive = b.get("naive_rows")
-        if b.get("rows_unparseable") or (naive is not None and naive != b["rows"]):
+        if is_unreadable(b):
             items.append({"kind": "batch-rows-unreadable", "subject": b["vendor"],
                           "path": b["path"], "rows": max(naive or 0, b["rows"]),
                           "rows_parsed": b["rows"], "naive_rows": naive,

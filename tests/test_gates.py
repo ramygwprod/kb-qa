@@ -462,6 +462,7 @@ def test_g5_reports_but_always_exits_zero(fx):
     assert v.verdict == ADVISORY
     assert v.counts["terms_at_multiple_urls"] == 1
     assert v.counts["failed"] == 0
+    assert v.counts["scanned"] == v.counts["rows"] > 0, "K7: say what was scanned"
 
 
 def test_g5_resolves_nothing(fx):
@@ -579,6 +580,46 @@ def test_claudebot_specific_disallow_is_exit_2(monkeypatch, tmp_path):
         ["--host", "closed.test", "--out", str(tmp_path), "--date", "2026-08-23"]
     )
     assert code == EXIT_DECLINED, "our own agent's rule must take precedence over *"
+
+
+def _g0(monkeypatch, tmp_path, robots):
+    monkeypatch.setattr(g0_permission, "_fetch", lambda host: (robots, None))
+    return g0_permission.run(["--host", "x.test", "--out", str(tmp_path), "--date", "2026-08-23"])
+
+
+def test_claude_user_specific_disallow_is_exit_2(monkeypatch, tmp_path):
+    """The case G0 passed before v6.16.0: it read only ClaudeBot's group.
+
+    Claude-User is the agent a site owner addresses for a fetch a person asked
+    for, which every collection is. A refusal addressed to it is a refusal.
+    """
+    v, code, _ = _g0(monkeypatch, tmp_path,
+                     "User-agent: *\nAllow: /\n\nUser-agent: Claude-User\nDisallow: /\n")
+    assert code == EXIT_DECLINED
+    assert "'claude-user'" in v.findings[0].message
+
+
+def test_a_refusal_of_either_agent_closes_the_host(monkeypatch, tmp_path):
+    """Allowing Claude-User does not reopen a host that refuses ClaudeBot."""
+    _, code, _ = _g0(monkeypatch, tmp_path,
+                     "User-agent: Claude-User\nAllow: /\n\nUser-agent: ClaudeBot\nDisallow: /\n")
+    assert code == EXIT_DECLINED
+
+
+def test_each_agent_falls_back_to_star_on_its_own(monkeypatch, tmp_path):
+    """ClaudeBot unnamed falls back to `*`, even when Claude-User has a group."""
+    _, code, _ = _g0(monkeypatch, tmp_path,
+                     "User-agent: *\nDisallow: /\n\nUser-agent: Claude-User\nAllow: /\n")
+    assert code == EXIT_DECLINED
+
+
+def test_both_agents_open_records_the_stricter_rules(monkeypatch, tmp_path):
+    v, code, _ = _g0(monkeypatch, tmp_path,
+                     "User-agent: Claude-User\nDisallow: /a\nCrawl-delay: 2\n\n"
+                     "User-agent: ClaudeBot\nDisallow: /b\nCrawl-delay: 10\n")
+    assert code == EXIT_PASS
+    assert v.extra["disallow"] == ["/a", "/b"]
+    assert v.extra["crawl_delay"] == "10"
 
 
 def test_open_robots_is_exit_0(monkeypatch, tmp_path):

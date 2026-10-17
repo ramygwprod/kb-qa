@@ -1,0 +1,5 @@
+=====BEGIN https://example.test/docs/inbox=====
+Docs > Inbox
+# Inbox
+The shared inbox lets agents reply to every customer message in one place. Admins can assign conversations to teams.
+=====END https://example.test/docs/inbox=====
