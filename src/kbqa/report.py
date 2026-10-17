@@ -479,8 +479,8 @@ REMEDIES.update({
     ),
     "evidence_grade_spelling": Remedy(
         FIXABLE,
-        "Use the schema's spelling of the grade (field-schema: official-doc | "
-        "help | marketing | verified | [verify]). The grade itself does not change.",
+        "Use the schema's spelling of the grade (official-doc | help | marketing "
+        "| verified | [verify]). The grade itself does not change.",
     ),
     # --- K2 · mandatory surfaces ------------------------------------------
     "surface_missing": Remedy(

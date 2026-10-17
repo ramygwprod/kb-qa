@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install this repository's skills from a tag, and record what was installed.
 #
-#   bash skills/install.sh v6.16.0
+#   bash skills/install.sh v6.16.1
 #
 # Installs kbqa-check, kbqa-merge and kbqa-collect into ~/.claude/skills/, and
 # the collector's three agents into ~/.claude/agents/. Run by the
@@ -28,7 +28,7 @@
 # KBQA_BACKUP_DIR.
 set -euo pipefail
 
-TAG="${1:?usage: bash skills/install.sh <tag, e.g. v6.16.0>}"
+TAG="${1:?usage: bash skills/install.sh <tag, e.g. v6.16.1>}"
 REPO="${KBQA_REPO:-https://github.com/ramygwprod/kb-qa.git}"
 HOME_SKILLS="${KBQA_SKILLS_HOME:-$HOME/.claude/skills}"
 BACKUPS="${KBQA_BACKUP_DIR:-$HOME/.kbqa-check-backups}"
