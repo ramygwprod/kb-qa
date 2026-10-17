@@ -32,8 +32,10 @@ take the other tools away, so this is a rule you keep, not a wall.
    give the operator the printed command.
 2. Read `kbqa-estate.json` at the estate root. It must name, relative to the
    estate root: `subjects_dir`, `logic_sheet`, `themes_codebook`,
-   `apqc_elements`, `field_schema`. If the file or any key is missing, or a named
-   file does not exist, stop and name exactly what is missing. Never guess a path.
+   `apqc_elements`. If the file or any key is missing, or a named file does not
+   exist, stop and name exactly what is missing. Never guess a path. The row
+   fields are not configured: they are the row-writer's table, which the check's
+   rules enforce.
 
 The subject's folder is `<subjects_dir>/<Subject>/`. Read that path: an error
 saying it is a directory means it exists; any other error means it does not —

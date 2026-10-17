@@ -271,7 +271,7 @@ def main(argv=None) -> int:
     elif args.new_tree:
         old_bytes = b""
         old_text = (f"---\nentity:       {d.name}\n"
-                    f"schema:       skill:r1a-vendor-catalogue/references/field-schema.md\n"
+                    f"schema:       kbqa vendor-catalogue profile v{KBQA_VERSION}\n"
                     f'proof:        "{proof_body([])} (derived by parsing this file — never typed)"\n'
                     f"---\n\n# {d.name} — Feature Tree (Layer 1)\n")
     else:

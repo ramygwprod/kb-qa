@@ -16,6 +16,33 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.16.1] — 2026-10-17
+
+The retired collection skill's names leave the tools: the old rounds are now
+the three commands, and nothing the tools write or require points at the
+retired skill's folder.
+
+### Fixed
+
+- **New trees cited the retired skill's schema.** `/kbqa-merge --new-tree`
+  wrote `schema: skill:r1a-vendor-catalogue/references/field-schema.md`; a new
+  tree's rows follow this package's row rules, so it now writes
+  `schema: kbqa vendor-catalogue profile v<version>`. Existing trees are records
+  and are not touched.
+- **`/kbqa-collect` required a `field_schema` path that nothing read.** No agent
+  used it, and it kept the retired skill's folder load-bearing. The four
+  remaining keys are the configuration; an estate config that still carries
+  `field_schema` keeps working.
+- **The pipeline diagram said the retired skill owns collection,** with a
+  footer of typed counts from v6.14.1. It names `/kbqa-collect`, and the footer
+  names the three commands instead of counts that drift.
+- **`MAPPING-CONTRACT.md` used the old round names and named the reference
+  company and its folder** in this public repository. It names the row-writer
+  and the mapper, and says "the reference company". Earlier commits still hold
+  the old text.
+
+---
+
 ## [6.16.0] — 2026-10-17
 
 The collector joins this repository, so one tag pins both sides of the contract

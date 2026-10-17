@@ -47,12 +47,10 @@ def _estate(root: Path) -> Path:
     cfg = {"subjects_dir": "Subjects",
            "logic_sheet": "ref/LOGIC-SHEET.md",
            "themes_codebook": "ref/codebook.md",
-           "apqc_elements": "ref/elements.jsonl",
-           "field_schema": "ref/field-schema.md"}
+           "apqc_elements": "ref/elements.jsonl"}
     (root / "ref").mkdir(parents=True)
     (root / "kbqa-estate.json").write_text(json.dumps(cfg))
     (root / "ref" / "LOGIC-SHEET.md").write_text("# Logic sheet (synthetic)\n")
-    (root / "ref" / "field-schema.md").write_text("# Field schema (synthetic)\n")
     (root / "ref" / "codebook.md").write_text("| code | theme |\n|---|---|\n| I01 | Messaging |\n| I02 | Automation |\n")
     (root / "ref" / "elements.jsonl").write_text("".join(json.dumps(e) + "\n" for e in ELEMENTS))
 
@@ -137,4 +135,6 @@ def test_collect_check_fix_check_merge(tmp_path):
                        capture_output=True, text=True)
     assert p.returncode == 0 and "MERGED" in p.stdout, p.stdout + p.stderr
     assert "G6 after merge: nothing on this tree or batch" in p.stdout, p.stdout
-    assert "rows=4 · unique_ids=4" in (d / "feature-tree.md").read_text()
+    tree = (d / "feature-tree.md").read_text()
+    assert "rows=4 · unique_ids=4" in tree
+    assert "schema:       kbqa vendor-catalogue profile v" in tree, "a new tree cites the rules enforced on it"

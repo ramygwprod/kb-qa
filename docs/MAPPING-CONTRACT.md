@@ -108,7 +108,8 @@ Because `broadMatch` covers the ordinary "unique but related" case,
 
 ### `canonical` is read-only in rows, in every round
 
-R1a leaves it. R2 does not write it either. Writing a mapping into the row *is*
+The row-writer leaves it. The mapper does not write it either — it writes
+`_map-*` files. Writing a mapping into the row *is*
 an edit to the row, so in-row writes and the additive discipline cannot both
 hold — and `kbqa freeze` would correctly report the write as drift.
 
@@ -193,19 +194,19 @@ mapping in its own file and it becomes a fact about where the data lives — and
 ## The prior `canonical` values — quarantine, do not delete
 
 The 1,014 existing tags were traced to a scheme documented in the estate's own
-archive: `NOVEL` · `C#.M#` · `EA1–EA8`. The registry is **WideBot's own product
-map**, still live in `widebot-own/`. Of 34 distinct tags in use, 19 are named
+archive: `NOVEL` · `C#.M#` · `EA1–EA8`. The registry is **the reference
+company's own product map**, kept in its own folder. Of 34 distinct tags in use, 19 are named
 there and 15 are named nowhere.
 
 So those values are not merely unprovenanced — they map competitors into *our*
-module codes, which is the inversion `field-schema.md` forbids: we never invent
+module codes, which is the inversion the row contract forbids: we never invent
 a list for a subject to match. That is the same error as a denominator taken
 from our expectations rather than the subject's index, one layer up.
 
 Per-row origin is unrecoverable: no `mapped_by`, no `mapped_date`. The only date
 present is `access_date`, which records when the *page* was fetched.
 
-**Move them to a mapping file keyed by `id`**, stamped `scheme: widebot-C-M`,
+**Move them to a mapping file keyed by `id`**, stamped `scheme: reference-C-M`,
 `status: quarantined`, dated, origin recorded as unrecoverable. Do not delete —
 15 tags have no registry anywhere, so deleting destroys their only trace.
 
