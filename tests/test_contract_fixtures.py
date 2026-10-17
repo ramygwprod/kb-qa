@@ -87,6 +87,25 @@ def test_k2_a_missing_help_surface_fails(fx):
     assert code == 1 and "surface_missing" in codes(v), sorted(codes(v))
 
 
+@pytest.mark.parametrize("reason", [
+    "js-only: not readable", "gated: login", "refused: robots",
+    "excluded: robots /help", "third-party host: help.other.test"])
+def test_k2_a_published_but_uncollectable_surface_closes_only_when_named(fx, reason):
+    """The fetcher's §2 contract: a surface that exists but cannot be read is
+    closed by its stop line only when the line names the surface it closes."""
+    d = fx / "K2" / "fail-help-missing"
+    stops = d / "_stop-conditions.md"
+    base = stops.read_text(encoding="utf-8")
+
+    stops.write_text(base + f"- https://help.example.test/ | {reason}\n", encoding="utf-8")
+    v, code = surfaces.run(["--subject", str(d)])
+    assert code == 1 and "surface_missing" in codes(v), "an unnamed stop must not close a surface"
+
+    stops.write_text(base + f"- https://help.example.test/ | {reason} (surface help)\n", encoding="utf-8")
+    v, code = surfaces.run(["--subject", str(d)])
+    assert code == 0, sorted(codes(v))
+
+
 # ── K5 · the mapping files ───────────────────────────────────────────────────
 
 def _mapcheck(fx, sub):

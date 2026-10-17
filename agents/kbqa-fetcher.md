@@ -98,6 +98,15 @@ shows it, never by a guess:
 - https://www.example.test/ | surface help not published: the site's menu and footer link no help centre
 ```
 
+If a surface **is** published but cannot be collected — its index or entry page
+is JavaScript-only, behind a login, refused or excluded by robots, or on another
+company's host — write that page's stop line (§4) and end it with the surface it
+closes, so the check counts the surface as accounted for, not missing:
+
+```
+- https://help.example.test/ | js-only: not readable (surface help)
+```
+
 Return the plan: per surface, the rung, URL and item count, or the stop line;
 the hosts in scope; PDFs found; the language version. **Fetch no page content
 until the operator has approved the plan.** PDFs and non-English pages need
