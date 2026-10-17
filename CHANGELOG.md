@@ -16,6 +16,27 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.16.3] — 2026-10-17
+
+### Added
+
+- **Installed skills and agents are read-only.** `install.sh` marks every file
+  it installs read-only, so any session can use the three skills and the three
+  agents while none of them — scripts included — can overwrite one without first
+  changing its permissions. A reinstall makes the old install writable only to
+  move it to the backups.
+
+### Fixed
+
+- **The settings snippet never protected the installed validator.** A rule path
+  with no prefix is relative to the session's folder, so
+  `Edit(**/site-packages/kbqa/**)` and `Edit(**/kb-qa/**)` matched only copies
+  inside the estate. They are `//**/…` now, matching anywhere. The pre-flight's
+  manifest check would still have caught a changed gate; the edit itself was not
+  blocked.
+
+---
+
 ## [6.16.2] — 2026-10-17
 
 ### Fixed

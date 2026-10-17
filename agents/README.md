@@ -37,7 +37,8 @@ as a backstop.
 
 ## The limit
 
-An installed agent is a file the operator's account can edit. The install
-record makes an edit **evident** at the next pre-flight; the deny rules in
-`skills/kbqa-check/settings-snippet.json` stop a session making one. Neither is
-tamper-proof. Only CI running the gates from a pinned version closes that.
+`install.sh` makes the installed agents read-only, the deny rules stop a
+session's file tools editing them, and the install record makes any change
+**evident** at the next pre-flight. None is tamper-proof: a process running as
+the operator can change a file's permissions back. Only the OS sandbox or CI
+running the gates from a pinned version closes that.

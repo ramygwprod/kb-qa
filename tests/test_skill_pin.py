@@ -280,6 +280,15 @@ def test_the_project_snippet_protects_the_installed_skills_and_agents():
         assert f"Edit({path})" in deny and f"Write({path})" in deny, path
 
 
+def test_the_validator_rules_are_absolute():
+    """A rule path with no prefix is relative to the session's folder, so
+    `Edit(**/site-packages/kbqa/**)` protected only a copy inside the project —
+    never the installed validator. `//` makes it match anywhere."""
+    deny = json.loads(SNIPPET.read_text())["permissions"]["deny"]
+    rules = [r for r in deny if "site-packages" in r or "dist-packages" in r or "kb-qa/**" in r]
+    assert rules and all(r.split("(", 1)[1].startswith(("//", "~/")) for r in rules), rules
+
+
 def test_there_is_one_project_snippet():
     """Two snippets for one project drift apart; the collector has none of its own."""
     assert not (SKILLS / "kbqa-collect" / "settings-snippet.json").exists()

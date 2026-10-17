@@ -1,12 +1,12 @@
 {
   "permissions": {
     "deny": [
-      "Edit(**/site-packages/kbqa/**)",
-      "Write(**/site-packages/kbqa/**)",
-      "Edit(**/dist-packages/kbqa/**)",
-      "Write(**/dist-packages/kbqa/**)",
-      "Edit(**/kb-qa/**)",
-      "Write(**/kb-qa/**)",
+      "Edit(//**/site-packages/kbqa/**)",
+      "Write(//**/site-packages/kbqa/**)",
+      "Edit(//**/dist-packages/kbqa/**)",
+      "Write(//**/dist-packages/kbqa/**)",
+      "Edit(//**/kb-qa/**)",
+      "Write(//**/kb-qa/**)",
       "Edit(//ABSOLUTE/PATH/TO/YOUR/kb-qa/CHECKOUT/**)",
       "Write(//ABSOLUTE/PATH/TO/YOUR/kb-qa/CHECKOUT/**)",
       "Edit(.git/hooks/**)",
