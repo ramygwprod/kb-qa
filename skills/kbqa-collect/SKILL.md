@@ -26,6 +26,18 @@ You orchestrate. Every step is a delegation:
 you.** The skill's tool list pre-approves `Task`, `Agent` and `Read`; it does not
 take the other tools away, so this is a rule you keep, not a wall.
 
+Three more rules for running the session:
+
+- **Offer only what the agents can do.** Before you put an option to the
+  operator, check that an agent's file says it can carry it out. If none can,
+  say so; never offer an option that cannot run.
+- **Scope is the operator's.** Propose it in chat, by the denominator's own line
+  numbers; the operator approves or changes it. Never delegate a scope judgement
+  to an agent — they are forbidden to make one.
+- **Report from disk, never from memory.** After a delegation that was
+  interrupted, failed or returned nothing, Read the files that step was to write,
+  by their exact names, before you say what happened.
+
 ## 0 · Pre-flight and configuration
 
 1. Delegate to `kbqa-fetcher` its pre-flight (its §0). On any `STOP`, stop and
@@ -39,9 +51,10 @@ take the other tools away, so this is a rule you keep, not a wall.
 
 The subject's folder is `<subjects_dir>/<Subject>/`. Read that path: an error
 saying it is a directory means it exists; any other error means it does not —
-say so and ask the operator to create it, before anything is delegated (G0
-creates the folder it is given, so a misspelt name would become a new folder).
-Never invent a location.
+say so and give the operator the exact command, run at the estate root:
+`mkdir -p "<subjects_dir>/<Subject>"`, before anything is delegated (G0 creates
+the folder it is given, so a misspelt name would become a new folder). Never
+invent a location.
 
 3. **A tree from before this pipeline.** Read `<subject folder>/feature-tree.md`
    and `<subject folder>/_merge-log.jsonl` (`limit: 5` each; a Read error means
@@ -175,10 +188,11 @@ mean re-fetching or re-planning: a new batch, never an edit.
 
 ## Limits, so a clean run is not read as more than it is
 
-- **WebFetch is lossy by design** (Claude Code docs): Claude receives a model's
-  rendering of the page, not its raw text, so a capture can differ from the
-  live page. The operator sample in each `/kbqa-check` report is where a human
-  compares them.
+- **A capture is the served HTML, rendered as text by code** (`kbqa capture`),
+  with the raw bytes kept beside it. Content a page builds with JavaScript after
+  loading is not in it: such a page is recorded `js-only`, never guessed at.
+  The operator sample in each `/kbqa-check` report is still where a human
+  compares a quote with the live page.
 - **Nothing checks that a quote supports its claim**, and two passes agreeing is
   consistency, not correctness.
 - **Coverage is measured against the index we captured.** A selective index goes

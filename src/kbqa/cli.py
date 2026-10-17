@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from . import __version__, freeze, mappings, probe, profile, report, sweep
+from . import __version__, capture, freeze, index, mappings, probe, profile, report, sweep
 from .gates import g0_permission, g1_capture, g2_conformance
 from .gates import g3_grounding, g4_completeness, g5_bundles, g6_integrity
 from .gates import mapcheck, surfaces
@@ -63,6 +63,14 @@ cycle:
                                                audit the whole estate: which
                                                batches can be checked at all;
                                                --recollect writes the re-collection list
+
+collection (the fetcher runs these; permission from today's g0 record):
+  index --out <d> --surface <s> --rung <n> --url <u> [--html] [--path-prefix <p>]
+                                               write a surface's denominator from
+                                               the subject's own index, by code
+  capture --out <d> --batch <name> --url <u>... | --urls-file <f>
+                                               capture one window verbatim: raw
+                                               bytes kept, text by a fixed rendering
 
 diagnostics:
   probe --staging <f> [--capture <f>]          report file SHAPE, not content
@@ -176,6 +184,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     # Answers "did interpreting the data change it", which no gate asks.
     if argv[0] == "freeze":
         return freeze.run(argv[1:])
+
+    # Collection, not gates: they fetch, under today's robots record, and write
+    # a denominator or a capture. Never a verdict.
+    if argv[0] == "index":
+        return index.run(argv[1:])
+    if argv[0] == "capture":
+        return capture.run(argv[1:])
 
     # Mapping statements: about rows, stored outside rows, keyed by id.
     # Checks that the file is well-formed. Never that a mapping is right.

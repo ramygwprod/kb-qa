@@ -194,6 +194,13 @@ Rules the parser enforces:
 Marker lines are excluded from the block text: a quote must be found in the
 vendor's own words, not in scaffolding we wrote.
 
+Since v6.17.0 `kbqa capture` writes it: each page's text is a fixed rendering of
+the served HTML (`kbqa.htmltext` — visible text in document order, whitespace
+collapsed as a browser collapses it, table cells joined by ` | `, a breadcrumb
+as one line joined by ` > `), keyed by the URL that served it. The raw bytes sit
+beside it in `_raw/<batch>/`, listed with their sha256 in `MANIFEST.tsv`, so any
+block can be re-derived and any quote re-checked against what was served.
+
 ## `_denominator-<surface>-<date>.md` (BRONZE, immutable)
 
 Markdown links, one index item per line. Bare URLs on their own line also count,
@@ -203,6 +210,11 @@ and take their label from the last path segment.
 - [Widgets Overview](https://docs.acme.test/widgets/overview)
 - [Syntax Reference](https://docs.acme.test/widgets/syntax-reference)
 ```
+
+Since v6.17.0 `kbqa index` writes it, under a first line naming the surface,
+rung and source URL: `llms.txt` link lines unchanged, a sitemap's `<loc>` URLs as
+bare lines, an HTML index page's same-host links as markdown links. The raw
+index bytes are kept in `_raw/index-<surface>-<date>/`.
 
 ## `_stop-conditions.md` (SILVER)
 

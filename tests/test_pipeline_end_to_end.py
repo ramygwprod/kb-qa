@@ -138,3 +138,87 @@ def test_collect_check_fix_check_merge(tmp_path):
     tree = (d / "feature-tree.md").read_text()
     assert "rows=4 · unique_ids=4" in tree
     assert "schema:       kbqa vendor-catalogue profile v" in tree, "a new tree cites the rules enforced on it"
+
+
+def test_kbqa_index_and_capture_feed_the_check_and_the_merge(tmp_path, monkeypatch):
+    """The v6.17.0 path: the denominator and the capture written by code from the
+    served bytes, rows quoting the capture, the real check, the real merge."""
+    import contextlib
+    import io
+
+    from kbqa import capture, fetch, index
+
+    day = "2026-10-18"
+    host = "docs.example.test"
+    batch = f"docs-{day}-w01"
+    pages = {
+        "webhooks": ("Docs > Webhooks", "Webhooks notify your server when a message is delivered."),
+        "retries": ("Docs > Webhooks > Retries", "Failed webhook calls are retried for up to 24 hours."),
+        "templates": ("Docs > Templates", "Templates let you reuse approved message layouts."),
+        "reports": ("Docs > Reports", "Delivery reports show every message's final status."),
+    }
+
+    def html(crumb, text):
+        items = "".join(f"<li>{c}</li>" for c in crumb.split(" > "))
+        return (f'<html><head><script>x()</script></head><body><nav aria-label="breadcrumb"><ol>{items}</ol></nav>'
+                f"<main><p>{text}</p></main></body></html>").encode()
+
+    web = {f"https://{host}/llms.txt": (b"# Docs\n" + "".join(
+        f"- [{p.title()}](https://{host}/{p})\n" for p in pages).encode(), "text/plain")}
+    web.update({f"https://{host}/{p}": (html(c, t), "text/html") for p, (c, t) in pages.items()})
+
+    class Resp:
+        def __init__(self, url, body, ctype):
+            self.url, self.body, self.status = url, body, 200
+            self.headers = {"Content-Type": ctype}
+        def read(self, n=-1): return self.body
+        def geturl(self): return self.url
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    monkeypatch.setattr(fetch, "_open", lambda req, timeout=None: Resp(req.full_url, *web[req.full_url]))
+    monkeypatch.setattr(fetch, "_sleep", lambda s: None)
+
+    root = tmp_path / "estate"
+    d = _estate(root)
+    for f in list(d.iterdir()):  # this subject is collected by code, not written by hand
+        f.unlink()
+    (d / f"_robots-{host}-{day}.txt").write_text("User-agent: *\nAllow: /\n")
+    (d / "_stop-conditions.md").write_text(
+        "- https://www.example.test/ | surface product not published: the site lists only docs\n"
+        "- https://www.example.test/ | surface help not published: no help centre is linked\n")
+
+    with contextlib.redirect_stdout(io.StringIO()) as out:
+        assert index.run(["--out", str(d), "--surface", "docs", "--rung", "1",
+                          "--url", f"https://{host}/llms.txt", "--date", day]) == 0, out.getvalue()
+    with contextlib.redirect_stdout(io.StringIO()) as out:
+        assert capture.run(["--out", str(d), "--batch", batch, "--date", day,
+                            *sum((["--url", f"https://{host}/{p}"] for p in pages), [])]) == 0, out.getvalue()
+    receipt = json.loads(out.getvalue())
+
+    cap = (d / f"_capture-{batch}.raw.txt").read_text()
+    rows = []
+    for p, (crumb, text) in pages.items():
+        assert f"=====BEGIN https://{host}/{p}=====\n{crumb}\n{text}\n" in cap  # the breadcrumb line, then the text
+        rows.append({"id": f"example.docs.{p}", "source_url": f"https://{host}/{p}", "source_quote": text,
+                     "access_date": day, "vendor_term": p.title(), "what_it_does": text,
+                     "parent_path": crumb, "evidence_grade": "official-doc", "confidence": "high",
+                     "mechanism": "Native", "outcome": "yes", "depth_level": str(len(crumb.split(" > "))),
+                     "canonical": "NOVEL"})
+    t = (d / f"_capture-{batch}.raw.txt").stat().st_mtime - 60
+    os.utime(d / f"_capture-{batch}.raw.txt", (t, t))
+    fm = (f"---\nbatch: {batch}\nsource_capture: _capture-{batch}.raw.txt\n"
+          f"source_capture_sha256: {receipt['sha256']}\npages:\n"
+          + "".join(f"  - {pg['url']}\n" for pg in receipt["pages"])
+          + f"fetched_by_this_agent: false\nwindow_offset: 0\nwindow_requested: 4\nwindow_returned: 4\n"
+            f"window_end: exhausted\naccess_date: {day}\n---\n")
+    (d / f"_collect-{batch}-staging.md").write_text(fm + "\n```json\n" + "\n".join(json.dumps(r) for r in rows) + "\n```\n")
+
+    out = _check(d, root)
+    assert "surfaces: PASS" in out, out
+    assert "status=CLEAR  round=1" in out, out
+    assert out.count("g4_completeness: PASS") == 2, out
+
+    p = subprocess.run([sys.executable, str(MERGE), "--vendor-dir", str(d), "--batch", batch, "--new-tree"],
+                       capture_output=True, text=True)
+    assert p.returncode == 0 and "MERGED" in p.stdout, p.stdout + p.stderr

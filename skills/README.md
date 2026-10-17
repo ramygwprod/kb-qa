@@ -42,7 +42,7 @@ All three skills and the three agents, from one tag, by the operator in their
 own terminal (PIPELINE-SPEC §5):
 
 ```bash
-bash skills/install.sh v6.16.3
+bash skills/install.sh v6.17.0
 ```
 
 It clones the tag, copies each skill to `~/.claude/skills/<skill>/` and the
@@ -109,11 +109,13 @@ the fetcher recorded, and every quote must be in that capture (G1, G3). What
 cannot: a capture the orchestrator wrote itself, hashed by itself. **Verify
 once** on your setup that the `kbqa-row-writer` subagent cannot fetch.
 
-**The capture is what the fetch tool returned, not necessarily what the server
-sent.** A fetch tool that converts or summarises produces a capture whose
-text differs from the page. Quotes then match the capture, G3 passes, and the
-text is not what a reader sees. Verify once per fetch mechanism by comparing one
-captured sentence against the live page. No gate can detect this.
+**A capture is the served HTML, not what a browser shows after JavaScript.**
+`kbqa capture` keeps the raw bytes and renders them as text the same way every
+time, so a quote can always be re-checked against the bytes. Text a page builds
+with JavaScript after loading is not in the bytes: such a page is recorded
+`js-only`. Until v6.17.0 captures went through WebFetch, which returns a model's
+summary and refuses to reproduce more than a short quote — no capture through it
+could be verbatim, and the first live collection captured nothing.
 
 **Nothing checks that a quote supports its claim.** G3 verifies the quote is
 real and on the page it cites. That is all it verifies.

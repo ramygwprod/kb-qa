@@ -62,7 +62,7 @@ Every row carries these fields, with exactly these values where a list is given:
 | `access_date` | from the receipt |
 | `vendor_term` | the subject's own name for the thing, verbatim |
 | `what_it_does` | one plain sentence, no larger than the quote supports |
-| `parent_path` | the page's own breadcrumb or navigation trail, verbatim; `unknown` when the page shows none — **never empty**, never built from the URL or the page title |
+| `parent_path` | the page's own breadcrumb, verbatim: the capture writes a breadcrumb as one line, its items joined by ` > ` — copy that line; `unknown` when the page shows none — **never empty**, never built from the URL or the page title |
 | `evidence_grade` | `official-doc` · `help` · `marketing` · `verified` · `[verify]` — spelled exactly so |
 | `confidence` | `high` · `medium` · `low` |
 | `mechanism` | `Native` · `Composed` · `Integrated` · `BYO` · `None` · `unknown` |

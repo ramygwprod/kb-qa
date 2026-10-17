@@ -16,6 +16,50 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.17.0] — 2026-10-17
+
+The first live collection (one subject, two surfaces) captured nothing:
+WebFetch returns a model's summary of a page and refuses to reproduce more than
+a short quote, so no capture written through it could be verbatim. Collection
+now captures by code.
+
+### Added
+
+- **`kbqa capture`** — one window of pages, verbatim and reproducible. Each
+  page's raw bytes are kept in `_raw/<batch>/` with their sha256, and its text —
+  a fixed rendering of the served HTML (`kbqa.htmltext`): visible text in order,
+  a breadcrumb as one ` > ` line, table cells joined by ` | ` — goes between the
+  usual markers, keyed by the URL that served it. It never overwrites, refuses a
+  used batch name, ends the window on a 429 or 503, leaves a redirect off the
+  host and a JavaScript-only shell uncaptured, and prints the receipt with the
+  exact stop lines to add.
+- **`kbqa index`** — a surface's denominator by code, in the index's own order
+  and words: `llms.txt` link lines unchanged, a sitemap's URLs (sitemap indexes
+  and gzip followed, whatever the size), or an HTML index page's same-host links.
+  `--path-prefix`, operator-approved, keeps one language of a help centre and
+  says so in the header. Written once.
+- **Permission in code** (`kbqa.fetch`): both commands refuse a host without a
+  robots record from `g0` dated today, apply the rules of `Claude-User`,
+  `ClaudeBot` and `*` path by path (RFC 9309 longest match, the stricter reading
+  of the three), and honour the longest crawl delay. The fetcher no longer
+  judges a robots rule.
+
+### Changed
+
+- **The fetcher** captures and indexes only through these two commands; its
+  shell holds four: the pre-flight, `g0`, `index`, `capture`. WebFetch is only
+  for looking at a page to decide something. The row-writer copies `parent_path`
+  from the capture's breadcrumb line.
+- **The collector's orchestrator** offers the operator only options an agent
+  can carry out; proposes scope in chat by the denominator's line numbers and
+  never delegates it; after an interrupted or failed delegation, reads the files
+  that step was to write before reporting; and gives the exact `mkdir` command
+  when the subject folder is missing — each a slip in the first live session.
+- **Denominators written through WebFetch are not to be trusted:** re-capture
+  them with `kbqa index` as new dated files.
+
+---
+
 ## [6.16.3] — 2026-10-17
 
 ### Added
