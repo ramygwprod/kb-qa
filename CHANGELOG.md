@@ -16,6 +16,20 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.16.2] — 2026-10-17
+
+### Fixed
+
+- **A surface that exists but cannot be collected was reported missing.** The
+  check closes a surface only on a stop line that names it (`surface <slug>`);
+  the fetcher wrote `js-only`, `gated`, `refused: robots`, `excluded: robots` and
+  `third-party host` lines without one, so a help centre that renders only with
+  JavaScript showed as `surface_missing` though it had been recorded. The
+  fetcher now ends such a line with `(surface <slug>)`; a contract test checks
+  each reason both ways — closed when named, missing when not.
+
+---
+
 ## [6.16.1] — 2026-10-17
 
 The retired collection skill's names leave the tools: the old rounds are now
