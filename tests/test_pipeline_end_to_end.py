@@ -141,7 +141,7 @@ def test_collect_check_fix_check_merge(tmp_path):
 
 
 def test_kbqa_index_and_capture_feed_the_check_and_the_merge(tmp_path, monkeypatch):
-    """The v6.17.1 path: the denominator and the capture written by code from the
+    """The v6.17.0 path: the denominator and the capture written by code from the
     served bytes, rows quoting the capture, the real check, the real merge."""
     import contextlib
     import io
