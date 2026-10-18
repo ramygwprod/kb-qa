@@ -642,6 +642,12 @@ REMEDIES.update({
         "A `needs-human` line says why in `note`, so the operator knows what to "
         "decide. Write the reason; do not change the status to clear this.",
     ),
+    "story_role_mismatch": Remedy(
+        FIXABLE,
+        "The `user_story` opens \"As a <role>, I want\" and that role is the "
+        "line's `role`, word for word. Write the story with the role from its "
+        "source; never change `role` to match a story.",
+    ),
     # --- K5 · mapping files: the whole batch -------------------------------
     "element_dominates": Remedy(
         PLANNER,
@@ -1091,6 +1097,13 @@ def run(argv: List[str]) -> int:
           f"sample_seed={machine['sample'].get('seed')}")
     if machine["not_checked"]:
         print(f"  NOT CHECKED (scanned 0): {', '.join(machine['not_checked'])}")
+    # The counts the collecting agents no longer give by hand (v6.18.0): the
+    # check is the one counter of rows and of distinct terms (spec §3).
+    stg = vendor_dir / f"_collect-{batch}-staging.md"
+    if stg.exists():
+        rows = [r.obj for r in parse_staging(stg).rows if r.obj is not None]
+        terms = {str(r.get("vendor_term")) for r in rows if r.get("vendor_term")}
+        print(f"  rows={len(rows)}  distinct_vendor_terms={len(terms)}")
     print(
         f"  findings={c['findings']}  gaps={c['gaps']}  issues={c['issues']}  "
         f"structural={c['structural']}  planner={c['planner']}  fixable={c['fixable']}"

@@ -2,7 +2,12 @@
 
 Permission is decided here, from the robots.txt that `kbqa g0` recorded today —
 never by an agent reading the file. No record dated today for a host means no
-fetch from it: G0 runs per host per collection run, and this enforces it.
+fetch from it until G0 has run: since v6.18.0 `ensure_robots` runs G0 itself
+(at most three attempts) instead of refusing, so a run that crosses midnight
+goes on — permission is still decided per day, from a record dated today.
+
+A TLS or protocol failure is final (`ProtocolError`): the same interpreter
+fails the same way on every attempt.
 
 For each path the rules of three user-agent groups apply — `Claude-User` (a
 fetch a person asked for), `ClaudeBot`, and `*` — each by its own group, else
@@ -14,6 +19,7 @@ to the same host.
 """
 
 import re
+import ssl
 import time
 import urllib.error
 import urllib.request
@@ -48,6 +54,23 @@ class TooLarge(FetchError):
     """A response over the size limit — another attempt cannot help."""
 
 
+class ProtocolError(FetchError):
+    """A TLS or protocol failure — the same interpreter fails the same way on
+    every attempt (v6.17.1 retried `TLSV1_ALERT_PROTOCOL_VERSION` and wasted
+    the retry), so it is final: the operator decides on the interpreter or a
+    stop line. A connection dropped mid-handshake is not one of these: it is
+    the network, and may pass."""
+
+
+# TLS errors that are the connection going away, not the protocol failing.
+_TLS_DROPS = (ssl.SSLEOFError, ssl.SSLZeroReturnError)
+
+
+def _is_protocol_failure(exc: BaseException) -> bool:
+    reason = getattr(exc, "reason", None) if isinstance(exc, urllib.error.URLError) else exc
+    return isinstance(reason, ssl.SSLError) and not isinstance(reason, _TLS_DROPS)
+
+
 @dataclass
 class Response:
     requested: str
@@ -68,6 +91,8 @@ def get(url: str, max_bytes: int = MAX_BYTES) -> Response:
     except urllib.error.HTTPError as exc:
         return Response(url, url, exc.code, "", b"")
     except Exception as exc:  # noqa: BLE001 — any transport failure is a failed fetch
+        if _is_protocol_failure(exc):
+            raise ProtocolError(f"TLS: {type(exc).__name__}: {exc}") from exc
         raise FetchError(f"{type(exc).__name__}: {exc}") from exc
     if len(body) > max_bytes:
         raise TooLarge(f"larger than {max_bytes} bytes")
@@ -92,7 +117,7 @@ def get_patiently(url: str, max_bytes: int = MAX_BYTES) -> Tuple[Optional[Respon
     for attempt in range(1, ATTEMPTS + 1):
         try:
             r = get(url, max_bytes)
-        except TooLarge as exc:
+        except (TooLarge, ProtocolError) as exc:
             return None, "final", attempt, str(exc)
         except FetchError as exc:
             reason = str(exc)
@@ -173,6 +198,52 @@ def robots_for(subject: Path, host: str, day: str) -> Robots:
             f"no robots record for {host} dated {day} ({record.name}). Permission comes first: "
             f"run `python3 -m kbqa g0 --host {host} --out <subject folder>`, then retry.")
     return Robots(host, record, _parse_groups(record.read_text(encoding="utf-8")))
+
+
+class RobotsUnreachable(FetchError):
+    """robots.txt could not be read in ATTEMPTS tries: the operator decides —
+    hold the host, or retry later. Unreachable is never permission."""
+
+
+def ensure_robots(subject: Path, host: str, day: str) -> Tuple[Robots, Optional[Dict[str, object]]]:
+    """Today's robots record for `host`, running G0 first when there is none.
+
+    Permission is still decided per day, from a record dated today: a record
+    from yesterday is never read (v6.17.1 refused instead, so a run that crossed
+    midnight needed an extra delegation per surface). G0 gets at most ATTEMPTS
+    tries; what it decided is returned so the receipt can say G0 ran.
+    """
+    try:
+        return robots_for(subject, host, day), None
+    except FetchError:
+        pass
+    from .gates import g0_permission
+    err = ""
+    for attempt in range(1, ATTEMPTS + 1):
+        verdict, code, _ = g0_permission.run(["--host", host, "--out", str(subject), "--date", day])
+        if code in (0, 2):
+            ran = {"host": host, "ran_g0": True, "verdict": verdict.verdict, "attempts": attempt}
+            return robots_for(subject, host, day), ran
+        err = "; ".join(f.message for f in verdict.findings) or "unreachable"
+        if attempt < ATTEMPTS:
+            _sleep(BACKOFF[attempt - 1])
+    raise RobotsUnreachable(
+        f"robots.txt for {host} could not be read in {ATTEMPTS} attempts ({err}); nothing is fetched "
+        f"from {host}. The operator decides: hold the host, or retry later.")
+
+
+def probe(url: str) -> Tuple[int, str]:
+    """(status, reason) of one GET, the body never read or kept — for the plan
+    to see a host that refuses our fetcher before scope is approved."""
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    try:
+        with _open(req, timeout=TIMEOUT) as resp:
+            return resp.status, ""
+    except urllib.error.HTTPError as exc:
+        return exc.code, f"HTTP {exc.code}"
+    except Exception as exc:  # noqa: BLE001
+        kind = "TLS: " if _is_protocol_failure(exc) else ""
+        return 0, f"{kind}{type(exc).__name__}: {exc}"
 
 
 class Pacer:

@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # Collecting a subject
 
-**This copy is kbqa-collect v6.17.1**, installed with kb-qa v6.17.1.
+**This copy is kbqa-collect v6.18.0**, installed with kb-qa v6.18.0.
 
 **Invoked as**, by the operator, in a session opened at the estate root:
 
@@ -20,7 +20,7 @@ You orchestrate. Every step is a delegation:
 
 | subagent | holds | does |
 |---|---|---|
-| `kbqa-fetcher` | `WebFetch`, `Write`, `Read`, `Bash` | permission, indexes, captures, stop-conditions, receipts |
+| `kbqa-fetcher` | `WebFetch`, `Read`, `Bash` | permission, indexes, captures, stop-conditions (by `kbqa stop add`), receipts |
 | `kbqa-row-writer` | `Read`, `Write` | rows, from the capture on disk alone |
 | `kbqa-mapper` | `Read`, `Write` | one classification pass of one batch |
 
@@ -40,9 +40,10 @@ Three more rules for running the session:
   interrupted, failed or returned nothing, Read the files that step was to write,
   by their exact names, before you say what happened.
 - **A blocker goes to the operator at once.** When an agent returns one, stop
-  that step and show it: what failed (command, URL, message, word for word) and
-  the options — an agent's alternative, if its file gives one, or the operator
-  opening the URL themselves and telling you what it shows. What the operator
+  that step and show it: what failed (command, URL, message, word for word), its
+  `next_step`, the `suggested_stop_line` and the `options` the command printed —
+  or, where it gave none, the operator opening the URL themselves and telling
+  you what it shows. You never choose among the options; the operator does. What the operator
   reports is their ruling (a scope decision or a stop reason), never a capture.
   Never wait on a step in silence.
 - **Three tries of a step, then the operator.** Delegate the same step at most
@@ -97,19 +98,26 @@ surface's own index as `_denominator-<surface>-<YYYY-MM-DD>.md`, and records a
 stop-condition for each surface not published (its §1–§2).
 
 Show the operator, per surface (`product`, `docs`, `help`): the index (rung, URL,
-item count, and its `sections` — groups of items with their line ranges) or its
-stop-condition; the hosts in scope, each with the page that
+item count, and its `sections` — an llms.txt's own `##` headings, or groups by
+host and path, each with its line ranges) or its stop-condition; **every host
+the probe flagged** (`refused: HTTP 403` and the like — the host refuses our
+fetcher — with whether its own copy answers), before scope is approved; the
+hosts in scope, each with the page that
 links to it, and any host whose ownership is unclear; hosts whose robots.txt
 stayed unreachable; the crawl delay; PDFs found; the language version. **Then
 stop and wait for explicit approval.** No page content is fetched before it.
 PDFs, non-English pages and any host the plan did not name need their own
 approval.
 
-**Propose the scope from the sections, by line numbers** (e.g. "docs: lines
-2–813, `/hc/en-us/articles`"), never by reading every item of a large
-denominator. Read individual denominator lines only to answer the operator's
-question about them. The approved selection is what every window of that
-surface is given.
+**Propose the scope from the sections, by line numbers or by path** (e.g.
+"docs: lines 2–813", or "help: the items under `/hc/en-us/articles/`" — a path
+selection, `--select-prefix`, when the items to keep are interleaved with
+others), never by reading every item of a large denominator. Read individual
+denominator lines only to answer the operator's question about them. The
+approved selection is what every window of that surface is given. A
+denominator that needs correcting the same day — a path prefix the operator
+adds after seeing it — is rewritten only on the operator's word, by the
+fetcher's `--supersede`: a new lettered file that names the one it supersedes.
 
 **A subject that no longer operates** — the fetched pages show it closed, shut
 down or gone: stop here. No plan, no denominator, no tree. Tell the operator
@@ -119,14 +127,17 @@ what the pages show; recording it is the operator's.
 
 **Where a surface stands is read from disk, never remembered.** Before the first
 window of a surface — in every run — have `kbqa-fetcher` report its status
-(`kbqa capture --status`, its §3). If windows are already recorded, show the
-operator: the windows so far, where collection stopped (`resume_from`), whether
-the surface is `exhausted`, the failed pages that can be retried, and the pages
-that need the operator. Continue only on the operator's word; never start a
+(`kbqa capture --status`, its §3 — with `--files` when you need to know which
+denominators, captures, staging and map files exist). If windows are already
+recorded, show the operator: the current denominator, the windows so far, where
+collection stopped (`resume_from`), whether the surface is `exhausted`, the
+failed pages that can be retried, and the pages that need the operator. Continue only on the operator's word; never start a
 surface again from the beginning.
 
 Batch names (`<surface>-<YYYY-MM-DD>-wNN`) are chosen by `kbqa capture`; a batch
-name is never reused.
+name is never reused. Batch dates follow the access date: a surface collected
+across midnight goes on in batches of the new date, and `kbqa capture` runs G0
+itself for the new day — nothing to re-delegate.
 
 Per window:
 
@@ -134,13 +145,12 @@ Per window:
    approved selection (the surface's first window) or `--resume` (every later
    window, in this run or a later one). `kbqa capture` names the batch, slices and
    sizes the window, and records it; the fetcher returns its receipt (its §6).
-2. `kbqa-row-writer`: the capture **path** and the receipt values, including
-   each page's `lines` and `parts`, so it reads one part at a time with its
-   context. It returns
-   the rows written and the **pages that produced no row**. Never pass page
-   content through you.
+2. `kbqa-row-writer`: the subject folder and the **batch name — nothing else**.
+   It reads the receipt from disk (`_raw/<batch>/RECEIPT.json`), so no window
+   field, page table or part list passes through you, and none is retyped. It
+   returns the staging path and the **pages that produced no row**.
 3. `kbqa-fetcher` again, only if step 2 named pages with no row: it records
-   `no feature: <what the page is>` for each (its §4).
+   `no feature: <what the page is>` for each with `kbqa stop add` (its §4).
 4. Read `window_end` — set by `kbqa capture`, never by an agent: `exhausted` —
    no selected item remains, the surface is done; `budget` — next window, with
    `--resume`; `error` — nothing in this window could be captured: stop this
@@ -149,9 +159,11 @@ Per window:
    A host that will not load is never worked around: stop that surface and ask
    the operator.
 5. Bring every `needs_operator` item to the operator — a page no attempt can fix
-   (a 404, a page failing in three runs) with its suggested stop line. On the
-   operator's word, `kbqa-fetcher` adds that exact line, or the operator opens
-   the URL and rules on it.
+   (a 404, a TLS failure, a host refusing our fetcher, a page failing in three
+   runs), with its suggested stop line and options. One may close a whole
+   surface on one host (`scope: surface`): a host that refused every page of the
+   window after its own copy was tried. On the operator's word, `kbqa-fetcher`
+   adds that exact line, or the operator opens the URL and rules on it.
 
 **Failed pages.** When a surface's windows are done, if its receipts list failed
 pages that may still pass (a timeout, a network error, throttling), offer the
@@ -183,7 +195,8 @@ Agreement between two passes that saw each other measures nothing. Each writes
 `_map-<batch>-<A|B>.jsonl`.
 
 Rows a pass cannot map are `needs-human`, with a note. They are questions for
-the operator, never forced.
+the operator, never forced. Passes hand back their `needs-human` ids and
+notes, not counts: `/kbqa-check` counts.
 
 ## 5 · Report and stop
 
@@ -195,9 +208,12 @@ Return:
   which offset
 - capture paths and sha256 values; fetch failures; redirects; every
   stop-condition added
-- per batch: rows and distinct `vendor_term`s; **evidence not captured** and
-  **role stated elsewhere**, as the row-writer listed them
+- per batch: the staging path; **evidence not captured** and **role stated
+  elsewhere**, as the row-writer listed them
 - per batch: map files written, and each pass's `needs-human` ids with their notes
+- **no counts of rows, terms or mapped lines.** Nobody in this run counts by
+  hand: `/kbqa-check` counts rows, distinct terms and each pass's `mapped` and
+  `needs-human` lines from the files
 - the next command: `/kbqa-check <subjects_dir>/<Subject>`, run by the operator
   in a new session
 

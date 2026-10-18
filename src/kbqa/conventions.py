@@ -77,8 +77,9 @@ class Conventions:
     surface_batch_pattern: str = (
         r"^(?P<surface>product|docs|help)-(?P<date>\d{4}-\d{2}-\d{2})(?:-w(?P<window>\d{2}))?$"
     )
+    # A same-day correction (`kbqa index --supersede`) adds a letter: `…-2026-10-17b.md`.
     surface_denominator_pattern: str = (
-        r"^_denominator-(?P<surface>product|docs|help)-(?P<date>\d{4}-\d{2}-\d{2})\.md$"
+        r"^_denominator-(?P<surface>product|docs|help)-(?P<date>\d{4}-\d{2}-\d{2})(?P<fix>[b-z]?)\.md$"
     )
 
     def batch_of(self, staging_name: str) -> str:

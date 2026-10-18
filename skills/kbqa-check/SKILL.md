@@ -24,7 +24,7 @@ It prints **PASS** or **STOP** and never installs anything. Its first line names
 the `python3` it used — the interpreter every gate below runs under. It checks,
 in order:
 
-1. the installed kbqa is the version this copy pins (`v6.17.1`)
+1. the installed kbqa is the version this copy pins (`v6.18.0`)
 2. its manifest is the one this copy expects
 3. the installed skill is the tagged skill: every file matches
    `INSTALLED-FROM-kbqa-check`, the record `skills/install.sh` wrote — none changed,
@@ -167,6 +167,10 @@ wrote, `_map-<batch>-<A|B>.jsonl`:
 - `role_source` filled; `needs-human` rows listed and never counted as mapped
 - A/B agreement on **ALL** rows — a missing or needs-human row is a disagreement
 - `element_dominates`: one element on more than 30 % of the batch
+- `story_role_mismatch`: the story's "As a <role>, I want" names another role than
+  the line's `role` (a failure); and, advisory only, the story words found in
+  neither the row, its `role`, nor its elements' names, minus the template's own
+  words — listed per pass for the operator, never counted as a failure
 
 It checks form and existence, never whether a mapping is right. Agreement is
 consistency, not correctness.
@@ -207,12 +211,18 @@ without opening a file:
 
 - pre-flight: PASS line (version, manifest)
 - **surfaces**: per surface — denominator, stop-condition, or MISSING
-- per batch: **CLEAR / BLOCKED / PARKED / NOT CHECKED**, the round, and the finding count by class
+- per batch: **CLEAR / BLOCKED / PARKED / NOT CHECKED**, the round, the finding count by class,
+  and its `rows=` and `distinct_vendor_terms=` line. **This check is the one counter**: the
+  collecting agents report no counts, so these numbers come from here or from nowhere
 - the **structural** and **planner** findings, which go back to planning
 - the **fixable** findings — the only ones a row-writer may receive, in round 1 only
 - **PARKED** batches with their finding lists
 - per surface: coverage, and whether its windows reached the end or are parked at an offset
-- mappings: per mapper rows / mapped / needs-human (with ids), agreement rates on all rows, `element_dominates`
+- mappings: per mapper rows / mapped / needs-human (with ids) — the mapping line prints each
+  pass's totals — agreement rates on all rows, `element_dominates`, every `story_role_mismatch`,
+  and, as a question for the operator (never a failure), each pass's
+  `story_words_outside_row_and_element`: the story words that came from neither the row nor
+  its elements
 - **the operator sample**: each report's "Operator sample" section — quote, claim and mapping for a fixed-seed sample of rows, with the seed. Show it; the gates cannot see whether a quote supports its claim
 - **ready for merge**: CLEAR batches that `g6` reports as not merged
 - **every gate that did not run or scanned 0, and why** — state this even when everything else is clean

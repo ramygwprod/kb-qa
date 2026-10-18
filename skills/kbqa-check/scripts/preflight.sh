@@ -19,8 +19,8 @@
 # KBQA_REPO, KBQA_SKILLS_HOME, KBQA_AGENTS_HOME, KBQA_SKILL_COPIES (newline-separated
 # paths; empty = skip the copy check).
 
-PINNED="${KBQA_PINNED:-v6.17.1}"
-EXPECTED_MANIFEST="${KBQA_EXPECTED_MANIFEST:-09f88090cc6e0d17c912e2c2062f7de63762fd9a6e780bd4ea1270f72dc95d96}"
+PINNED="${KBQA_PINNED:-v6.18.0}"
+EXPECTED_MANIFEST="${KBQA_EXPECTED_MANIFEST:-e57dab4a44ddb2e09ccad6596825946af725510b1dfcba8bb6efb47340d5f629}"
 REPO="${KBQA_REPO:-https://github.com/ramygwprod/kb-qa.git}"
 INSTALL="python3 -m pip install --force-reinstall \"git+${REPO}@${PINNED}\""
 SKILLS_HOME="${KBQA_SKILLS_HOME:-$HOME/.claude/skills}"
@@ -42,6 +42,13 @@ PY_PATH=$(command -v python3) \
 PY_EXE=$(python3 -c 'import sys; print(sys.executable)' 2>/dev/null)
 PY_VER=$(python3 -c 'import platform; print(platform.python_version())' 2>/dev/null)
 echo "python3: ${PY_PATH} -> ${PY_EXE} (Python ${PY_VER})"
+# An old TLS library fails some hosts on every attempt (a TLS protocol-version
+# alert): kbqa classes that failure final. A warning, never a stop — changing
+# the interpreter moves the pinned path, so it is the operator's decision.
+PY_TLS=$(python3 -c 'import ssl; print(ssl.OPENSSL_VERSION + ("" if ssl.HAS_TLSv1_3 else " · no TLS 1.3"))' 2>/dev/null)
+case "${PY_TLS}" in
+  *"no TLS 1.3"*) echo "WARN: this python3's TLS is old (${PY_TLS}). Some hosts refuse it on every attempt; kbqa records those pages as final for the operator. A Python built with a current OpenSSL avoids it — the operator decides, since kbqa and the pin would move with it." ;;
+esac
 
 # 1 · the validator this copy pins ------------------------------------------
 VERSION=$(python3 -m kbqa --version 2>/dev/null) \

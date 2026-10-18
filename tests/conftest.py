@@ -37,5 +37,21 @@ def fx(tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    """The suite never reaches the network. Since v6.18.0 `kbqa capture` and
+    `kbqa index` run G0 themselves when today's robots record is missing, so a
+    test that forgot to fake the web would otherwise fetch a real robots.txt.
+    Tests that need a web install their own fake over these."""
+    import urllib.error
+    from kbqa import fetch
+    from kbqa.gates import g0_permission
+
+    def blocked(*a, **k):
+        raise urllib.error.URLError("no network in the test suite")
+    monkeypatch.setattr(fetch, "_open", blocked)
+    monkeypatch.setattr(g0_permission, "_fetch", lambda host: (None, "no network in the test suite"))
+
+
+@pytest.fixture(autouse=True)
 def pinned_clock(monkeypatch):
     monkeypatch.setenv("KBQA_RUN_AT", "2026-08-23T18:40:11Z")

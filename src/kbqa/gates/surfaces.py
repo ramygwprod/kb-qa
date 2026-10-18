@@ -17,6 +17,13 @@ The stop-condition is recognised by the form the collector writes:
 The word `surface` and the slug are what is matched. A line that names the
 surface some other way is not recognised, and the surface reports MISSING —
 the safe direction: a human reads the line, nothing passes unseen.
+
+A surface that IS published but cannot be collected is closed by a stop line
+ending `(surface <slug>)` (`js-only: not readable (surface help)`, `refused:
+HTTP 403 (surface help)` — the vocabulary in `kbqa.stops`). Beside a
+denominator such a line is not a contradiction: the index was read, its pages
+could not be, and the line — approved by the operator — is the surface's end.
+Only `surface <slug> not published` contradicts a denominator.
 """
 
 import argparse
@@ -78,7 +85,9 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
     per_surface: Dict[str, dict] = {}
     for slug in conv.surfaces:
         said = re.compile(rf"\bsurface\s+{re.escape(slug)}\b", re.IGNORECASE)
+        absent = re.compile(rf"\bsurface\s+{re.escape(slug)}\s+not\s+published\b", re.IGNORECASE)
         stop_lines = [(k, r, n) for k, r, n in entries if said.search(r)]
+        not_published = [(k, r, n) for k, r, n in stop_lines if absent.search(r)]
         for k, r, n in stop_lines:
             if not k.startswith(("http://", "https://")):
                 findings.append(Finding(
@@ -87,15 +96,17 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
                     f"{k!r}, not the URL of a fetched page that shows the absence",
                     where=f"{stops_path.name}:{n}",
                 ))
-        if dens[slug] and stop_lines:
+        if dens[slug] and not_published:
             state = "contradiction"
             findings.append(Finding(
                 "surface_contradiction",
                 f"surface {slug!r} has a denominator ({', '.join(dens[slug])}) and "
                 f"a stop-condition saying it is not published (line "
-                f"{', '.join(str(n) for _, _, n in stop_lines)})",
+                f"{', '.join(str(n) for _, _, n in not_published)})",
                 where=slug,
             ))
+        elif dens[slug] and stop_lines:
+            state = "denominator, closed by a stop line"
         elif dens[slug]:
             state = "denominator"
             if not batches[slug]:

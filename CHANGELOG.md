@@ -16,6 +16,86 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.18.0] — 2026-10-18
+
+What the first full live collection run exposed: data that could be lost
+between steps, a vocabulary that disagreed with itself, and blockers with no
+way on. Every failure now ends in one of four states — captured, closed by a
+stop line, an operator ruling, or parked with a resume point — and says which
+next step leads there.
+
+### Added
+
+- **The receipt is a file.** `kbqa capture` writes its receipt to
+  `_raw/<batch>/RECEIPT.json`, beside `WINDOW.json`, and prints the same JSON.
+  The row-writer is given the batch name only and copies the window fields from
+  that file, so nobody retypes them (eleven staging files of the run had
+  `window_*` fields lost in hand-written briefs).
+- **One stop-reason vocabulary, in code** (`kbqa.stops`), and `kbqa stop add
+  <subject> "<line>"`: an atomic append under an exclusive lock, once, refusing
+  a reason outside the vocabulary. Every stop line `capture` and `index` suggest
+  is built from it, and the fetcher's reason table is tested against it — in
+  v6.17.1 capture suggested `unreachable:` lines the table did not know. New
+  reasons: `refused: HTTP 401|403` and `unreachable: <failure>`. A reason may
+  end ` (surface <slug>)` to close that surface's remaining items on the host
+  of its URL. `kbqa stop reasons` prints the list.
+- **A next step on every failure**, decided by code: `retry`, `operator` (with
+  a `suggested_stop_line` and `options`), or `stop: <exact line>`.
+- **The site's own copy.** A page answering 401/403, or showing no text without
+  JavaScript, is tried once through its markdown twin (`<url>.md`, the llms.txt
+  convention): same host, robots-allowed, served as text, else not used. The
+  capture keys it by the page's URL with `fetch_method: site-copy`. A host that
+  refused every page of a window (at least three) and served none is offered
+  one line that closes the surface on that host.
+- **G0 runs itself.** `capture` and `index` run G0 (at most three attempts)
+  when a host has no robots record from today, and say so under `permission`;
+  permission is still decided per day. A run that crosses midnight no longer
+  needs a delegation per surface. Batch dates follow the access date.
+- **Same-day correction.** `kbqa index --supersede` writes
+  `_denominator-<surface>-<date>b.md` (then `c`, …), whose header names the file
+  it supersedes; that file stays. Windows are cut from the current denominator
+  only; `--resume` follows only its windows and refuses a superseded one.
+- **Selection by path.** `kbqa capture --select-prefix <path>` (repeatable)
+  takes the items under a path, recorded in the window state and kept on
+  resume; the denominator stays complete.
+- **`kbqa capture --status --files`**: the surface's denominators, captures,
+  staging, map files, receipts and robots records with sizes; fetches nothing.
+- **Sections from an llms.txt's own `##` headings**, with line ranges.
+- **The plan's probe.** `kbqa index` sends one GET to one item of each host
+  that has today's robots record, keeping nothing, and flags a 401/403 with
+  whether its `.md` copy answers — before scope is approved.
+- **The check is the counter.** The per-batch report line prints `rows=` and
+  `distinct_vendor_terms=`; the mapping line prints each pass's `mapped` and
+  `needs-human`. The agents report no counts (two hand counts of one batch
+  differed by four).
+- **`mapcheck` reads the story.** `story_role_mismatch` (fixable) when the
+  story's "As a <role>, I want" is not the line's `role`; and, advisory only,
+  `story_words_outside_row_and_element` per pass — the story's words found in
+  neither the row, its role, nor its elements' names, minus the template's own.
+- **Pre-flight warns on an old TLS** (no TLS 1.3); never a stop.
+
+### Changed
+
+- A TLS or protocol failure is final: one attempt, then the operator. A
+  connection dropped mid-handshake (`SSLEOFError`) stays transient.
+- `g4` counts items on a host whose surface an approved line closed as
+  `existence_closed_by_surface_line`, apart from evidence. `surfaces` reads a
+  denominator beside such a line as closed; only `surface <slug> not published`
+  contradicts a denominator. The denominator name may carry a correction letter.
+- The fetcher agent no longer holds `Write`: every file it causes is written by
+  a command.
+- `/kbqa-check`'s coverage step picks the current denominator by byte order
+  (`LC_ALL=C`), so `…-17b.md` follows `…-17.md` in any locale.
+
+### Not built (waiting on the operator)
+
+- The `rendered` route (a browser for JavaScript pages and bot-protected
+  hosts) — OD-2, the choice of tool.
+- `/kbqa-classify` in its own session, agent reports to files (#16–#18) — a
+  change to PIPELINE-SPEC §1.
+- The role and permission row index for the mapper (#14), the heading-coverage
+  report (#7), supplied material (D4).
+
 ## [6.17.1] — 2026-10-17
 
 Collection resumes from disk and can never loop or dead-end.

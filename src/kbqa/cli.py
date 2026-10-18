@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from . import __version__, capture, elements, freeze, index, mappings, probe, profile, report, sweep
+from . import __version__, capture, elements, freeze, index, mappings, probe, profile, report, stops, sweep
 from .gates import g0_permission, g1_capture, g2_conformance
 from .gates import g3_grounding, g4_completeness, g5_bundles, g6_integrity
 from .gates import mapcheck, surfaces
@@ -64,13 +64,19 @@ cycle:
                                                batches can be checked at all;
                                                --recollect writes the re-collection list
 
-collection (the fetcher runs these; permission from today's g0 record):
-  index --out <d> --surface <s> --rung <n> --url <u> [--html] [--path-prefix <p>]
+collection (the fetcher runs these; permission from today's g0 record, g0 run first when missing):
+  index --out <d> --surface <s> --rung <n> --url <u> [--html] [--path-prefix <p>] [--supersede]
                                                write a surface's denominator from
-                                               the subject's own index, by code
-  capture --out <d> --batch <name> --url <u>... | --urls-file <f>
+                                               the subject's own index, by code;
+                                               sections and a probe per host for the plan
+  capture --out <d> --surface <s> --denominator <f> [--select <lines> | --select-prefix <p>...]
+          | --resume | --retry-failed | --status [--files]
                                                capture one window verbatim: raw
-                                               bytes kept, text by a fixed rendering
+                                               bytes kept, text by a fixed rendering,
+                                               the receipt in _raw/<batch>/RECEIPT.json
+  stop add <subject dir> "- <url> | <reason>"  append one stop line, atomically, if its
+                                               reason is in the vocabulary
+  stop reasons                                 print the stop-reason vocabulary
 
 reference:
   elements --outline <elements.jsonl>         write <list>.outline.md: the top two
@@ -196,6 +202,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         return index.run(argv[1:])
     if argv[0] == "capture":
         return capture.run(argv[1:])
+    # The stop-condition vocabulary, and the one atomic way to add a line.
+    if argv[0] == "stop":
+        return stops.run(argv[1:])
     # Derived reference: the APQC list's outline, so a mapping pass reads parts.
     if argv[0] == "elements":
         return elements.run(argv[1:])

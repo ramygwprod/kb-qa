@@ -1,6 +1,6 @@
 # kbqa — user manual
 
-**Version 6.17.1** · for operators and for maker agents
+**Version 6.18.0** · for operators and for maker agents
 
 Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -10,7 +10,7 @@ Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.17.1"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.18.0"
 # Day to day, the pipeline is two commands with a human between them:
 #
 #   /kbqa-collect <Subject Name>     collect until the source runs out
@@ -18,7 +18,7 @@ pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.17.1"
 #
 # Everything below is what those do, and what to run when you want it by hand.
 
-python -m kbqa --version          # must print 6.17.1
+python -m kbqa --version          # must print 6.18.0
 ```
 
 **Audit a corpus** — needs no captures, changes nothing, answers "what here can
@@ -101,7 +101,7 @@ python3 -m venv .venv
 For an estate or CI, install from the pinned tag rather than a branch:
 
 ```bash
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.17.1"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.18.0"
 ```
 
 **Always a tag, never a branch.** A branch would let the gates and the data they
@@ -801,16 +801,19 @@ judged, or its verdict cites nothing.
 
 ### Collection — fetch and write; never a verdict
 
-The fetcher agent runs these. Both refuse a host without a robots record from
-`g0` dated today, apply the rules of `Claude-User`, `ClaudeBot` and `*` (the
-stricter reading) path by path, honour the longest crawl delay, keep every
-fetched byte in `_raw/` with its sha256, never overwrite, and print a JSON
-receipt with the exact stop lines to add.
+The fetcher agent runs these. Both decide permission from a robots record from
+`g0` dated today — and, since v6.18.0, run `g0` themselves (at most three
+attempts) when a host has none from today, saying so under `permission` — apply
+the rules of `Claude-User`, `ClaudeBot` and `*` (the stricter reading) path by
+path, honour the longest crawl delay, keep every fetched byte in `_raw/` with
+its sha256, never overwrite, and print a JSON receipt. Every failure and
+refusal carries a `next_step` decided by code: `retry`, `operator` (with a
+`suggested_stop_line` and `options` where they fit) or `stop: <exact line>`.
 
 | action | fetches | writes | exit |
 |---|---|---|---|
-| `index --out <d> --surface <s> --rung <n> --url <u> [--html] [--path-prefix <p>]` | the subject's `llms.txt`, sitemap (indexes and gzip followed) or HTML index page | `_denominator-<surface>-<date>.md`, in the index's own order and words; `--path-prefix` (operator-approved) is recorded in its header; the receipt's `sections` summarise it by path with line ranges | 0 written · 1 refused |
-| `capture --out <d> --surface <s> --denominator <f> --select <lines> \| --resume` · `--retry-failed` · `--status` (or `--url <u>…`) | one window, sliced from the approved selection and sized by budget (20 pages / ~150,000 characters by default) | `_capture-<batch>.raw.txt` — each page's text by a fixed rendering, a breadcrumb as one ` > ` line — and `_raw/<batch>/` | 0 if any page was captured · 1 otherwise; names the next free batch; records every window's state in `_raw/<batch>/WINDOW.json`, even when nothing was captured; `--resume` continues at the recorded `next_offset` and refuses a gap, another denominator or another selection; a failure that may pass gets 3 attempts in a run and `--retry-failed` at most 3 runs, then goes to `needs_operator` with a suggested stop line; the receipt sets `window_end` (`exhausted` only when no selected item remains), `next_offset`, and each page's line range; a 429/503 ends the window (`stopped: throttled`) |
+| `index --out <d> --surface <s> --rung <n> --url <u> [--html] [--path-prefix <p>] [--supersede]` | the subject's `llms.txt`, sitemap (indexes and gzip followed) or HTML index page; then one GET of one item per host with today's robots record, its body never read (`probe`) | `_denominator-<surface>-<date>.md`, in the index's own order and words; `--path-prefix` (operator-approved) is recorded in its header; `--supersede` (operator-approved, same day) writes `…-<date>b.md` (then `c`, …) naming the file it supersedes, which stays; the receipt's `sections` summarise it — an llms.txt by its own `##` headings, otherwise by host and path — with line ranges, and `probe` flags a host answering 401/403 with whether its `.md` copy answers | 0 written · 1 refused |
+| `capture --out <d> --surface <s> --denominator <f> --select <lines> \| --select-prefix <path>… \| --resume` · `--retry-failed` · `--status [--files]` (or `--url <u>…`) | one window, sliced from the approved selection — by line, or by URL path prefix (repeatable) — and sized by budget (20 pages / ~150,000 characters by default); a page answering 401/403, or showing no text without JavaScript, is tried once through its markdown twin (`<url>.md`, same host, robots-allowed, served as text: `fetch_method: site-copy`) | `_capture-<batch>.raw.txt` — each page's text by a fixed rendering, a breadcrumb as one ` > ` line — and `_raw/<batch>/`, with the receipt as `_raw/<batch>/RECEIPT.json` | 0 if any page was captured · 1 otherwise; names the next free batch; records every window's state in `_raw/<batch>/WINDOW.json`, even when nothing was captured; windows are cut from the current denominator only (latest by date, then letter); `--resume` follows only the windows of that denominator and refuses a gap, a changed denominator or another selection; `--status --files` lists the surface's denominators, captures, staging, map files, receipts and robots records with sizes, fetching nothing; a TLS failure is final (one attempt); a failure that may pass gets 3 attempts in a run and `--retry-failed` at most 3 runs, then goes to `needs_operator` with a suggested stop line; the receipt sets `window_end` (`exhausted` only when no selected item remains), `next_offset`, and each page's line range; a 429/503 ends the window (`stopped: throttled`) |
 
 Each page in a capture receipt also lists its `parts`: a page over ~20,000
 characters is split at headings (at line ends where a section has none), and
@@ -828,6 +831,40 @@ whole list (about 2,000 elements). Run it once per element list.
 They replace WebFetch for captures and indexes: WebFetch returns a model's
 summary of a page and refuses to reproduce more than a short quote, so nothing
 written through it was verbatim.
+
+| action | reads | writes | exit |
+|---|---|---|---|
+| `stop add <subject dir> "- <url> \| <reason>"` | `_stop-conditions.md` | that one line, appended under an exclusive lock and synced; never twice; never a change to a line already there | 0 added or already there · 1 the reason is not in the vocabulary |
+| `stop reasons` | — | prints the vocabulary: each reason, when it applies, and whether it may close a surface with ` (surface <slug>)` | 0 |
+
+The vocabulary is defined once, in `kbqa.stops`: every stop line `index` and
+`capture` suggest is built from it, and the fetcher's reason table is tested
+against it. A line ending ` (surface <slug>)` — `refused: HTTP 403 (surface
+help)`, say — closes that surface's remaining items **on the host of its URL**:
+`g4` counts them as `existence_closed_by_surface_line`, apart from evidence, and
+`surfaces` reads the surface as closed rather than contradicted.
+
+**When a page or a host cannot be fetched.** Every branch ends in one of four
+states — captured, closed by a stop line, an operator ruling, or parked with a
+resume point — and the receipt names the next step:
+
+| blocker | done by code | next step |
+|---|---|---|
+| robots refuses | nothing fetched | `stop: … refused: robots` (`(surface s)` for an index) |
+| no robots record today | `g0` runs, at most 3 attempts | as its verdict; unreachable → refused, `operator` (hold the host, or retry later) |
+| timeout, network, 5xx | 3 attempts in the run; `--retry-failed` at most 3 runs | `retry`, then `operator` with an `unreachable: … in 3 runs` line |
+| 429 / 503 | the window ends at that page | `retry` (the next window starts there), then `operator` |
+| 401 / 403 | the page's `.md` copy is tried | `operator`: supplied material, or `refused: HTTP 403`; a host refusing every page of a window (at least 3) is offered `refused: HTTP 403 (surface s)` |
+| no text without JavaScript | the page's `.md` copy is tried | `stop: … js-only: not readable` |
+| 404 / 410, too large | — | `operator` with an `unreachable:` line |
+| TLS or protocol failure | one attempt (final) | `operator`: a Python with a newer TLS, or an `unreachable: TLS …` line |
+| redirect off the host | — | `stop: … third-party host: <host>` |
+| PDF, other non-page type | — | `operator` (`not approved: pdf` for a PDF) |
+| a refusal of the command itself (gap, changed or superseded denominator, scope, used batch) | nothing fetched | `operator` |
+
+Not built: the `rendered` route (a browser that renders JavaScript), which
+waits on the operator's choice of tool; and login walls, which code does not
+detect — the fetcher records `gated: login` from what it sees.
 
 ### Cycle — several gates plus an artifact
 
@@ -881,7 +918,7 @@ Two ways a script gets this wrong:
 
 ## 7 · Findings reference
 
-92 codes. Every one carries a remedy, enforced by `tests/test_report.py` — a
+93 codes. Every one carries a remedy, enforced by `tests/test_report.py` — a
 report that falls back to "see the message" for its most important findings is
 not a report.
 
@@ -959,6 +996,7 @@ not a report.
 | `status_invalid` | fixable | issue | Mapping line: `status` is `mapped` or `needs-human` |
 | `stop_condition_without_reason` | fixable | gap | "We stopped" is not a reason |
 | `stops_file_missing` | structural | gap | Wrong path, or no stops recorded — not the same thing |
+| `story_role_mismatch` | fixable | issue | Mapping line: the story's "As a <role>, I want" is not the line's `role`, or the story does not open that way |
 | `subject_missing` | structural | gap | The path is not a subject folder — nothing was checked |
 | `surface_contradiction` | planner | issue | A surface both indexed and unpublished — a human decides which file is wrong |
 | `surface_missing` | planner | issue | A mandatory surface has neither an index nor a URL-keyed stop |
@@ -1031,7 +1069,7 @@ and the data they judge change in the same push.
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.17.1"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.18.0"
 ```
 
 > `pip < 21.3` cannot read this project's metadata and installs an empty package

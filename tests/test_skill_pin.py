@@ -36,7 +36,7 @@ COLLECT = SKILLS / "kbqa-collect" / "SKILL.md"
 # and must read _qa/.
 COLLECT_SNIPPET = SKILLS / "kbqa-collect" / "collect-session-settings.json"
 AGENTS = SKILLS.parent / "agents"
-COLLECT_AGENTS = {"kbqa-fetcher.md": {"WebFetch", "Write", "Read", "Bash"},
+COLLECT_AGENTS = {"kbqa-fetcher.md": {"WebFetch", "Read", "Bash"},
                   "kbqa-row-writer.md": {"Read", "Write"},
                   "kbqa-mapper.md": {"Read", "Write"}}
 

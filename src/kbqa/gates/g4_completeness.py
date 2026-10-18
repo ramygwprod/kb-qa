@@ -156,6 +156,34 @@ def parse_stops(path: Path) -> Tuple[Dict[str, str], List[str]]:
     return {k: r for k, r, _ in entries}, errors
 
 
+def _host(url: str) -> str:
+    return (urlsplit(url).hostname or "").lower()
+
+
+def closing_hosts(denom: Path, stops: Dict[str, str]) -> Dict[str, str]:
+    """{host: the URL keying its line} for each stop line that closes this
+    denominator's surface: a reason from the vocabulary (`kbqa.stops`) ending
+    `(surface <slug>)`, where the slug is the surface named in the
+    denominator's file name. Such a line closes the surface's remaining items
+    on the host of its own URL, and nowhere else — a help host refusing our
+    fetcher closes the help items on that host, never another host's."""
+    from .. import stops as vocabulary
+    m = re.match(r"^_denominator-(?P<surface>product|docs|help)-", denom.name)
+    if not m:
+        return {}
+    out: Dict[str, str] = {}
+    for key, reason in stops.items():
+        if not key.startswith(("http://", "https://")):
+            continue
+        try:
+            _, surface = vocabulary.classify(reason)
+        except vocabulary.StopLineError:
+            continue
+        if surface == m.group("surface"):
+            out.setdefault(_host(key), key)
+    return out
+
+
 def _int_or_none(v) -> Optional[int]:
     if isinstance(v, bool):
         return None
@@ -352,10 +380,12 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
             findings.append(Finding("stops_file_missing", f"not found: {sp}"))
 
     stop_keys = {_label_key(k) for k in stops} | set(stops)
+    closing = closing_hosts(denom, stops)
 
     by_url: List[str] = []
     by_name: List[str] = []
     stopped: List[str] = []
+    closed: List[str] = []
     without_row: List[str] = []
 
     for key, (label, url) in sorted(resolved.items()):
@@ -369,6 +399,9 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
         if url in stop_keys or lk in stop_keys:
             stopped.append(url)
             continue
+        if _host(url) in closing:
+            closed.append(url)
+            continue
         without_row.append(url)
 
     for url in without_row:
@@ -380,6 +413,11 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
         # EXISTENCE — what the vendor's own index says is there.
         "existence_index_items": len(resolved),
         "existence_stopped": len(stopped),
+        # Items on a host whose surface an operator-approved stop line closed,
+        # e.g. `<url> | refused: HTTP 403 (surface help)`. Counted apart, never
+        # as evidence.
+        "existence_closed_by_surface_line": len(closed),
+        "closing_lines": {h: k for h, k in sorted(closing.items())},
         # EVIDENCE — what we have actually sourced. Never blended with the above.
         "evidence_covered_by_url": len(by_url),
         "evidence_covered_by_name": len(by_name),
