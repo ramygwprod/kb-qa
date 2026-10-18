@@ -29,6 +29,9 @@ page's line range in the capture, so the row-writer reads one page at a time.
 **The receipt is a file**, `_raw/<batch>/RECEIPT.json`, beside the window's
 state (`WINDOW.json`), and the same JSON is printed. The row-writer reads it
 from disk, so no agent retypes window fields between the capture and the rows.
+Beside it, `_raw/<batch>/FEATURES.md` lists the subject's features as they
+stand before this batch (`kbqa.features`): the row-writer reads it to tell a
+new feature from another source of one it already has (`same_feature_as`).
 
 **Every failure carries its next step**, decided here, never by an agent:
 `retry` (a later run, `--resume` or `--retry-failed`), `operator` (with a
@@ -60,7 +63,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlsplit
 
-from . import __version__, fetch, stops
+from . import __version__, fetch, features, stops
 from .htmltext import render, visible_chars
 
 BATCH_RE = re.compile(r"^(product|docs|help)-\d{4}-\d{2}-\d{2}-w\d{2}$")
@@ -200,6 +203,7 @@ def parse_select(spec: str) -> List[int]:
 
 STATE = "WINDOW.json"
 RECEIPT = "RECEIPT.json"
+FEATURES = "FEATURES.md"  # the subject's anchors, for the row-writer's same_feature_as
 RETRY_RUNS = 3  # a page that keeps failing is retried in at most this many runs
 
 
@@ -736,6 +740,10 @@ def run(argv: Optional[List[str]] = None) -> int:
     _write_atomic(raw_dir / STATE, (json.dumps(state, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
 
     def finish(code: int) -> int:
+        # The subject's features as they stand before this batch's rows: what the
+        # row-writer reads to tell a new feature from another source of one.
+        _write_atomic(raw_dir / FEATURES, features.features_list(subject).encode("utf-8"))
+        receipt["features"] = f"_raw/{b}/{FEATURES}"
         text = json.dumps(receipt, ensure_ascii=False, indent=2)
         _write_atomic(raw_dir / RECEIPT, (text + "\n").encode("utf-8"))
         print(text)

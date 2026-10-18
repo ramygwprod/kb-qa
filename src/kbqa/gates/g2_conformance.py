@@ -14,6 +14,7 @@ from typing import List, Optional, Tuple
 
 from pydantic import ValidationError
 
+from ..features import TREE, is_anchor, subject_rows
 from ..profile import active, conventions, row_model
 from ..parsing import parse_staging
 from ..verdict import FAIL, PASS, Finding, Verdict, input_ref
@@ -135,6 +136,33 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
         else:
             seen_ids[row.id] = rp.line_no
 
+    # Another source of a feature names that feature's anchor: a row of this
+    # subject — here, in another staging file, or in the tree — that is not
+    # itself another source. Checked against the subject folder, because the
+    # anchor is often a row of an earlier batch.
+    linked = [(f"{staging.name}:{rp.line_no}", rp.obj) for rp in parsed.rows
+              if rp.obj is not None and rp.obj.get("same_feature_as") is not None]
+    if linked:
+        known = subject_rows(staging.parent, skip=staging)
+        for rp in parsed.rows:
+            if rp.obj is not None and rp.obj.get("id"):
+                known[str(rp.obj["id"])] = rp.obj
+        for where, row in linked:
+            target = row.get("same_feature_as")
+            if not isinstance(target, str) or not target.strip() or target == row.get("id"):
+                continue  # the row rule `same_feature_as_invalid` reports these
+            anchor = known.get(target)
+            if anchor is None:
+                findings.append(Finding(
+                    "same_feature_unknown",
+                    f"same_feature_as {target!r} names no row of this subject — not in {TREE}, "
+                    "this batch or another staging file", where))
+            elif not is_anchor(anchor):
+                findings.append(Finding(
+                    "same_feature_not_anchor",
+                    f"same_feature_as {target!r} names a row that is itself another source (of "
+                    f"{anchor.get('same_feature_as')!r}); name that anchor instead", where))
+
     counts = {
         "rows": len(parsed.rows),
         "naive_rows": parsed.naive_count,
@@ -144,6 +172,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
         "surface": surface or "legacy",
         "strict_rules": "applied" if strict is not None else "not applied (legacy batch name)",
         "strict_checked": strict_checked,
+        "same_feature_rows": len(linked),
         "failed": len(findings),
     }
     verdict = PASS if not findings else FAIL

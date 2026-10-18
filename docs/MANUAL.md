@@ -1,6 +1,6 @@
 # kbqa — user manual
 
-**Version 6.18.1** · for operators and for maker agents
+**Version 6.19.0** · for operators and for maker agents
 
 Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -10,7 +10,7 @@ Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.18.1"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.19.0"
 # Day to day, the pipeline is two commands with a human between them:
 #
 #   /kbqa-collect <Subject Name>     collect until the source runs out
@@ -18,7 +18,7 @@ pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.18.1"
 #
 # Everything below is what those do, and what to run when you want it by hand.
 
-python -m kbqa --version          # must print 6.18.1
+python -m kbqa --version          # must print 6.19.0
 ```
 
 **Audit a corpus** — needs no captures, changes nothing, answers "what here can
@@ -101,7 +101,7 @@ python3 -m venv .venv
 For an estate or CI, install from the pinned tag rather than a branch:
 
 ```bash
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.18.1"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.19.0"
 ```
 
 **Always a tag, never a branch.** A branch would let the gates and the data they
@@ -923,7 +923,7 @@ Two ways a script gets this wrong:
 
 ## 7 · Findings reference
 
-94 codes. Every one carries a remedy, enforced by `tests/test_report.py` — a
+101 codes. Every one carries a remedy, enforced by `tests/test_report.py` — a
 report that falls back to "see the message" for its most important findings is
 not a report.
 
@@ -957,12 +957,15 @@ not a report.
 | `id_not_first_key` | fixable | issue | `id` must be the row's first key (current-convention batches) |
 | `index_item_without_row` | planner | gap | Plan a batch, or record a reasoned stop |
 | `input_missing` | structural | gap | A file the mapping check needs was not found — nothing was checked |
+| `interface_type_unknown` | fixable | issue | `interface_type` is `API`, `SDK`, `webhook`, `CLI` or `user interface` |
+| `interface_without_type` | fixable | issue | A row naming an `operation` or `parameter` says which way in, in `interface_type` |
 | `manifest_mismatch` | structural | issue | **Tamper-evidence firing.** Verdicts came from other code |
 | `map_fields_mismatch` | fixable | issue | Mapping line: exactly the format's fields, none missing, none extra |
 | `map_id_duplicate` | fixable | issue | Mapping file: one line per staging id |
 | `map_id_missing` | fixable | gap | A staging row has no mapping line — write one, `needs-human` if unmappable |
 | `map_id_not_first` | fixable | issue | Mapping line: `id` must be the first key |
 | `map_id_not_in_staging` | fixable | issue | Mapping line for an id that is not a row of this batch — remove the line |
+| `map_line_for_another_source` | fixable | issue | A row with `same_feature_as` takes its anchor's classification and has no mapping line |
 | `map_line_unparseable` | fixable | issue | Mapping line is not one JSON object |
 | `map_null_value` | fixable | issue | Mapping line: no nulls; empty is `""` or `[]` |
 | `map_type` | fixable | issue | Mapping line: `theme_links` and `pcf_ids` are lists |
@@ -996,6 +999,9 @@ not a report.
 | `row_unparseable` | fixable | issue | Invalid JSON; it was never checked |
 | `row_unparseable_not_checked` | structural | issue | Unchecked rows are not sound rows |
 | `rows_file_missing` | structural | gap | Run-configuration fault |
+| `same_feature_as_invalid` | fixable | issue | `same_feature_as` names another row's id — never empty, never the row's own |
+| `same_feature_not_anchor` | fixable | issue | `same_feature_as` names a row that is itself another source — name its anchor |
+| `same_feature_unknown` | fixable | issue | `same_feature_as` names a row the subject does not have |
 | `schema_violation` | fixable | issue | Correct the row, or bump the contract deliberately |
 | `site_wide_disallow` | structural | issue | **Terminal.** No retry, no alternate fetcher |
 | `staging_missing` | structural | gap | Wrong batch name, or the row-writer never ran |
@@ -1012,6 +1018,7 @@ not a report.
 | `theme_link_unknown` | fixable | issue | A `theme_links` entry is not a codebook code |
 | `theme_unknown` | fixable | issue | `theme` is not a codebook code or a non-feature code |
 | `too_many_maps` | structural | issue | At most two mapping files, A and B |
+| `tree_same_feature_dangling` | structural | issue | A tree row points at no anchor — the tree changed outside /kbqa-merge |
 | `unfetchable_source` | fixable | gap | Citation nobody can retrieve; capture the document and cite its URL |
 | `url_not_in_capture` | planner | issue | Page never fetched, or the URL is invented |
 | `verdict_stale` | fixable | issue | Checked, then edited. Re-run the gates |
@@ -1075,7 +1082,7 @@ and the data they judge change in the same push.
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.18.1"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.19.0"
 ```
 
 > `pip < 21.3` cannot read this project's metadata and installs an empty package

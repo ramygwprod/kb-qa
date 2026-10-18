@@ -16,6 +16,55 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.19.0] — 2026-10-18
+
+One feature, several sources, and the ways in. The operator ruled that an
+interface — an API operation, an SDK method, a webhook, a CLI command, a
+settings screen — is a way in, never a feature, and that one feature is
+classified once however many pages or operations print it, with nothing lost.
+The first full collection had the same setting printed by five API operations
+as five rows, each classified, each a question.
+
+### Added
+
+- **`same_feature_as`.** The first row of a feature is its anchor; every later
+  source of it — another operation, another page, a later batch — is a row of
+  its own, grounded by its own quote, that names the anchor. Only anchors are
+  classified. The feature tree stays append-only: nothing is folded into an
+  earlier row. G2 checks that the anchor exists in the subject and is an anchor
+  (`same_feature_unknown`, `same_feature_not_anchor`, and the row rule
+  `same_feature_as_invalid`); `mapcheck` expects no line for another source
+  (`map_line_for_another_source`); `/kbqa-merge` refuses a row whose anchor is
+  not yet in the tree or the batch; G6 finds a tree row pointing at no anchor
+  (`tree_same_feature_dangling`).
+- **The ways in, on the row.** `interface_type` (`API` · `SDK` · `webhook` ·
+  `CLI` · `user interface`), `operation` and `parameter`, as printed — the
+  standard terms of ArchiMate (application interface, application service) and
+  OpenAPI (operation, parameter). An interface's picture is the rows sharing its
+  URL and operation: module = `parent_path`, functions = `what_it_does`,
+  features exposed = `same_feature_as`. Row rules `interface_type_unknown` and
+  `interface_without_type`.
+- **The row-writer's list of features.** `kbqa capture` writes
+  `_raw/<batch>/FEATURES.md` beside the receipt: the subject's anchors from
+  the tree and every staging file, grouped by breadcrumb with an outline of
+  line ranges, so the row-writer tells a new feature from another source by
+  reading only the groups that matter.
+- **Counts.** The check prints `features=`, `other_sources=` and
+  `interfaces=` per batch. G5 counts a repeated term whose rows are all one
+  feature apart from its naming questions.
+
+### Changed
+
+- CI uses `actions/checkout@v5` and `actions/setup-python@v6`, the Node 24
+  releases (GitHub forced Node 20 actions onto Node 24 with a warning).
+
+### Not built
+
+- #7 heading coverage: the capture keeps no per-page heading positions, so it
+  needs a capture change first.
+- #14 role index: which words name a role is the project's vocabulary, so the
+  pattern must come from the estate, not this tool.
+
 ## [6.18.1] — 2026-10-18
 
 The operator's rulings on how a feature is classified, after the first full

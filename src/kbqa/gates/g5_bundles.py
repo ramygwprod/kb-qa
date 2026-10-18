@@ -2,6 +2,10 @@
 
 Reports that the same vendor term appears at more than one URL. That is all.
 
+A term whose rows are all one feature — each row is the anchor or names it in
+`same_feature_as` — is not reported: the row-writer already answered the
+question, from the rows' own quotes, and the gate counts it apart.
+
 ⛔ Resolves nothing. A repeated name is an R2 question for a human. A
 `usecase_of` guessed from string similarity is indistinguishable later from a
 sourced one, so this gate never writes one. (spec §G5)
@@ -29,6 +33,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
         inputs[f"rows[{i}]"] = input_ref(Path(r))
 
     term_urls: Dict[str, Set[str]] = defaultdict(set)
+    term_features: Dict[str, Set[str]] = defaultdict(set)
     term_display: Dict[str, str] = {}
     total_rows = 0
 
@@ -46,11 +51,15 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
                 continue
             key = normalise_for_match(term).casefold()
             term_urls[key].add(url)
+            term_features[key].add(str(rp.obj.get("same_feature_as") or rp.obj.get("id")))
             term_display.setdefault(key, term)
 
     findings: List[Finding] = []
-    repeated = 0
+    repeated = linked = 0
     for key, urls in sorted(term_urls.items()):
+        if len(urls) > 1 and len(term_features[key]) == 1:
+            linked += 1
+            continue
         if len(urls) > 1:
             repeated += 1
             findings.append(
@@ -68,6 +77,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
         "rows": total_rows,
         "distinct_terms": len(term_urls),
         "terms_at_multiple_urls": repeated,
+        "terms_at_multiple_urls_one_feature": linked,
         "rows_beyond_one_per_term": max(0, total_rows - len(term_urls)),
         "failed": 0,
     }

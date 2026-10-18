@@ -24,7 +24,7 @@ It prints **PASS** or **STOP** and never installs anything. Its first line names
 the `python3` it used — the interpreter every gate below runs under. It checks,
 in order:
 
-1. the installed kbqa is the version this copy pins (`v6.18.1`)
+1. the installed kbqa is the version this copy pins (`v6.19.0`)
 2. its manifest is the one this copy expects
 3. the installed skill is the tagged skill: every file matches
    `INSTALLED-FROM-kbqa-check`, the record `skills/install.sh` wrote — none changed,
@@ -161,7 +161,9 @@ If you are asked to re-freeze after a drift report, say no and explain why.
 `mapcheck` (run by §2 when mapping files exist) checks the files the mappers
 wrote, `_map-<batch>-<A|B>.jsonl`:
 
-- every staging id exactly once, `id` first, exactly the mapper's fields, none null
+- every staging id exactly once — except a row with `same_feature_as`, which takes its
+  anchor's classification and has no line (`map_line_for_another_source` when it has one) —
+  `id` first, exactly the mapper's fields, none null
 - theme codes exist in the codebook; APQC ids exist in the v8.0 list **and** carry
   that list's hierarchy id and name
 - `role_source` filled; `needs-human` rows listed and never counted as mapped
@@ -214,7 +216,9 @@ without opening a file:
 - pre-flight: PASS line (version, manifest)
 - **surfaces**: per surface — denominator, stop-condition, or MISSING
 - per batch: **CLEAR / BLOCKED / PARKED / NOT CHECKED**, the round, the finding count by class,
-  and its `rows=` and `distinct_vendor_terms=` line. **This check is the one counter**: the
+  and its `rows=` and `distinct_vendor_terms=` line, then `features=` (anchors, each classified
+  once), `other_sources=` (rows with `same_feature_as`) and `interfaces=` (ways in documented).
+  **This check is the one counter**: the
   collecting agents report no counts, so these numbers come from here or from nowhere
 - the **structural** and **planner** findings, which go back to planning
 - the **fixable** findings — the only ones a row-writer may receive, in round 1 only

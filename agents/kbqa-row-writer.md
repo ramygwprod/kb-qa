@@ -10,7 +10,8 @@ You receive the subject folder and a batch name — nothing else. **Read the
 batch's receipt from disk first**: `<subject folder>/_raw/<batch>/RECEIPT.json`,
 written by `kbqa capture`. It holds everything you copy and everything you read
 by: `capture` (the capture's path), `sha256`, `access_date`, the window fields,
-and `pages` — each with its `lines` and its `parts`. Copy from that file; never
+`pages` — each with its `lines` and its `parts` — and `features`, the path of the
+subject's features list (§2a). Copy from that file; never
 from a brief, a message or your memory. If the file is missing, or its `batch`
 is not the batch you were given, stop and say so.
 
@@ -90,12 +91,44 @@ Every row carries these fields, with exactly these values where a list is given:
 | `depth_level` | the level the page itself names (`product-line` · `module` · `sub-module` · `feature` · `sub-feature`); else the number of levels in the page's breadcrumb; `unknown` **only** when `parent_path` is `unknown` — a page with a breadcrumb always has a counted depth |
 | `canonical` | `NOVEL`, always |
 
+When the row documents a way in — an API operation, an SDK method, a webhook, a
+CLI command or a settings screen — add `interface_type` (`API` · `SDK` ·
+`webhook` · `CLI` · `user interface`, spelled exactly so), `operation` (the
+operation, method, command or screen, as printed) and, when the row comes from
+one setting or field of it, `parameter` (as printed). When the feature already
+has a row, add `same_feature_as` (§2a).
+
 When the page describes `mechanism` or `outcome` in prose that fits none of the
 values, write `unknown` in the field and the subject's own words in
 `mechanism_raw` or `outcome_raw`. When `mechanism` is `Integrated` and the page
 names the other party, write that name, verbatim, in `mechanism_via`. A subject's
 misprint goes in `source_typo` (§3). Add no other field: the checker rejects
 fields it does not know.
+
+## 2a · One feature, one anchor
+
+A feature has one **anchor**: its first row, wherever it was seen first. Every
+later row of the same feature — the same setting printed by another API
+operation, a help page about a feature an API page already gave, the same
+feature in a later batch — is a row of its own, grounded by its own quote, that
+adds `same_feature_as: <the anchor's id>`. Nothing is folded and nothing is
+dropped; only the anchor is classified.
+
+- **Read the receipt's `features` file first** (`_raw/<batch>/FEATURES.md`):
+  the subject's anchors as they stood before this batch, one line each —
+  `id | vendor_term | parent_path | what_it_does`, grouped by breadcrumb, with
+  an outline of line ranges. Read the outline, then only the groups that could
+  hold your page's features (offset and limit) — never the whole file.
+- A feature on your page that is listed there, or that an earlier row of this
+  batch already gave → your row adds `same_feature_as` with that row's `id`,
+  copied exactly. Always the anchor's id: never a row that itself carries
+  `same_feature_as`.
+- Same feature means the same thing done for the same purpose, by the
+  subject's own words on both rows — not a similar name. When you cannot tell
+  from the words, write no `same_feature_as`: an anchor too many is seen and
+  asked about; a wrong link hides a feature.
+- A feature listed nowhere is new: your row is its anchor, with no
+  `same_feature_as`.
 
 ## 3 · The quote is the whole job
 
@@ -112,7 +145,8 @@ fields it does not know.
 - A subject's error is kept as printed, and flagged: `source_typo` holds the
   misprinted words exactly as printed. Contradictions, duplicates and the same
   term at several URLs are all kept as rows, never folded together — the same
-  feature printed by several API operations included: each copy is a row.
+  feature printed by several API operations included: each copy is a row, and
+  each copy after the first carries `same_feature_as` (§2a).
 - **An interface is a way in, not a feature.** An API operation, a field, an
   SDK method, a webhook or a settings screen is how a feature is reached or set
   up. The row is about the feature: `vendor_term` is the subject's own name as

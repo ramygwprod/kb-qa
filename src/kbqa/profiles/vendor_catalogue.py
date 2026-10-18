@@ -186,6 +186,29 @@ EXTENSIONS: Dict[str, ExtensionField] = {
     "product_page": ext(PROVENANCE, "source_url", "The subject's product page for this node."),
     "real_href": ext(PROVENANCE, "source_url", "The href behind a link, where it differs."),
 
+    # --- the way in, and the one feature behind several ways in -----------
+    # An interface (API operation, SDK method, webhook, CLI command, settings
+    # screen) is how a feature is reached or set up, never a feature itself
+    # (the operator's ruling, 2026-10-18). Its record is a row like any other —
+    # grounded by its own quote — that names the way in; the feature behind it
+    # is the row `same_feature_as` points to, classified once. Standard terms:
+    # ArchiMate's application interface / application service; OpenAPI's
+    # operation and parameter.
+    "same_feature_as": ext(PROVENANCE, "id",
+                          "This row is another source of the feature whose row "
+                          "id it names (the anchor, which carries no "
+                          "`same_feature_as` itself). Kept and grounded — its "
+                          "words, its URL and any role it names stay — and not "
+                          "classified: it takes the anchor's classification."),
+    "interface_type": ext(PROVENANCE, None,
+                         "The way in this row documents: `API`, `SDK`, "
+                         "`webhook`, `CLI` or `user interface`."),
+    "operation": ext(VERBATIM, None,
+                    "The operation, method, command or screen, as printed."),
+    "parameter": ext(VERBATIM, None,
+                    "The setting or field inside the operation that delivers "
+                    "this row's function, as printed."),
+
     # --- batch-level facts repeated per row ------------------------------
     # Harmless redundancy, but they belong in frontmatter. D-005 leaves the
     # move open; registering them stops them failing rows in the meantime.
@@ -229,6 +252,11 @@ EXTENSIONS: Dict[str, ExtensionField] = {
                 "for removal unless the collector can say what it means."),
 }
 
+# The ways in a row may name in `interface_type` — standard terms, one spelling each.
+INTERFACE_TYPES = ("API", "SDK", "webhook", "CLI", "user interface")
+# The fields that say which part of an interface a row documents.
+INTERFACE_DETAIL = "operation parameter".split()
+
 # The schema's spelling of each grade — one spelling per value (K1). The enum
 # above still accepts both spellings of "verify", because legacy rows use the
 # bare form and are never edited. A NEW batch writes the schema's spelling.
@@ -263,6 +291,25 @@ def strict_row_check(obj: dict) -> List[Tuple[str, str]]:
             "depth_unknown_with_breadcrumb",
             f"depth_level is `unknown` but the page shows the breadcrumb {pp!r}; "
             "count its levels for a numeric depth, or use the level the page states",
+        ))
+    itype = obj.get("interface_type")
+    if itype is not None and itype not in INTERFACE_TYPES:
+        out.append((
+            "interface_type_unknown",
+            f"interface_type {itype!r} is not one of {' | '.join(INTERFACE_TYPES)}",
+        ))
+    if itype is None and any(obj.get(k) not in (None, "") for k in INTERFACE_DETAIL):
+        out.append((
+            "interface_without_type",
+            "the row names an `operation` or `parameter` but no `interface_type`: say "
+            "which way in it documents",
+        ))
+    sfa = obj.get("same_feature_as")
+    if sfa is not None and (not isinstance(sfa, str) or not sfa.strip() or sfa == obj.get("id")):
+        out.append((
+            "same_feature_as_invalid",
+            f"same_feature_as is {sfa!r}; it names the row id of another row of the same "
+            "feature (its anchor), never empty and never the row's own id",
         ))
     grade = obj.get("evidence_grade")
     if grade not in SCHEMA_EVIDENCE_GRADES:
