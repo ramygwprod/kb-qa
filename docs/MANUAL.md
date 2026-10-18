@@ -1,6 +1,6 @@
 # kbqa — user manual
 
-**Version 6.18.0** · for operators and for maker agents
+**Version 6.18.1** · for operators and for maker agents
 
 Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -10,7 +10,7 @@ Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.18.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.18.1"
 # Day to day, the pipeline is two commands with a human between them:
 #
 #   /kbqa-collect <Subject Name>     collect until the source runs out
@@ -18,7 +18,7 @@ pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.18.0"
 #
 # Everything below is what those do, and what to run when you want it by hand.
 
-python -m kbqa --version          # must print 6.18.0
+python -m kbqa --version          # must print 6.18.1
 ```
 
 **Audit a corpus** — needs no captures, changes nothing, answers "what here can
@@ -101,7 +101,7 @@ python3 -m venv .venv
 For an estate or CI, install from the pinned tag rather than a branch:
 
 ```bash
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.18.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.18.1"
 ```
 
 **Always a tag, never a branch.** A branch would let the gates and the data they
@@ -923,7 +923,7 @@ Two ways a script gets this wrong:
 
 ## 7 · Findings reference
 
-93 codes. Every one carries a remedy, enforced by `tests/test_report.py` — a
+94 codes. Every one carries a remedy, enforced by `tests/test_report.py` — a
 report that falls back to "see the message" for its most important findings is
 not a report.
 
@@ -967,6 +967,7 @@ not a report.
 | `map_null_value` | fixable | issue | Mapping line: no nulls; empty is `""` or `[]` |
 | `map_type` | fixable | issue | Mapping line: `theme_links` and `pcf_ids` are lists |
 | `marker_unbalanced` | structural | issue | Capture is corrupt; re-fetch, do not hand-repair |
+| `needs_human_without_pattern` | fixable | issue | A `needs-human` note opens with the rule or open pattern it stops on, in brackets (`[<name>] …`), so the rows are grouped into one question each |
 | `needs_human_without_reason` | fixable | issue | A `needs-human` line says why in `note` |
 | `no_declared_pages` | fixable | gap | Add the `pages:` list |
 | `no_exhaustion_evidence` | planner | gap | No window reached the end of the list; a short return is not the end |
@@ -1001,7 +1002,7 @@ not a report.
 | `status_invalid` | fixable | issue | Mapping line: `status` is `mapped` or `needs-human` |
 | `stop_condition_without_reason` | fixable | gap | "We stopped" is not a reason |
 | `stops_file_missing` | structural | gap | Wrong path, or no stops recorded — not the same thing |
-| `story_role_mismatch` | fixable | issue | Mapping line: the story's "As a <role>, I want" is not the line's `role`, or the story does not open that way |
+| `story_role_mismatch` | fixable | issue | Mapping line: the story's "As <role>, I want" is not the line's `role` (singular or plural as printed; "a"/"an" optional), the story does not open that way, or the "(APQC-closest)" tag is missing after an APQC-closest role or present after another |
 | `subject_missing` | structural | gap | The path is not a subject folder — nothing was checked |
 | `surface_contradiction` | planner | issue | A surface both indexed and unpublished — a human decides which file is wrong |
 | `surface_missing` | planner | issue | A mandatory surface has neither an index nor a URL-keyed stop |
@@ -1074,7 +1075,7 @@ and the data they judge change in the same push.
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.18.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.18.1"
 ```
 
 > `pip < 21.3` cannot read this project's metadata and installs an empty package

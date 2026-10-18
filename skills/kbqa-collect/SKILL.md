@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # Collecting a subject
 
-**This copy is kbqa-collect v6.18.0**, installed with kb-qa v6.18.0.
+**This copy is kbqa-collect v6.18.1**, installed with kb-qa v6.18.1.
 
 **Invoked as**, by the operator, in a session opened at the estate root:
 
@@ -194,9 +194,11 @@ never summarise one to the other, and never start B with anything A said.
 Agreement between two passes that saw each other measures nothing. Each writes
 `_map-<batch>-<A|B>.jsonl`.
 
-Rows a pass cannot map are `needs-human`, with a note. They are questions for
-the operator, never forced. Passes hand back their `needs-human` ids and
-notes, not counts: `/kbqa-check` counts.
+Rows a pass cannot map are `needs-human`, with a note that opens with the rule
+or open pattern the row stops on, in brackets (`[<name>] …`). They are
+questions for the operator, never forced, and `/kbqa-check` groups them into
+one question per pattern. Passes hand back their `needs-human` ids and notes,
+not counts: `/kbqa-check` counts.
 
 ## 5 · Report and stop
 

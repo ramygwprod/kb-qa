@@ -642,11 +642,20 @@ REMEDIES.update({
         "A `needs-human` line says why in `note`, so the operator knows what to "
         "decide. Write the reason; do not change the status to clear this.",
     ),
+    "needs_human_without_pattern": Remedy(
+        FIXABLE,
+        "A `needs-human` note opens with the rule or open pattern it stops on, in "
+        "brackets, as the logic sheet names it (`[<name>] …`), so the check groups "
+        "the rows and the operator answers each question once. Name it; do not "
+        "change the status to clear this.",
+    ),
     "story_role_mismatch": Remedy(
         FIXABLE,
-        "The `user_story` opens \"As a <role>, I want\" and that role is the "
-        "line's `role`, word for word. Write the story with the role from its "
-        "source; never change `role` to match a story.",
+        "The `user_story` opens \"As <role>, I want\" (with \"a\" or \"an\" for a "
+        "singular role) and that role is the line's `role`, word for word, "
+        "singular or plural as printed; an APQC-closest role is followed by "
+        "\"(APQC-closest)\", and no other is. Write the story with the role from "
+        "its source; never change `role` to match a story.",
     ),
     # --- K5 · mapping files: the whole batch -------------------------------
     "element_dominates": Remedy(

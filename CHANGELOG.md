@@ -16,6 +16,39 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.18.1] — 2026-10-18
+
+The operator's rulings on how a feature is classified, after the first full
+collection sent most rows to a human — more than seventy of them one question
+asked once per row, because an API page was read as if the API were the
+feature. The tools disagreed with four rulings; now they follow them.
+
+### Changed
+
+- **The story's role, as ruled.** `mapcheck` reads `As <role>, I want` with
+  "a" / "an" optional, so a plural role copied as printed passes
+  (`As admins, I want`). An APQC-closest role is followed by `(APQC-closest)`
+  in the story, and no other role is: a missing or misplaced tag is a
+  `story_role_mismatch`. In v6.18.0 every plural and every tagged story failed.
+- **One question per pattern.** A `needs-human` note opens with the rule or open
+  pattern it stops on, in brackets (`[<name>] …`); a note without one is
+  `needs_human_without_pattern` (fixable). `mapcheck` groups the rows by that
+  name, per pass (`needs_human_by_pattern`) and across both
+  (`questions`), and the check prints one `question [<name>]` line for each,
+  with its rows, so the operator answers each question once.
+- **The mapper follows the rulings:** the story's wording; a role source is any
+  row of the subject naming the role for the same feature, never a
+  permission-set name; confidence as the logic sheet defines each level; the
+  sheet's block on resolving an open point is applied before a row goes to a
+  human.
+- **An interface is a way in, not a feature** (the operator's rule), in the
+  mapper and the row-writer: an API operation, a field, an SDK method, a webhook
+  or a settings screen never decides the theme, the role or the job; the job is
+  the task of whoever uses what the feature does; setup is a separate role with
+  its own purpose. The row-writer writes `what_it_does` as what the feature does,
+  and a field that only identifies (an id, a name) is not a row. Copies of one
+  feature are still kept as rows until interface records exist.
+
 ## [6.18.0] — 2026-10-18
 
 What the first full live collection run exposed: data that could be lost

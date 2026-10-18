@@ -20,9 +20,15 @@ Checked, per mapper:
   · `needs-human` rows are listed and never counted as mapped
   · one APQC element on more than 30 % of the batch's rows → a finding that a
     human must read a sample before the batch is accepted
-  · the story's role — the words after "As a" / "As an", up to "I want" — is
-    the row's `role`, compared without case or punctuation (a FAIL: the
-    first live run had stories whose "As a …" did not match their `role`)
+  · the story's role — the words after "As" (and its "a" / "an", when the
+    role is singular), up to "I want" — is the row's `role`, singular or
+    plural as printed, compared without case or punctuation (a FAIL: the
+    first live run had stories whose "As a …" did not match their `role`).
+    When `role_source` is `apqc-closest` the tag "(APQC-closest)" follows the
+    role, and only then (the operator's ruling of 2026-10-18)
+  · a `needs-human` note opens with the name of the rule or open pattern it
+    stops on, in brackets (`[<name>] …`), so the check can group the rows by
+    question and the operator answers each question once (a FAIL when absent)
   · advisory, never a FAIL: the story's words that are in neither the row
     (`vendor_term`, `what_it_does`, `source_quote`, `parent_path`), its
     `role`, nor its elements' names, once the story template's own words
@@ -67,10 +73,16 @@ DOMINANCE = 0.30
 
 THEME_ROW_RE = re.compile(r"^\|\s*(?P<code>I\d{2})\s*\|")
 # "As a <role>, I want … so that …" — the role is what stands between them.
-STORY_ROLE_RE = re.compile(r"^\s*As\s+an?\s+(?P<role>.+?)\s*,?\s+I\s+want\b", re.IGNORECASE)
+# The article is optional: a plural role has none ("As admins, I want").
+STORY_ROLE_RE = re.compile(r"^\s*As\s+(?:an?\s+)?(?P<role>.+?)\s*,?\s+I\s+want\b", re.IGNORECASE)
+# The tag a story carries after its role when the role is the APQC-closest one.
+APQC_TAG = "(APQC-closest)"
+APQC_TAG_RE = re.compile(r"\s*\(\s*APQC-closest\s*\)\s*$", re.IGNORECASE)
+# A needs-human note opens with the name of the rule or open pattern it stops on.
+NOTE_PATTERN_RE = re.compile(r"^\s*\[(?P<name>[^\[\]\n]*\S[^\[\]\n]*)\]")
 # The template's own words: the only words a story may hold that the row and
 # its elements need not. Kept to the template, so nothing else is excused.
-STORY_TEMPLATE_WORDS = frozenset({"as", "a", "an", "i", "want", "to", "so", "that"})
+STORY_TEMPLATE_WORDS = frozenset({"as", "a", "an", "i", "want", "to", "so", "that", "apqc", "closest"})
 WORD_RE = re.compile(r"[a-z0-9]+(?:['’][a-z]+)?")
 
 
@@ -81,6 +93,12 @@ def words(text: str) -> List[str]:
 def story_role(story: str) -> Optional[str]:
     m = STORY_ROLE_RE.match(str(story))
     return m.group("role") if m else None
+
+
+def note_pattern(note: str) -> Optional[str]:
+    """The rule or open pattern a needs-human note names, spaces collapsed."""
+    m = NOTE_PATTERN_RE.match(str(note))
+    return " ".join(m.group("name").split()) if m else None
 
 
 def read_codebook(path: Path) -> List[str]:
@@ -198,17 +216,32 @@ def check_one(letter: str, path: Path, staging_ids: List[str], themes: Set[str],
             f("confidence_invalid", f"confidence {obj.get('confidence')!r}", n)
         if obj.get("status") not in STATUSES:
             f("status_invalid", f"status {obj.get('status')!r} is not mapped | needs-human", n)
-        if obj.get("status") == "needs-human" and not str(obj.get("note", "")).strip():
-            f("needs_human_without_reason", "needs-human row has an empty note", n)
+        if obj.get("status") == "needs-human":
+            note = str(obj.get("note", ""))
+            if not note.strip():
+                f("needs_human_without_reason", "needs-human row has an empty note", n)
+            elif note_pattern(note) is None:
+                f("needs_human_without_pattern", f"needs-human note {note[:60]!r} does not open with the "
+                                                 "rule or open pattern it stops on, in brackets: `[<name>] …`", n)
 
         story = obj.get("user_story")
         if isinstance(story, str) and story.strip() and theme not in NO_ROLE:
             said = story_role(story)
+            role = APQC_TAG_RE.sub("", str(obj.get("role", "")))
             if said is None:
-                f("story_role_mismatch", f"user_story {story[:80]!r} does not open \"As a <role>, I want\", "
+                f("story_role_mismatch", f"user_story {story[:80]!r} does not open \"As <role>, I want\", "
                                          f"so its role cannot be compared with role {obj.get('role')!r}", n)
-            elif words(said) != words(obj.get("role", "")):
-                f("story_role_mismatch", f"user_story says \"As a {said}\" but role is {obj.get('role')!r}", n)
+            else:
+                tagged = bool(APQC_TAG_RE.search(said))
+                said = APQC_TAG_RE.sub("", said)
+                if words(said) != words(role):
+                    f("story_role_mismatch", f"user_story says \"As {said}\" but role is {obj.get('role')!r}", n)
+                elif rs == "apqc-closest" and not tagged:
+                    f("story_role_mismatch", f"role_source is apqc-closest, so the story carries {APQC_TAG} "
+                                             f"right after the role: \"As {said} {APQC_TAG}, I want\"", n)
+                elif tagged and rs != "apqc-closest":
+                    f("story_role_mismatch", f"the story carries {APQC_TAG}, but role_source is {rs!r}: "
+                                             "the tag marks an APQC-closest role only", n)
             if staging_rows is not None:
                 row = staging_rows.get(rid, {})
                 allowed = set(STORY_TEMPLATE_WORDS) | set(words(obj.get("role", "")))
@@ -231,6 +264,7 @@ def check_one(letter: str, path: Path, staging_ids: List[str], themes: Set[str],
 
     rows = [by_id[r] for r in staging_ids if r in by_id]
     needs_human = [r["id"] for r in rows if r.get("status") == "needs-human"]
+    by_pattern = group_by_pattern(rows)
     mapped = [r for r in rows if r.get("status") == "mapped"]
     element_rows = Counter()
     for r in rows:
@@ -254,11 +288,33 @@ def check_one(letter: str, path: Path, staging_ids: List[str], themes: Set[str],
         "mapped": len(mapped),
         "needs_human": len(needs_human),
         "needs_human_ids": needs_human,
+        # one question per rule or open pattern, with the rows it covers
+        "needs_human_by_pattern": by_pattern,
         "dominant_elements": dominant,
         # advisory: listed for a human, never a finding
         "story_words_outside_row_and_element": outside_words,
     }
     return by_id, summary
+
+
+UNNAMED = "(no rule named)"
+
+
+def group_by_pattern(rows: List[dict]) -> Dict[str, List[str]]:
+    """{the named rule or open pattern: the ids stopping on it}, the largest
+    group first; names are grouped without case. A note naming none is listed
+    under UNNAMED, never dropped."""
+    groups: Dict[str, List[str]] = {}
+    spelling: Dict[str, str] = {}
+    for r in rows:
+        if r.get("status") != "needs-human":
+            continue
+        name = note_pattern(str(r.get("note", ""))) or UNNAMED
+        key = name.casefold()
+        spelling.setdefault(key, name)
+        groups.setdefault(key, []).append(str(r.get("id")))
+    ordered = sorted(groups.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+    return {spelling[k]: ids for k, ids in ordered}
 
 
 def agreement(staging_ids: List[str], a: Dict[str, dict], b: Dict[str, dict]) -> dict:
@@ -340,6 +396,15 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
     if len(parsed) == 2:
         (_, a), (_, b) = sorted(parsed.items())
         counts["agreement"] = agreement(staging_ids, a, b)
+    # The operator's questions across both passes: one per rule or open pattern.
+    questions: Dict[str, Dict[str, List[str]]] = {}
+    for letter, s in sorted(per.items()):
+        for name, ids in s["needs_human_by_pattern"].items():
+            key = next((k for k in questions if k.casefold() == name.casefold()), name)
+            questions.setdefault(key, {})[letter] = ids
+    counts["questions"] = [{"pattern": k, "rows": sorted({i for ids in v.values() for i in ids}), "per_pass": v}
+                           for k, v in sorted(questions.items(),
+                                              key=lambda kv: -len({i for ids in kv[1].values() for i in ids}))]
     if not staging_ids:
         findings.append(Finding("nothing_checked", "the staging file has no rows; an empty check is not a pass"))
     counts["failed"] = len(findings)

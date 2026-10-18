@@ -24,7 +24,7 @@ It prints **PASS** or **STOP** and never installs anything. Its first line names
 the `python3` it used — the interpreter every gate below runs under. It checks,
 in order:
 
-1. the installed kbqa is the version this copy pins (`v6.18.0`)
+1. the installed kbqa is the version this copy pins (`v6.18.1`)
 2. its manifest is the one this copy expects
 3. the installed skill is the tagged skill: every file matches
    `INSTALLED-FROM-kbqa-check`, the record `skills/install.sh` wrote — none changed,
@@ -167,8 +167,10 @@ wrote, `_map-<batch>-<A|B>.jsonl`:
 - `role_source` filled; `needs-human` rows listed and never counted as mapped
 - A/B agreement on **ALL** rows — a missing or needs-human row is a disagreement
 - `element_dominates`: one element on more than 30 % of the batch
-- `story_role_mismatch`: the story's "As a <role>, I want" names another role than
-  the line's `role` (a failure); and, advisory only, the story words found in
+- `story_role_mismatch`: the story's "As <role>, I want" names another role than
+  the line's `role` — singular or plural as printed, "a"/"an" optional — or an
+  APQC-closest role lacks the "(APQC-closest)" tag after it, or another role carries it
+  (a failure); and, advisory only, the story words found in
   neither the row, its `role`, nor its elements' names, minus the template's own
   words — listed per pass for the operator, never counted as a failure
 
@@ -219,7 +221,9 @@ without opening a file:
 - **PARKED** batches with their finding lists
 - per surface: coverage, and whether its windows reached the end or are parked at an offset
 - mappings: per mapper rows / mapped / needs-human (with ids) — the mapping line prints each
-  pass's totals — agreement rates on all rows, `element_dominates`, every `story_role_mismatch`,
+  pass's totals — and **the operator's questions**: one `question [<pattern>]` line per rule or
+  open pattern the needs-human notes name, with its rows (`needs_human_without_pattern` when a
+  note names none). Ask each question once, for all its rows — agreement rates on all rows, `element_dominates`, every `story_role_mismatch`,
   and, as a question for the operator (never a failure), each pass's
   `story_words_outside_row_and_element`: the story words that came from neither the row nor
   its elements

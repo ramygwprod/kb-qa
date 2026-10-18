@@ -76,13 +76,13 @@ def _estate(root: Path) -> Path:
     for letter in "AB":
         (d / f"_map-{B}-{letter}.jsonl").write_text("".join(
             json.dumps({"id": f"example.docs.{p}",
-                        "user_story": "As an operator, I want this so that messages are handled.",
+                        "user_story": "As an operator (APQC-closest), I want this so that messages are handled.",
                         "role": "operator", "role_source": "apqc-closest", "actor": "B",
                         "theme": "I01" if i < 2 else "I02", "theme_links": [],
                         "pcf_ids": [ELEMENTS[i]],
                         "confidence": "low" if (letter == "B" and i == 3) else "high",
                         "status": "needs-human" if (letter == "B" and i == 3) else "mapped",
-                        "note": "fit is outside the current list" if (letter == "B" and i == 3) else ""}) + "\n"
+                        "note": "[new category] fit is outside the current list" if (letter == "B" and i == 3) else ""}) + "\n"
             for i, (p, _, _) in enumerate(PAGES[:4])))
     return d
 
