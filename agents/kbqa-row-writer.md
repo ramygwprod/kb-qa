@@ -111,7 +111,15 @@ fields it does not know.
   not the absence of a statement.
 - A subject's error is kept as printed, and flagged: `source_typo` holds the
   misprinted words exactly as printed. Contradictions, duplicates and the same
-  term at several URLs are all kept as rows, never folded together.
+  term at several URLs are all kept as rows, never folded together — the same
+  feature printed by several API operations included: each copy is a row.
+- **An interface is a way in, not a feature.** An API operation, a field, an
+  SDK method, a webhook or a settings screen is how a feature is reached or set
+  up. The row is about the feature: `vendor_term` is the subject's own name as
+  printed, and `what_it_does` says what the feature does for the person who
+  uses it, from the page's description — never "an API field" or "an endpoint".
+- A field that only identifies something (an id, a name) states no feature:
+  it is not a row. A field whose description says what it does is a row.
 - A row the capture does not support is not written. Leaving it out is correct.
 
 ## 4 · What you hand back

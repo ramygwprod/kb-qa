@@ -19,3 +19,7 @@ line = "   %s: %s · scanned %s · %s" % (v.get("gate"), state, scanned, found)
 for letter, m in sorted((v.get("counts", {}).get("per_mapper") or {}).items()):
     line += " · %s: mapped %s, needs-human %s" % (letter, m.get("mapped"), m.get("needs_human"))
 print(line)
+# The operator's questions: one per rule or open pattern the needs-human notes name.
+for q in v.get("counts", {}).get("questions") or []:
+    passes = ", ".join("%s %d" % (k, len(ids)) for k, ids in sorted(q["per_pass"].items()))
+    print("     question [%s]: %d rows (%s)" % (q["pattern"], len(q["rows"]), passes))
