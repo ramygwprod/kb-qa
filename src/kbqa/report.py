@@ -30,6 +30,7 @@ from .gates import g1_capture, g2_conformance, g3_grounding, g4_completeness
 from .manifest import MANIFEST, MANIFEST_SHA256
 from .manifest import sha256_file
 from .parsing import parse_staging
+from . import headings as heading_coverage
 from .verdict import Verdict, utc_now_iso, write_verdict
 
 STRUCTURAL = "structural"
@@ -1022,6 +1023,10 @@ def build(
           "it stops appearing — not when it is explained.")
         a("")
 
+    heads = heading_coverage.coverage(vendor_dir, batch)
+    for ln in heading_coverage.markdown(heads):
+        a(ln)
+
     a("## Operator sample — quote, claim, mapping")
     a("")
     if sample["size"]:
@@ -1061,6 +1066,7 @@ def build(
     a("")
 
     machine = {
+        "heading_coverage": heads,
         "kbqa_version": __version__,
         "manifest_sha256": MANIFEST_SHA256,
         "batch": batch,
@@ -1160,6 +1166,7 @@ def run(argv: List[str]) -> int:
         ways_in = {(str(r.get("source_url")), str(r.get("operation") or ""))
                    for r in rows if r.get("interface_type")}
         print(f"  features={len(rows) - len(others)}  other_sources={len(others)}  interfaces={len(ways_in)}")
+    print("  " + heading_coverage.summary_line(machine["heading_coverage"]))
     print(
         f"  findings={c['findings']}  gaps={c['gaps']}  issues={c['issues']}  "
         f"structural={c['structural']}  planner={c['planner']}  fixable={c['fixable']}"

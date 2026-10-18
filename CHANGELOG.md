@@ -16,6 +16,29 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.20.0] — 2026-10-18
+
+The two items v6.19.0 left open.
+
+### Added
+
+- **Heading coverage (#7).** The receipt lists each page's headings with their
+  capture lines, and `/kbqa-check` reports the headings under which no row's
+  quote begins, on pages no stop line explains — `headings=… with_row=…
+  page_stopped=… without_row=…`, and an advisory section listing each one.
+  Never a failure: a heading without a row is a missed feature or a section that
+  is rightly not a row, and only a human can tell which. A quote counts for the
+  section it begins in; a heading with no text of its own is counted apart. A
+  batch captured before this release is reported as not measured.
+- **Role-row candidates (#14).** When the estate's `kbqa-estate.json` names
+  `role_rows` patterns, `kbqa capture` writes `_raw/<batch>/ROLE-ROWS.md`: the
+  subject's rows the patterns match, with the words and field matched, and the
+  collect skill hands it to both mapping passes for their role sources. The
+  patterns are the estate's vocabulary and live in the estate; the tool holds
+  none. A candidate is never a role source by itself: the mapper judges same
+  feature, and the row's own words. Without patterns nothing is written, and the
+  receipt says why; a malformed pattern is refused, never half applied.
+
 ## [6.19.0] — 2026-10-18
 
 One feature, several sources, and the ways in. The operator ruled that an

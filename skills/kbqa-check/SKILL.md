@@ -24,7 +24,7 @@ It prints **PASS** or **STOP** and never installs anything. Its first line names
 the `python3` it used — the interpreter every gate below runs under. It checks,
 in order:
 
-1. the installed kbqa is the version this copy pins (`v6.19.0`)
+1. the installed kbqa is the version this copy pins (`v6.20.0`)
 2. its manifest is the one this copy expects
 3. the installed skill is the tagged skill: every file matches
    `INSTALLED-FROM-kbqa-check`, the record `skills/install.sh` wrote — none changed,
@@ -217,7 +217,9 @@ without opening a file:
 - **surfaces**: per surface — denominator, stop-condition, or MISSING
 - per batch: **CLEAR / BLOCKED / PARKED / NOT CHECKED**, the round, the finding count by class,
   and its `rows=` and `distinct_vendor_terms=` line, then `features=` (anchors, each classified
-  once), `other_sources=` (rows with `same_feature_as`) and `interfaces=` (ways in documented).
+  once), `other_sources=` (rows with `same_feature_as`) and `interfaces=` (ways in documented),
+  and `headings=… without_row=…`: the capture's headings no row's quote begins under, listed in
+  the report's advisory section for the operator — never a failure.
   **This check is the one counter**: the
   collecting agents report no counts, so these numbers come from here or from nowhere
 - the **structural** and **planner** findings, which go back to planning

@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # Collecting a subject
 
-**This copy is kbqa-collect v6.19.0**, installed with kb-qa v6.19.0.
+**This copy is kbqa-collect v6.20.0**, installed with kb-qa v6.20.0.
 
 **Invoked as**, by the operator, in a session opened at the estate root:
 
@@ -61,7 +61,10 @@ Three more rules for running the session:
 2. Read `kbqa-estate.json` at the estate root. It must name, relative to the
    estate root: `subjects_dir`, `logic_sheet`, `themes_codebook`,
    `apqc_elements`. If the file or any key is missing, or a named file does not
-   exist, stop and name exactly what is missing. Never guess a path.
+   exist, stop and name exactly what is missing. Never guess a path. An optional
+   key, `role_rows`, holds the estate's patterns for rows that name roles and
+   permissions; `kbqa capture` reads it itself and lists the candidates for the
+   mappers. Without it the receipt says the list was not written.
    The element list must have its outline beside it, `<list>.outline.md` (the
    list's name with `.outline.md` for `.jsonl`). If it is missing, stop and give
    the operator the command, run at the estate root:
@@ -187,7 +190,9 @@ For every batch written in this run, spawn `kbqa-mapper` **twice, separately**:
 once with pass `A`, once with pass `B`. Give each the staging file path, its
 letter, the configured paths (`logic_sheet`, `themes_codebook`,
 `apqc_elements`) and the element list's outline, and — for finding a role only — the subject's
-`feature-tree.md` path and the path of every staging file this run wrote.
+`feature-tree.md` path, the path of every staging file this run wrote, and the
+batch receipt's `role_rows` path (`_raw/<batch>/ROLE-ROWS.md`) when the receipt
+has one.
 
 The passes are independent: never give one pass the other's file or output,
 never summarise one to the other, and never start B with anything A said.

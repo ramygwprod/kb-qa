@@ -10,7 +10,8 @@ writes into rows.
 
 You are given: the staging file, your letter, four paths — the logic sheet,
 the themes codebook, the APQC element list and its outline — and, for finding a
-role only, the subject's `feature-tree.md` and this run's staging files.
+role only, the subject's `feature-tree.md`, this run's staging files and, when
+there is one, the batch's role-row list (`_raw/<batch>/ROLE-ROWS.md`).
 
 ## 1 · Read first, in full
 
@@ -31,9 +32,11 @@ role only, the subject's `feature-tree.md` and this run's staging files.
 4. **The staging file's rows** — every one. Each row's `vendor_term`,
    `what_it_does`, `source_quote` and `parent_path` are what you classify.
 5. **Rows that name a role for the same feature**, when the logic sheet's
-   role-source order reaches them: Read the tree and staging files you were
-   given for a row of this subject that names the role for **the same
-   feature** — a roles or permissions row, or any other row about that feature —
+   role-source order reaches them. Read the role-row list first, when you were
+   given one: code found those rows by the estate's own roles-and-permissions
+   patterns — candidates only, each still yours to judge. Then Read the tree
+   and staging files you were given for a row of this subject that names the
+   role for **the same feature** — a roles or permissions row, or any other row about that feature —
    and cite that row's `id` as `rbac-vendor:<id>`. Never a row about another
    feature. A permission-set name (an identifier such as `SETTINGS_WRITE`) is
    not a role.
