@@ -183,6 +183,35 @@ Rules the parser enforces:
 - Fields outside the core contract must be registered in `vendor_fields.py` by
   name. Their values are never constrained — see docs/DECISIONS.md D-005.
 
+### One feature, several sources, and the ways in (since v6.19.0)
+
+An interface — an API operation, an SDK method, a webhook, a CLI command, a
+settings screen — is a way in to a feature, never a feature itself (the
+operator's ruling of 2026-10-18; standard terms: ArchiMate's *application
+interface* and *application service*, OpenAPI's *operation* and *parameter*).
+Four registered fields record it on an ordinary row, so every gate reads it as
+it reads any row and every source keeps its own grounded quote:
+
+| field | value |
+|---|---|
+| `same_feature_as` | the `id` of the feature's **anchor** — its first row, wherever it was seen first. Present on every later source of the feature; absent on the anchor. Only anchors are classified. |
+| `interface_type` | `API` · `SDK` · `webhook` · `CLI` · `user interface` |
+| `operation` | the operation, method, command or screen, as printed |
+| `parameter` | the setting or field inside it that delivers this row's function, as printed |
+
+An interface's whole picture is the rows that share its `source_url` and
+`operation`: the module is their `parent_path`, its functions are their
+`what_it_does`, and the features it exposes are their `same_feature_as` (or the
+row itself, when it is an anchor). Nothing is folded: the tree is append-only,
+so a source found later is a new row pointing at the anchor, and
+`/kbqa-merge` refuses a row whose anchor is not yet in the tree. G2 checks that
+`same_feature_as` names an anchor of the subject (`same_feature_unknown`,
+`same_feature_not_anchor`); G6 that no tree row points at nothing
+(`tree_same_feature_dangling`); `mapcheck` that only anchors have mapping lines
+(`map_line_for_another_source`); G5 counts a repeated term whose rows are one
+feature apart from its naming questions. `kbqa capture` writes the subject's
+anchors to `_raw/<batch>/FEATURES.md` for the row-writer.
+
 ## `_capture-<batch>.raw.txt` (BRONZE, immutable)
 
 ```

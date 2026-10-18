@@ -3,6 +3,7 @@
 Estate-wide checks that no single-batch gate can see:
   · the manifest recorded in the newest verdicts still matches this code
   · every feature-tree's `proof:` count matches its own content
+  · every tree row with `same_feature_as` names an anchor in that tree
   · no Bronze file changed after the verdict that vouched for it
   · no staging file attests `fetched_by_this_agent: true` (role collapse)
   · no batch is CLEAR on its current bytes but absent from its tree (K4)
@@ -141,7 +142,21 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
         # Count via the parser, not a line pattern: the collector writes a
         # pretty-printed array in a ```json fence, where `^{"id"` matches
         # nothing. A regex here would report every real tree as 0 rows.
-        actual = len([r for r in parse_staging(tree).rows if r.obj is not None])
+        tree_objs = [r.obj for r in parse_staging(tree).rows if r.obj is not None]
+        actual = len(tree_objs)
+        # Another source of a feature points at an anchor in the same tree; merge
+        # refuses anything else, so a row pointing at nothing means the tree
+        # was edited outside it.
+        anchors = {str(o.get("id")) for o in tree_objs if not o.get("same_feature_as")}
+        for o in tree_objs:
+            target = o.get("same_feature_as")
+            if target and str(target) not in anchors:
+                findings.append(Finding(
+                    "tree_same_feature_dangling",
+                    f"{tree}: row {o.get('id')!r} has same_feature_as {target!r}, which is not an "
+                    "anchor row of this tree",
+                    where=str(tree),
+                ))
         if claimed != actual:
             findings.append(
                 Finding(

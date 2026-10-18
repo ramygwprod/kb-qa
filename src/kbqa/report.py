@@ -327,6 +327,47 @@ REMEDIES: Dict[str, Remedy] = {
         "The denominator holds no index items, so coverage is unmeasurable. "
         "Re-capture the index surface.",
     ),
+    # --- one feature, several sources (same_feature_as) and ways in --------
+    "same_feature_as_invalid": Remedy(
+        FIXABLE,
+        "`same_feature_as` names the row id of another row of the same feature — "
+        "its anchor. Write that id, or remove the field when this row is the "
+        "feature's first row.",
+    ),
+    "same_feature_unknown": Remedy(
+        FIXABLE,
+        "`same_feature_as` names a row id the subject does not have. Copy the "
+        "anchor's id from the batch's FEATURES.md or this batch's own rows; if "
+        "the feature has no row yet, this row is its anchor — remove the field.",
+    ),
+    "same_feature_not_anchor": Remedy(
+        FIXABLE,
+        "`same_feature_as` names a row that is itself another source. Name the "
+        "anchor that row points to: every source of a feature points at the one "
+        "anchor, never along a chain.",
+    ),
+    "interface_type_unknown": Remedy(
+        FIXABLE,
+        "`interface_type` is one of `API`, `SDK`, `webhook`, `CLI` or `user "
+        "interface`, spelled exactly so.",
+    ),
+    "interface_without_type": Remedy(
+        FIXABLE,
+        "A row naming an `operation` or `parameter` says which way in it "
+        "documents, in `interface_type`.",
+    ),
+    "map_line_for_another_source": Remedy(
+        FIXABLE,
+        "A row with `same_feature_as` takes its anchor's classification and has "
+        "no mapping line. Remove its line from the mapping file; the rows are "
+        "not changed.",
+    ),
+    "tree_same_feature_dangling": Remedy(
+        STRUCTURAL,
+        "A tree row points at a feature the tree does not have. /kbqa-merge "
+        "refuses that, so the tree was changed outside it: a human compares the "
+        "tree with its merge log before anything else merges.",
+    ),
     "proof_count_mismatch": Remedy(
         FIXABLE,
         "The GOLD file's `proof:` count disagrees with its own content. Correct "
@@ -1113,6 +1154,12 @@ def run(argv: List[str]) -> int:
         rows = [r.obj for r in parse_staging(stg).rows if r.obj is not None]
         terms = {str(r.get("vendor_term")) for r in rows if r.get("vendor_term")}
         print(f"  rows={len(rows)}  distinct_vendor_terms={len(terms)}")
+        # One feature, several sources: features are counted once (their
+        # anchors); the other sources and the ways in are counted apart.
+        others = [r for r in rows if r.get("same_feature_as")]
+        ways_in = {(str(r.get("source_url")), str(r.get("operation") or ""))
+                   for r in rows if r.get("interface_type")}
+        print(f"  features={len(rows) - len(others)}  other_sources={len(others)}  interfaces={len(ways_in)}")
     print(
         f"  findings={c['findings']}  gaps={c['gaps']}  issues={c['issues']}  "
         f"structural={c['structural']}  planner={c['planner']}  fixable={c['fixable']}"

@@ -288,6 +288,15 @@ def main(argv=None) -> int:
     clash = sorted(set(new_ids) & {str(o.get("id")) for o in old_objs})
     if clash:
         return refuse(f"{len(clash)} id(s) already in the tree, e.g. {clash[:5]} — ids are never renumbered")
+    # Another source of a feature points at that feature's anchor; the anchor
+    # must be in the tree already, or in this batch, so the tree never holds a
+    # row pointing at nothing. The anchor's batch merges first.
+    anchors = {str(o.get("id")) for o in old_objs + new_objs if not o.get("same_feature_as")}
+    dangling = sorted({str(o["same_feature_as"]) for o in new_objs
+                       if o.get("same_feature_as") and str(o["same_feature_as"]) not in anchors})
+    if dangling:
+        return refuse(f"{len(dangling)} same_feature_as target(s) are not an anchor in the tree or this batch, "
+                      f"e.g. {dangling[:5]} — merge the batch holding the anchor first")
 
     # 4–5 · append unchanged, recompute proof -----------------------------------
     lines = []

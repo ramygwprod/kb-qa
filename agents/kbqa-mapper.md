@@ -54,8 +54,8 @@ what the feature does, not from the API.
   configures it.
 - One field can hold two tasks (setting a target, and acting on its alert): one
   line, both elements.
-- Rows that are copies of one feature (the same field printed by several
-  operations) get the same reading.
+- Rows that are copies of one feature without `same_feature_as` (written
+  before the anchor rule) get the same reading.
 
 Do not open the other pass's file, `_qa/`, any report or verdict, any other
 batch's map files, any capture (`_capture-*`: the logic sheet says saved pages
@@ -66,7 +66,12 @@ folder.
 
 `<subject folder>/_map-<batch>-<A|B>.jsonl` — no fence, no header: one JSON
 object per line, **one line per staging row, every staging `id` exactly once,
-no other ids**, in the staging file's order. If the file already exists, stop and
+no other ids**, in the staging file's order — **except a row with
+`same_feature_as`**: it is another source of a feature that already has a row
+(its anchor), takes the anchor's classification, and gets no line. Its words
+still count: when it names who uses the feature, it is a role source for the
+anchor (`rbac-vendor:<its id>`, §1.5). When every row of the batch has
+`same_feature_as`, write no file and say so. If the file already exists, stop and
 say so; the operator decides whether a batch is re-classified.
 
 Each line has exactly these keys, in this order, and no others:

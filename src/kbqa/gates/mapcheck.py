@@ -6,7 +6,9 @@ outside the rows. This checks that it is WELL-FORMED and that every code it
 uses EXISTS — never that a mapping is right. Correctness is a human audit.
 
 Checked, per mapper:
-  · one line per staging row: every staging id exactly once, none added
+  · one line per staging row: every staging id exactly once, none added —
+    except a row with `same_feature_as`: another source of a feature takes
+    its anchor's classification and has no line of its own
   · `id` is the first key; exactly the fields of the mapper's §5 format,
     none missing, none extra, none null (empty is `""` or `[]`)
   · `theme` is a codebook code or one of the three non-feature codes;
@@ -133,7 +135,8 @@ ROW_WORD_FIELDS = ("vendor_term", "what_it_does", "source_quote", "parent_path")
 def check_one(letter: str, path: Path, staging_ids: List[str], themes: Set[str],
               elements: Dict[str, dict], known_ids: Optional[Set[str]],
               findings: List[Finding],
-              staging_rows: Optional[Dict[str, dict]] = None) -> Tuple[Dict[str, dict], dict]:
+              staging_rows: Optional[Dict[str, dict]] = None,
+              other_sources: Optional[Set[str]] = None) -> Tuple[Dict[str, dict], dict]:
     by_id: Dict[str, dict] = {}
     outside_words: List[Dict[str, object]] = []
     lines = path.read_text(encoding="utf-8").splitlines()
@@ -259,7 +262,11 @@ def check_one(letter: str, path: Path, staging_ids: List[str], themes: Set[str],
         if rid not in by_id:
             findings.append(Finding("map_id_missing", f"[{letter}] staging id {rid!r} has no line", path.name))
     for rid in by_id:
-        if rid not in staged:
+        if other_sources and rid in other_sources:
+            findings.append(Finding("map_line_for_another_source",
+                                    f"[{letter}] {rid!r} has `same_feature_as`: it takes its anchor's "
+                                    "classification and has no line of its own", path.name))
+        elif rid not in staged:
             findings.append(Finding("map_id_not_in_staging", f"[{letter}] {rid!r} is not a row of this batch", path.name))
 
     rows = [by_id[r] for r in staging_ids if r in by_id]
@@ -374,7 +381,9 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
         return Verdict(GATE, FAIL, inputs, {"scanned": 0, "failed": len(findings)}, findings), EXIT_FAIL
 
     staged = [r.obj for r in parse_staging(staging).rows if r.obj and r.obj.get("id")]
-    staging_ids = [str(o["id"]) for o in staged]
+    # Only anchors are classified; another source of a feature takes its anchor's reading.
+    other_sources = {str(o["id"]) for o in staged if o.get("same_feature_as")}
+    staging_ids = [str(o["id"]) for o in staged if str(o["id"]) not in other_sources]
     staging_rows = {str(o["id"]): o for o in staged}
     known = subject_ids(Path(args.subject)) if args.subject else None
 
@@ -382,13 +391,16 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
     parsed: Dict[str, Dict[str, dict]] = {}
     for m in maps:
         letter = m.stem.rsplit("-", 1)[-1] if "-" in m.stem else m.stem
-        by_id, summary = check_one(letter, m, staging_ids, themes, elements, known, findings, staging_rows)
+        by_id, summary = check_one(letter, m, staging_ids, themes, elements, known, findings, staging_rows,
+                                   other_sources)
         per[letter] = summary
         parsed[letter] = by_id
 
     counts: Dict[str, object] = {
         "scanned": sum(s["scanned"] for s in per.values()),
-        "staging_rows": len(staging_ids),
+        "staging_rows": len(staged),
+        "classified_rows": len(staging_ids),
+        "other_sources_not_classified": len(other_sources),
         "theme_codes": len(themes),
         "elements": len(elements),
         "per_mapper": per,
@@ -406,7 +418,8 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
                            for k, v in sorted(questions.items(),
                                               key=lambda kv: -len({i for ids in kv[1].values() for i in ids}))]
     if not staging_ids:
-        findings.append(Finding("nothing_checked", "the staging file has no rows; an empty check is not a pass"))
+        findings.append(Finding("nothing_checked", "the staging file has no rows to classify; an empty check "
+                                                   "is not a pass"))
     counts["failed"] = len(findings)
     verdict = PASS if not findings else FAIL
     return Verdict(GATE, verdict, inputs, counts, findings), (
