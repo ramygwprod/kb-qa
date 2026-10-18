@@ -37,8 +37,11 @@ next step leads there.
   is built from it, and the fetcher's reason table is tested against it — in
   v6.17.1 capture suggested `unreachable:` lines the table did not know. New
   reasons: `refused: HTTP 401|403` and `unreachable: <failure>`. A reason may
-  end ` (surface <slug>)` to close that surface's remaining items on the host
-  of its URL. `kbqa stop reasons` prints the list.
+  end ` (surface <slug>)` (the surface's index could not be read); only
+  `refused: robots` or `refused: HTTP 401|403` so ended, keyed by an item of
+  the surface's denominator, also closes its remaining items on that host.
+  A host or robots rule the vocabulary cannot read sends the page to the
+  operator; it never crashes the window. `kbqa stop reasons` prints the list.
 - **A next step on every failure**, decided by code: `retry`, `operator` (with
   a `suggested_stop_line` and `options`), or `stop: <exact line>`.
 - **The site's own copy.** A page answering 401/403, or showing no text without
@@ -78,10 +81,14 @@ next step leads there.
 
 - A TLS or protocol failure is final: one attempt, then the operator. A
   connection dropped mid-handshake (`SSLEOFError`) stays transient.
-- `g4` counts items on a host whose surface an approved line closed as
-  `existence_closed_by_surface_line`, apart from evidence. `surfaces` reads a
-  denominator beside such a line as closed; only `surface <slug> not published`
-  contradicts a denominator. The denominator name may carry a correction letter.
+- `g4` counts items on a host whose surface an approved `refused:` line closed
+  as `existence_closed_by_surface_line`, apart from evidence. `surfaces` reads a
+  denominator beside that same line as closed; any other surface line beside a
+  denominator stays a contradiction. The denominator name may carry a
+  correction letter. (A pre-PR review found the first build accepted any
+  closing reason, and index-level lines, passing a surface with zero rows; and
+  that an underscore in a redirect's host crashed a window. Both fixed, with
+  their reproductions as tests.)
 - The fetcher agent no longer holds `Write`: every file it causes is written by
   a command.
 - `/kbqa-check`'s coverage step picks the current denominator by byte order

@@ -456,7 +456,7 @@ def test_a_denominator_beside_a_closing_line_is_a_closed_surface_not_a_contradic
     for s in ("product", "docs", "help"):
         (d / f"_denominator-{s}-{DAY}b.md").write_text("Index: x\nhttps://x.test/a\n")
         _stg(d, f"{s}-{DAY}-w01", "https://x.test/a")
-    (d / "_stop-conditions.md").write_text("- https://help.x.test/ | refused: HTTP 403 (surface help)\n")
+    (d / "_stop-conditions.md").write_text("- https://x.test/a | refused: HTTP 403 (surface help)\n")
     v, code = surfaces.run(["--subject", str(d)])
     assert code == 0, [f.code for f in v.findings]
     assert v.counts["surfaces"]["help"]["state"] == "denominator, closed by a stop line"
@@ -538,3 +538,106 @@ def test_the_mapping_line_carries_each_passes_totals():
     out = subprocess.run([sys.executable, str(ROOT / "skills" / "kbqa-check" / "scripts" / "summ.py")],
                          input=v.to_json(), capture_output=True, text=True).stdout
     assert "A: mapped 3, needs-human 1" in out and "B: mapped" in out
+
+
+# ── the pre-PR review of v6.18.0 ────────────────────────────────────────────
+
+def test_r1_an_index_level_line_never_closes_another_rungs_items(tmp_path):
+    """R1, reproduced: rung 1 (llms.txt) was excluded by robots, rung 2 (a
+    sitemap) listed three help pages, no row was written. v6.17.1 failed this;
+    the first v6.18.0 build passed it with all three items 'closed'."""
+    den = tmp_path / f"_denominator-help-{DAY}.md"
+    den.write_text("Index: help, rung 2 — https://help.x.test/sitemap.xml\n"
+                   "https://help.x.test/a\nhttps://help.x.test/b\nhttps://help.x.test/c\n")
+    rows = tmp_path / f"_collect-help-{DAY}-w01-staging.md"
+    rows.write_text(f"---\nbatch: help-{DAY}-w01\n---\n```json\n```\n")
+    st = tmp_path / "_stop-conditions.md"
+    st.write_text("- https://help.x.test/llms.txt | excluded: robots /llms.txt (surface help)\n")
+    v, code = g4_completeness.run(["--denominator", str(den), "--rows", str(rows), "--stops", str(st)])
+    assert code == 1 and v.counts["without_row"] == 3
+    assert v.counts["existence_closed_by_surface_line"] == 0
+
+
+@pytest.mark.parametrize("reason", ["unreachable: HTTP 404", "js-only: not readable", "gated: login",
+                                    "excluded: robots /b", "third-party host: other.test"])
+def test_r1_a_one_page_reason_closes_one_page_even_with_a_surface_suffix(tmp_path, reason):
+    den = tmp_path / f"_denominator-help-{DAY}.md"
+    den.write_text("Index: help\nhttps://help.x.test/a\nhttps://help.x.test/b\nhttps://help.x.test/c\n")
+    rows = _stg(tmp_path, f"help-{DAY}-w01", "https://help.x.test/a")
+    st = tmp_path / "_stop-conditions.md"
+    st.write_text(f"- https://help.x.test/b | {reason} (surface help)\n")
+    v, code = g4_completeness.run(["--denominator", str(den), "--rows", str(rows), "--stops", str(st)])
+    assert code == 1 and [f.where for f in v.findings] == ["https://help.x.test/c"]
+    assert v.counts["existence_closed_by_surface_line"] == 0 and v.counts["existence_stopped"] == 1
+
+
+def test_r1_the_surfaces_check_accepts_only_the_line_g4_accepts(tmp_path):
+    d = tmp_path
+    for s in ("product", "docs", "help"):
+        (d / f"_denominator-{s}-{DAY}.md").write_text("Index: x\nhttps://help.x.test/a\n")
+        _stg(d, f"{s}-{DAY}-w01", "https://help.x.test/a")
+    for line in ("- https://help.x.test/llms.txt | excluded: robots /llms.txt (surface help)",
+                 "- https://help.x.test/a | unreachable: HTTP 404 (surface help)",
+                 "- https://help.x.test/other | refused: HTTP 403 (surface help)"):
+        (d / "_stop-conditions.md").write_text(line + "\n")
+        v, code = surfaces.run(["--subject", str(d)])
+        assert code == 1 and "surface_contradiction" in {f.code for f in v.findings}, line
+
+
+def test_r2_an_unusual_host_never_crashes_a_window(subject, seqweb):
+    """R2, reproduced: page A redirects to a host with an underscore; page B is
+    fine. The first v6.18.0 build crashed before writing anything."""
+    a, b = f"https://{HOST}/a", f"https://{HOST}/b"
+
+    class Redirect(SeqWeb):
+        def __call__(self, req, timeout=None):
+            if req.full_url == a:
+                self.asked.append(a)
+                from test_capture import _Resp
+                return _Resp("https://my_cdn.example.com/a", 200, PAGE.encode(), "text/html")
+            return super().__call__(req, timeout)
+    import kbqa.fetch as f_
+    w = Redirect({b: OK})
+    seqweb({})
+    import pytest as _p
+    mp = _p.MonkeyPatch()
+    mp.setattr(f_, "_open", w)
+    try:
+        code, r = _cap(subject, "--surface", "docs", "--url", a, "--url", b)
+    finally:
+        mp.undo()
+    assert code == 0 and [p["url"] for p in r["pages"]] == [b], "the healthy page is kept"
+    assert r["stop_lines_to_add"] == [f"- {a} | third-party host: my_cdn.example.com"]
+    assert (subject / "_raw" / r["batch"] / "WINDOW.json").exists()
+
+
+def test_r2_a_stop_line_the_vocabulary_cannot_read_goes_to_the_operator(subject, seqweb, monkeypatch):
+    """Whatever fetched data does to a line, the page is a failure handed to
+    the operator and the window is recorded — never a crash."""
+    a, b = f"https://{HOST}/a", f"https://{HOST}/b"
+    seqweb({a: (200, PAGE.encode(), "text/html"), b: OK})
+    monkeypatch.setattr(fetch.Robots, "check", lambda self, u: (False, "") if u == a else (True, None))
+    code, r = _cap(subject, "--surface", "docs", "--url", a, "--url", b)
+    assert code == 0 and [p["url"] for p in r["pages"]] == [b]
+    assert r["excluded"][0]["next_step"] == "operator"
+    assert r["needs_operator"][0]["url"] == a and r["needs_operator"][0]["next_step"] == "operator"
+
+
+def test_r2_real_hosts_and_rules_read_as_reasons():
+    for ln in ("- https://x.test/a | third-party host: my_cdn.example.com",
+               "- https://x.test/a | third-party host: bücher.example",
+               "- https://x.test/a | excluded: robots /a b/",
+               "- https://x.test/a | excluded: robots /a b/ (surface help)"):
+        stops.parse_line(ln)
+
+
+def test_r1_a_refusal_keyed_by_an_index_url_closes_no_item(tmp_path):
+    """Even a reason that may close items does so only when keyed by an item of
+    this denominator: a refused rung-1 index says nothing of rung 2's pages."""
+    den = tmp_path / f"_denominator-help-{DAY}.md"
+    den.write_text("Index: help, rung 3\nhttps://help.x.test/a\nhttps://help.x.test/b\n")
+    rows = _stg(tmp_path, f"help-{DAY}-w01", "https://help.x.test/a")
+    st = tmp_path / "_stop-conditions.md"
+    st.write_text("- https://help.x.test/llms.txt | refused: HTTP 403 (surface help)\n")
+    v, code = g4_completeness.run(["--denominator", str(den), "--rows", str(rows), "--stops", str(st)])
+    assert code == 1 and v.counts["existence_closed_by_surface_line"] == 0

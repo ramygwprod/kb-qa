@@ -256,12 +256,18 @@ def run(argv: Optional[List[str]] = None) -> int:
         permission.append(ran)
     pacer = fetch.Pacer()
 
+    def stopline(u: str, reason: str) -> str:
+        ln, err = stops.try_line(u, reason, s)
+        if ln is None:  # fetched data the vocabulary cannot read: the operator's, never a crash
+            raise fetch.FetchError(f"{u}: {reason} — its stop line is not in the vocabulary ({err})")
+        return ln
+
     def get(u: str):
         ok, rule = rb.check(u)
         if rb.site_wide_refused():
-            return None, stops.line(u, "refused: robots", s)
+            return None, stopline(u, "refused: robots")
         if not ok:
-            return None, stops.line(u, f"excluded: robots {rule}", s)
+            return None, stopline(u, f"excluded: robots {rule}")
         pacer.wait(host, rb.crawl_delay())
         r = fetch.get(u)
         if r.status in fetch.THROTTLE_STATUSES:
@@ -271,7 +277,7 @@ def run(argv: Optional[List[str]] = None) -> int:
         if r.status != 200:
             raise fetch.FetchError(f"HTTP {r.status} from {u}")
         if fetch.host_of(r.url) != host:
-            return None, stops.line(u, f"third-party host: {fetch.host_of(r.url)}", s)
+            return None, stopline(u, f"third-party host: {fetch.host_of(r.url)}")
         return r, None
 
     sources: List[Tuple[str, bytes, str]] = []  # (served url, bytes, content type)
@@ -314,7 +320,7 @@ def run(argv: Optional[List[str]] = None) -> int:
             items = [ln for ln, it in zip(src, is_item) if it]
             heads = (src, is_item)
     except Refused as exc:
-        line = stops.line(exc.url, f"refused: HTTP {exc.status}", s)
+        line = stops.try_line(exc.url, f"refused: HTTP {exc.status}", s)[0]
         return refuse(f"the index could not be read: HTTP {exc.status} from {exc.url} — the host refuses our "
                       "fetcher although robots allows it", suggested_stop_line=line,
                       options=["the operator supplies the material", "approve the suggested stop line",

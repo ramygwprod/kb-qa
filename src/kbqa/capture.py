@@ -251,12 +251,12 @@ def suggested_line(url: str, reason: str, runs: int = 1) -> Optional[str]:
     base = _one_line(reason.split(" — ")[0])
     m = re.match(r"^HTTP (401|403)$", base)
     if m:
-        return stops.line(url, f"refused: HTTP {m.group(1)}")
+        return stops.try_line(url, f"refused: HTTP {m.group(1)}")[0]
     if base.startswith("content type application/pdf"):
-        return stops.line(url, "not approved: pdf")
-    if base.startswith(("content type ", "the page's text contains")):
+        return stops.try_line(url, "not approved: pdf")[0]
+    if base.startswith(("content type ", "the page's text contains")) or "not in the vocabulary" in base:
         return None  # not a fetch failure: the operator rules on what the page is
-    return stops.line(url, f"unreachable: {base}" + (f" in {runs} runs" if runs > 1 else ""))
+    return stops.try_line(url, f"unreachable: {base}" + (f" in {runs} runs" if runs > 1 else ""))[0]
 
 
 OPTIONS = {
@@ -546,7 +546,12 @@ def run(argv: Optional[List[str]] = None) -> int:
         if cls == "final":
             needs_operator.append(_for_operator(url, reason, cls, 1))
 
-    def stop_here(url: str, reason: str, cls: str, line: str, tried: Optional[List[str]] = None) -> None:
+    def stop_here(url: str, reason: str, cls: str, key: str, stop_reason: str,
+                  tried: Optional[List[str]] = None) -> None:
+        line, err = stops.try_line(key, stop_reason)
+        if line is None:  # fetched data the vocabulary cannot read: the operator's, never a crash
+            fail(url, f"{reason}; its stop line is not in the vocabulary ({err})", "final", tried=tried)
+            return
         fail(url, reason, cls, next_step=f"stop: {line}", tried=tried)
         stop_lines.append(line)
 
@@ -622,11 +627,17 @@ def run(argv: Optional[List[str]] = None) -> int:
         except fetch.FetchError as exc:
             return refuse(str(exc), permission=permission)
         if rb.site_wide_refused():
-            stop_here(url, "refused: robots (site-wide)", "refused", stops.line(url, "refused: robots"))
+            stop_here(url, "refused: robots (site-wide)", "refused", url, "refused: robots")
             continue
         ok, rule = rb.check(url)
         if not ok:
-            line = stops.line(url, f"excluded: robots {rule}")
+            line, err = stops.try_line(url, f"excluded: robots {rule}")
+            if line is None:
+                excluded.append({"url": url, "rule": rule, "next_step": "operator", "note": err})
+                needs_operator.append({"url": url, "reason": f"excluded by robots rule {rule!r}; {err}",
+                                       "runs": 1, "next_step": "operator", "suggested_stop_line": None,
+                                       "options": OPTIONS["other"]})
+                continue
             excluded.append({"url": url, "rule": rule, "next_step": f"stop: {line}"})
             stop_lines.append(line)
             continue
@@ -653,7 +664,7 @@ def run(argv: Optional[List[str]] = None) -> int:
             continue
         if fetch.host_of(r.url) != host:
             stop_here(url, f"redirected off the host to {r.url}", "off-host",
-                      stops.line(url, f"third-party host: {fetch.host_of(r.url)}"))
+                      url, f"third-party host: {fetch.host_of(r.url)}")
             continue
         page_kind = _kind(r.content_type)
         if page_kind is None:
@@ -671,7 +682,7 @@ def run(argv: Optional[List[str]] = None) -> int:
                     host_tally(host)["captured"].append(url)
                     continue
                 stop_here(url, "js-only: the page shows almost no text without JavaScript", "js-only",
-                          stops.line(r.url, "js-only: not readable"),
+                          r.url, "js-only: not readable",
                           tried=["direct", f"site-copy {copy_url}" if copy_url else "site-copy: none"])
                 continue
         if keep(url, r, "direct", text_in, page_kind):
@@ -684,9 +695,12 @@ def run(argv: Optional[List[str]] = None) -> int:
                 and len(t["refused"]) >= HOST_REFUSAL_PAGES:
             first = t["refused"][0]
             code = next(f["reason"] for f in failures if f["url"] == first).split()[1]
+            closing, _ = stops.try_line(first, f"refused: HTTP {code}", surface)
+            if closing is None:
+                continue  # each page is already the operator's, one by one
             needs_operator.append({
                 "scope": "surface", "host": host, "pages_refused": len(t["refused"]), "next_step": "operator",
-                "suggested_stop_line": stops.line(first, f"refused: HTTP {code}", surface),
+                "suggested_stop_line": closing,
                 "options": OPTIONS["refused"],
                 "note": f"{host} refused every page of this window and served none, and its own copy "
                         f"was tried; approving the line closes the {surface} items on {host}"})

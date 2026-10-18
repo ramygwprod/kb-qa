@@ -266,9 +266,12 @@ exactly so:
 | `no feature: <what the page is>` | a page you captured from which the row-writer recorded no row — say what the page is (`pricing page`, `legal notice`, `blog index`) |
 
 Every reason but `surface … not published`, `not approved: pdf` and
-`no feature: …` may end with ` (surface <slug>)`. Such a line closes the
-surface's remaining items on the host of its URL. Add one only when a command
-printed it as a `next_step`, or the operator approved it.
+`no feature: …` may end with ` (surface <slug>)`, which says the surface's
+index could not be read. Only `refused: robots` and `refused: HTTP 401|403`
+with that ending, keyed by one of the surface's own denominator items, also
+close the surface's remaining items on that host — every other reason closes
+one page. Add such a line only when a command printed it as a `next_step`, or
+the operator approved it.
 
 Copy the commands' lines exactly. Add lines; never change or delete a line
 already there. The checker reads this file to decide which index items and

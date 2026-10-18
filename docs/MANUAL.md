@@ -839,10 +839,15 @@ written through it was verbatim.
 
 The vocabulary is defined once, in `kbqa.stops`: every stop line `index` and
 `capture` suggest is built from it, and the fetcher's reason table is tested
-against it. A line ending ` (surface <slug>)` — `refused: HTTP 403 (surface
-help)`, say — closes that surface's remaining items **on the host of its URL**:
-`g4` counts them as `existence_closed_by_surface_line`, apart from evidence, and
-`surfaces` reads the surface as closed rather than contradicted.
+against it. A line ending ` (surface <slug>)` says the surface's index could
+not be read. Only `refused: robots` or `refused: HTTP 401|403` with that ending,
+**keyed by an item of the surface's current denominator**, also closes that
+surface's remaining items on the host of its URL: `g4` counts them as
+`existence_closed_by_surface_line`, apart from evidence, and `surfaces` reads
+the surface as closed. Any other surface line beside a denominator is a
+`surface_contradiction`, as before; a 404, a JavaScript page or a login wall
+closes one page. A host name or robots rule the vocabulary cannot read never
+crashes a window: that page goes to the operator, and the window is recorded.
 
 **When a page or a host cannot be fetched.** Every branch ends in one of four
 states — captured, closed by a stop line, an operator ruling, or parked with a

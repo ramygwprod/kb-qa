@@ -37,6 +37,12 @@ class Reason:
     pattern: str     # the reason, matched whole
     when: str        # the fetcher's table: when the reason applies
     closes_surface: bool = False  # may end with ` (surface <slug>)`
+    # A closing line of this reason also closes the surface's remaining
+    # denominator items on its host (g4). Only a host that refuses us as a
+    # whole: robots, or HTTP 401/403. A 404, a JavaScript page or a login wall
+    # is one page, and a surface suffix on it says only that the surface's
+    # index could not be read (the surfaces check).
+    closes_items: bool = False
 
 
 REASONS: Tuple[Reason, ...] = (
@@ -44,16 +50,16 @@ REASONS: Tuple[Reason, ...] = (
            r"surface (?:product|docs|help) not published: \S.*",
            "a surface does not exist"),
     Reason("refused: robots", r"refused: robots",
-           "G0 exit 2, or a host refused site-wide", True),
+           "G0 exit 2, or a host refused site-wide", True, True),
     Reason("refused: HTTP <401 or 403>", r"refused: HTTP (?:401|403)",
            "the host refuses our fetcher although robots allows it, and the site's own copy was "
-           "tried — only with the operator's word", True),
-    Reason("excluded: robots <path>", r"excluded: robots \S+",
+           "tried — only with the operator's word", True, True),
+    Reason("excluded: robots <path>", r"excluded: robots \S.*",
            "robots closes the path to us", True),
     Reason("js-only: not readable", r"js-only: not readable",
            "the page shows no text without JavaScript, and the site's own copy was tried", True),
     Reason("gated: login", r"gated: login", "the page needs a login", True),
-    Reason("third-party host: <host>", r"third-party host: [a-z0-9.-]+",
+    Reason("third-party host: <host>", r"third-party host: \S+",
            "the link or a redirect leads off the subject's own hosts", True),
     Reason("not approved: pdf", r"not approved: pdf", "a PDF the operator has not approved"),
     Reason("unreachable: <the failure kbqa printed>", r"unreachable: \S.*",
@@ -109,6 +115,16 @@ def line(url: str, reason: str, surface: Optional[str] = None) -> str:
     return text
 
 
+def try_line(url: str, reason: str, surface: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
+    """(line, None), or (None, why) when fetched data — a host, a robots rule —
+    makes a line the vocabulary cannot read. A collection command never crashes
+    on that: the page goes to the operator, and the window is still recorded."""
+    try:
+        return line(url, reason, surface), None
+    except StopLineError as exc:
+        return None, str(exc)
+
+
 def add(subject: Path, text: str) -> dict:
     """Append one stop line to the subject's file, atomically, once."""
     url, reason, _, surface = parse_line(text)
@@ -147,7 +163,8 @@ def run(argv: Optional[List[str]] = None) -> int:
     args = ap.parse_args(argv)
 
     if args.action == "reasons":
-        print(json.dumps([{"reason": r.wording, "when": r.when, "closes_surface": r.closes_surface}
+        print(json.dumps([{"reason": r.wording, "when": r.when, "closes_surface": r.closes_surface,
+                           "closes_items": r.closes_items}
                           for r in REASONS], ensure_ascii=False, indent=2))
         return 0
     subject = Path(args.subject)

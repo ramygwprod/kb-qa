@@ -160,13 +160,19 @@ def _host(url: str) -> str:
     return (urlsplit(url).hostname or "").lower()
 
 
-def closing_hosts(denom: Path, stops: Dict[str, str]) -> Dict[str, str]:
+def closing_hosts(denom: Path, stops: Dict[str, str], items: Set[str]) -> Dict[str, str]:
     """{host: the URL keying its line} for each stop line that closes this
-    denominator's surface: a reason from the vocabulary (`kbqa.stops`) ending
-    `(surface <slug>)`, where the slug is the surface named in the
-    denominator's file name. Such a line closes the surface's remaining items
-    on the host of its own URL, and nowhere else — a help host refusing our
-    fetcher closes the help items on that host, never another host's."""
+    denominator's surface: `refused: robots` or `refused: HTTP 401|403` — the
+    host refusing us as a whole — ending `(surface <slug>)`, where the slug is
+    the surface named in the denominator's file name, and keyed by one of this
+    denominator's own items. Such a line closes the surface's remaining items
+    on the host of its own URL, and nowhere else.
+
+    Every other reason closes one page: a 404, a JavaScript page or a login
+    wall says nothing of the host's other pages. And a line keyed by an index
+    URL — one rung that could not be read — never closes the items another
+    rung's denominator lists: those pages were never asked for. (A pre-PR
+    review of v6.18.0 found both passing a surface with zero rows.)"""
     from .. import stops as vocabulary
     m = re.match(r"^_denominator-(?P<surface>product|docs|help)-", denom.name)
     if not m:
@@ -175,11 +181,13 @@ def closing_hosts(denom: Path, stops: Dict[str, str]) -> Dict[str, str]:
     for key, reason in stops.items():
         if not key.startswith(("http://", "https://")):
             continue
+        if key not in items:
+            continue
         try:
-            _, surface = vocabulary.classify(reason)
+            entry, surface = vocabulary.classify(reason)
         except vocabulary.StopLineError:
             continue
-        if surface == m.group("surface"):
+        if entry.closes_items and surface == m.group("surface"):
             out.setdefault(_host(key), key)
     return out
 
@@ -380,7 +388,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
             findings.append(Finding("stops_file_missing", f"not found: {sp}"))
 
     stop_keys = {_label_key(k) for k in stops} | set(stops)
-    closing = closing_hosts(denom, stops)
+    closing = closing_hosts(denom, stops, {u for _, u in resolved.values()})
 
     by_url: List[str] = []
     by_name: List[str] = []
