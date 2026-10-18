@@ -70,7 +70,9 @@ for surf in product docs help; do
     echo "$b" | grep -Eq "$SURFACE_RE" && ROWS+=("$f")
   done < <(find "$D" -maxdepth 1 -name "_collect-$surf-*-staging.md" | sort)
   [ ${#ROWS[@]} -gt 0 ] || { echo "-- $surf: no batch"; continue; }
-  DEN=$(find "$D" -maxdepth 1 -name "_denominator-$surf-*.md" | sort | tail -1)
+  # The current denominator: the latest by date, then by correction letter
+  # (`…-17.md` before `…-17b.md`). Byte order, so no locale reorders them.
+  DEN=$(find "$D" -maxdepth 1 -name "_denominator-$surf-*.md" | LC_ALL=C sort | tail -1)
   echo "-- $surf (${#ROWS[@]} batch(es))"
   if [ -n "$DEN" ]; then
     python3 -m kbqa g4 --denominator "$DEN" --rows "${ROWS[@]}" ${SARG[@]+"${SARG[@]}"} \

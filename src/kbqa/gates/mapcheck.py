@@ -20,6 +20,15 @@ Checked, per mapper:
   · `needs-human` rows are listed and never counted as mapped
   · one APQC element on more than 30 % of the batch's rows → a finding that a
     human must read a sample before the batch is accepted
+  · the story's role — the words after "As a" / "As an", up to "I want" — is
+    the row's `role`, compared without case or punctuation (a FAIL: the
+    first live run had stories whose "As a …" did not match their `role`)
+  · advisory, never a FAIL: the story's words that are in neither the row
+    (`vendor_term`, `what_it_does`, `source_quote`, `parent_path`), its
+    `role`, nor its elements' names, once the story template's own words
+    (STORY_TEMPLATE_WORDS) are taken out. The rule is that every word comes
+    from the row or the element; which outside words are fair (a plural, a
+    joining word) is a human's call, so they are listed, not judged
 
 With two mappers, agreement is reported on ALL staging rows — a needs-human or
 missing row is a disagreement, never excluded. Agreement is consistency, not
@@ -57,6 +66,21 @@ PCF_KEYS = ("pcf_id", "hierarchy_id", "name")
 DOMINANCE = 0.30
 
 THEME_ROW_RE = re.compile(r"^\|\s*(?P<code>I\d{2})\s*\|")
+# "As a <role>, I want … so that …" — the role is what stands between them.
+STORY_ROLE_RE = re.compile(r"^\s*As\s+an?\s+(?P<role>.+?)\s*,?\s+I\s+want\b", re.IGNORECASE)
+# The template's own words: the only words a story may hold that the row and
+# its elements need not. Kept to the template, so nothing else is excused.
+STORY_TEMPLATE_WORDS = frozenset({"as", "a", "an", "i", "want", "to", "so", "that"})
+WORD_RE = re.compile(r"[a-z0-9]+(?:['’][a-z]+)?")
+
+
+def words(text: str) -> List[str]:
+    return WORD_RE.findall(str(text).casefold())
+
+
+def story_role(story: str) -> Optional[str]:
+    m = STORY_ROLE_RE.match(str(story))
+    return m.group("role") if m else None
 
 
 def read_codebook(path: Path) -> List[str]:
@@ -85,10 +109,15 @@ def subject_ids(vendor_dir: Path) -> Set[str]:
     return ids
 
 
+ROW_WORD_FIELDS = ("vendor_term", "what_it_does", "source_quote", "parent_path")
+
+
 def check_one(letter: str, path: Path, staging_ids: List[str], themes: Set[str],
               elements: Dict[str, dict], known_ids: Optional[Set[str]],
-              findings: List[Finding]) -> Tuple[Dict[str, dict], dict]:
+              findings: List[Finding],
+              staging_rows: Optional[Dict[str, dict]] = None) -> Tuple[Dict[str, dict], dict]:
     by_id: Dict[str, dict] = {}
+    outside_words: List[Dict[str, object]] = []
     lines = path.read_text(encoding="utf-8").splitlines()
     scanned = 0
     seen = Counter()
@@ -172,6 +201,26 @@ def check_one(letter: str, path: Path, staging_ids: List[str], themes: Set[str],
         if obj.get("status") == "needs-human" and not str(obj.get("note", "")).strip():
             f("needs_human_without_reason", "needs-human row has an empty note", n)
 
+        story = obj.get("user_story")
+        if isinstance(story, str) and story.strip() and theme not in NO_ROLE:
+            said = story_role(story)
+            if said is None:
+                f("story_role_mismatch", f"user_story {story[:80]!r} does not open \"As a <role>, I want\", "
+                                         f"so its role cannot be compared with role {obj.get('role')!r}", n)
+            elif words(said) != words(obj.get("role", "")):
+                f("story_role_mismatch", f"user_story says \"As a {said}\" but role is {obj.get('role')!r}", n)
+            if staging_rows is not None:
+                row = staging_rows.get(rid, {})
+                allowed = set(STORY_TEMPLATE_WORDS) | set(words(obj.get("role", "")))
+                for k in ROW_WORD_FIELDS:
+                    allowed |= set(words(row.get(k, "")))
+                for e in (pcfs if isinstance(pcfs, list) else []):
+                    if isinstance(e, dict):
+                        allowed |= set(words(e.get("name", "")))
+                extra = [w for w in dict.fromkeys(words(story)) if w not in allowed]
+                if extra:
+                    outside_words.append({"id": rid, "words": extra})
+
     staged = set(staging_ids)
     for rid in staging_ids:
         if rid not in by_id:
@@ -206,6 +255,8 @@ def check_one(letter: str, path: Path, staging_ids: List[str], themes: Set[str],
         "needs_human": len(needs_human),
         "needs_human_ids": needs_human,
         "dominant_elements": dominant,
+        # advisory: listed for a human, never a finding
+        "story_words_outside_row_and_element": outside_words,
     }
     return by_id, summary
 
@@ -266,14 +317,16 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
                                 f"gave {len(elements)} elements; nothing to check against"))
         return Verdict(GATE, FAIL, inputs, {"scanned": 0, "failed": len(findings)}, findings), EXIT_FAIL
 
-    staging_ids = [str(r.obj["id"]) for r in parse_staging(staging).rows if r.obj and r.obj.get("id")]
+    staged = [r.obj for r in parse_staging(staging).rows if r.obj and r.obj.get("id")]
+    staging_ids = [str(o["id"]) for o in staged]
+    staging_rows = {str(o["id"]): o for o in staged}
     known = subject_ids(Path(args.subject)) if args.subject else None
 
     per: Dict[str, dict] = {}
     parsed: Dict[str, Dict[str, dict]] = {}
     for m in maps:
         letter = m.stem.rsplit("-", 1)[-1] if "-" in m.stem else m.stem
-        by_id, summary = check_one(letter, m, staging_ids, themes, elements, known, findings)
+        by_id, summary = check_one(letter, m, staging_ids, themes, elements, known, findings, staging_rows)
         per[letter] = summary
         parsed[letter] = by_id
 

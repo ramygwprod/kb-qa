@@ -222,3 +222,20 @@ def test_kbqa_index_and_capture_feed_the_check_and_the_merge(tmp_path, monkeypat
     p = subprocess.run([sys.executable, str(MERGE), "--vendor-dir", str(d), "--batch", batch, "--new-tree"],
                        capture_output=True, text=True)
     assert p.returncode == 0 and "MERGED" in p.stdout, p.stdout + p.stderr
+
+
+def test_the_check_measures_the_current_denominator_and_counts_rows(tmp_path):
+    """v6.18.0: a same-day correction is `…-<date>b.md`; coverage is measured
+    against it, not the file it supersedes. And the check is the counter."""
+    root = tmp_path / "estate"
+    d = _estate(root)
+    _staging(d, fixed=True)
+    out = _check(d, root)
+    assert "rows=4  distinct_vendor_terms=4" in out, out
+    assert "A: mapped 4, needs-human 0 · B: mapped 3, needs-human 1" in out, out
+    old = (d / "_denominator-docs-2026-10-16.md").read_text()
+    (d / "_denominator-docs-2026-10-16b.md").write_text(
+        old.splitlines()[0] + " · supersedes _denominator-docs-2026-10-16.md\n"
+        + "".join(ln + "\n" for ln in old.splitlines()[1:]) + f"- [Extra]({HOST}/extra)\n")
+    out = _check(d, root)
+    assert "index_item_without_row x1" in out, out

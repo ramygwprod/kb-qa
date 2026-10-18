@@ -1,6 +1,6 @@
 # kbqa — developer guide
 
-**Version 6.17.1** · for anyone extending or maintaining the package
+**Version 6.18.0** · for anyone extending or maintaining the package
 
 For *using* the tool, see [MANUAL.md](MANUAL.md). This document covers
 architecture, how to extend it, what must not break, and how to release.
@@ -67,10 +67,11 @@ The test for which layer something belongs in:
 | `freeze.py` | fingerprints `Profile.verbatim_fields`; answers *did interpreting the data change it* |
 | `mappings.py` | checks mapping statements — about rows, stored outside rows, keyed by `id` |
 | `probe.py` | shape-only diagnostic |
-| `fetch.py` | the one request path for collection: permission from today's G0 record, path rules for `Claude-User`, `ClaudeBot` and `*`, crawl delay |
+| `fetch.py` | the one request path for collection: permission from today's G0 record (G0 run first when missing), path rules for `Claude-User`, `ClaudeBot` and `*`, crawl delay; TLS failures final |
 | `htmltext.py` | HTML to capture text — a fixed rendering, same bytes in, same text out |
-| `capture.py` | `kbqa capture`: one window verbatim, raw bytes kept in `_raw/<batch>/` |
-| `index.py` | `kbqa index`: a surface's denominator from `llms.txt`, a sitemap or an HTML index page |
+| `capture.py` | `kbqa capture`: one window verbatim, raw bytes and the receipt kept in `_raw/<batch>/`; the site-copy fallback; a `next_step` on every failure |
+| `index.py` | `kbqa index`: a surface's denominator from `llms.txt`, a sitemap or an HTML index page; `--supersede`; sections; the plan's probe per host |
+| `stops.py` | `kbqa stop`: the one stop-reason vocabulary, and the atomic append of a stop line |
 | `elements.py` | `kbqa elements --outline`: the APQC list's top two levels with line ranges, so mapping reads parts |
 | `cli.py` | dispatch, `--profile`, recording flags |
 

@@ -175,12 +175,42 @@ def test_the_same_bytes_give_the_same_capture(tmp_path, web):
     assert shas[0] == shas[1]
 
 
-def test_no_robots_record_from_today_means_no_fetch(subject, web):
+def test_no_robots_record_from_today_runs_g0_first(subject, web, monkeypatch):
+    """#3: a run that crosses midnight goes on — capture runs G0 itself, and
+    permission is still decided from a record dated today."""
+    from kbqa.gates import g0_permission
     (subject / f"_robots-{HOST}-{DAY}.txt").unlink()
-    w = web({})
+    (subject / f"_robots-{HOST}-2026-10-17.txt").write_text("User-agent: *\nAllow: /\n")
+    asked_g0 = []
+    monkeypatch.setattr(g0_permission, "_fetch", lambda host: (asked_g0.append(host), ("User-agent: *\nDisallow: /private/\n", None))[1])
+    a, no = f"https://{HOST}/p", f"https://{HOST}/private/x"
+    w = web({a: (200, PAGE.encode(), "text/html"), no: (200, PAGE.encode(), "text/html")})
+    code, r = run_capture(subject, a, no)
+    assert code == 0 and asked_g0 == [HOST], "G0 ran once for the host"
+    assert (subject / f"_robots-{HOST}-{DAY}.txt").exists(), "today's record is written by G0"
+    assert r["permission"] == [{"host": HOST, "ran_g0": True, "verdict": "PASS", "attempts": 1}]
+    assert no not in w.asked, "today's rules decide, not yesterday's record"
+
+
+def test_robots_unreachable_in_three_attempts_fetches_nothing(subject, web):
+    (subject / f"_robots-{HOST}-{DAY}.txt").unlink()
+    w = web({f"https://{HOST}/p": (200, PAGE.encode(), "text/html")})
     code, r = run_capture(subject, f"https://{HOST}/p")
-    assert code == 1 and "no robots record" in r["refused"]
+    assert code == 1 and "could not be read in 3 attempts" in r["refused"] and r["next_step"] == "operator"
     assert w.asked == [], "nothing is fetched before permission"
+    assert web.sleeps == [2.0, 5.0], "three attempts, a little apart"
+    assert not (subject / "_raw").exists(), "no window is recorded when nothing could be asked"
+
+
+def test_a_host_that_declines_in_g0_is_refused_by_robots(subject, web, monkeypatch):
+    from kbqa.gates import g0_permission
+    (subject / f"_robots-{HOST}-{DAY}.txt").unlink()
+    monkeypatch.setattr(g0_permission, "_fetch", lambda host: ("User-agent: *\nDisallow: /\n", None))
+    w = web({f"https://{HOST}/p": (200, PAGE.encode(), "text/html")})
+    code, r = run_capture(subject, f"https://{HOST}/p")
+    assert code == 1 and w.asked == []
+    assert r["permission"][0]["verdict"] == "DECLINED"
+    assert r["stop_lines_to_add"] == [f"- https://{HOST}/p | refused: robots"]
 
 
 def test_a_path_any_of_our_agents_is_refused_is_not_fetched(subject, web):
@@ -191,7 +221,8 @@ def test_a_path_any_of_our_agents_is_refused_is_not_fetched(subject, web):
     code, r = run_capture(subject, ok, no)
     assert code == 0
     assert no not in w.asked
-    assert r["excluded"] == [{"url": no, "rule": "/private/"}]
+    assert r["excluded"] == [{"url": no, "rule": "/private/",
+                              "next_step": f"stop: - {no} | excluded: robots /private/"}]
     assert f"- {no} | excluded: robots /private/" in r["stop_lines_to_add"]
 
 
@@ -590,7 +621,8 @@ def test_a_failure_that_may_pass_gets_three_attempts_then_stops(subject, seqweb)
     assert code == 1
     assert w.asked == [a, a, a], "three attempts, never more"
     assert seqweb.sleeps == [2.0, 5.0]
-    assert r["failures"] == [{"url": a, "reason": "HTTP 500", "class": "transient", "attempts": 3}]
+    assert r["failures"] == [{"url": a, "reason": "HTTP 500", "class": "transient", "attempts": 3,
+                              "next_step": "retry"}]
 
 
 def test_a_failure_that_passes_on_a_later_attempt_is_captured(subject, seqweb):
@@ -605,8 +637,11 @@ def test_a_final_error_is_not_retried_and_goes_to_the_operator(subject, seqweb):
     w = seqweb({a: (404, b"", "")})
     code, r = _cap(subject, "--surface", "docs", "--url", a)
     assert w.asked == [a], "retrying a 404 cannot help"
-    assert r["needs_operator"] == [{"url": a, "reason": "HTTP 404", "runs": 1,
-                                    "suggested_stop_line": f"- {a} | unreachable: HTTP 404"}]
+    assert r["needs_operator"] == [{"url": a, "reason": "HTTP 404", "runs": 1, "next_step": "operator",
+                                    "suggested_stop_line": f"- {a} | unreachable: HTTP 404",
+                                    "options": ["approve the suggested stop line",
+                                                "the operator opens the URL and rules on it"]}]
+    assert r["failures"][0]["next_step"] == "operator"
 
 
 def test_batches_are_numbered_by_code(subject, seqweb):

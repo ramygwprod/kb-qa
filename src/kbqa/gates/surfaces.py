@@ -17,6 +17,16 @@ The stop-condition is recognised by the form the collector writes:
 The word `surface` and the slug are what is matched. A line that names the
 surface some other way is not recognised, and the surface reports MISSING —
 the safe direction: a human reads the line, nothing passes unseen.
+
+A surface that IS published but whose index cannot be read is closed by a
+stop line ending `(surface <slug>)` (`js-only: not readable (surface help)` —
+the vocabulary in `kbqa.stops`). Beside a denominator such a line is a
+contradiction, as it always was: the index WAS read. The one exception is a
+line that closes the surface's pages (`refused: robots` or `refused: HTTP
+401|403`, the host refusing us as a whole) keyed by an item of the surface's
+current denominator: the index was read, its pages could not be, and the line —
+approved by the operator — is the surface's end. That is the same line `g4`
+accepts, and nothing wider.
 """
 
 import argparse
@@ -30,6 +40,26 @@ from . import EXIT_FAIL, EXIT_PASS
 from .g4_completeness import read_stop_entries
 
 GATE = "surfaces"
+
+
+def _page_closing(d: Path, dens: List[str], slug: str,
+                  lines: List[Tuple[str, str, int]]) -> List[Tuple[str, str, int]]:
+    """The lines that close the surface's pages, as `g4` reads them: a reason
+    that closes items, for this surface, keyed by an item of the current
+    denominator (the last by date, then correction letter)."""
+    from .. import stops as vocabulary
+    from ..capture import denominator_items
+    current = sorted(dens, key=lambda n: (re.sub(r"[b-z]?\.md$", "", n), n))[-1]
+    items = {u for _, u in denominator_items(d / current)}
+    out = []
+    for k, r, n in lines:
+        try:
+            entry, surface = vocabulary.classify(r)
+        except vocabulary.StopLineError:
+            continue
+        if entry.closes_items and surface == slug and k in items:
+            out.append((k, r, n))
+    return out
 
 
 def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
@@ -87,15 +117,19 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
                     f"{k!r}, not the URL of a fetched page that shows the absence",
                     where=f"{stops_path.name}:{n}",
                 ))
-        if dens[slug] and stop_lines:
+        closing = _page_closing(d, dens[slug], slug, stop_lines) if dens[slug] else []
+        other = [x for x in stop_lines if x not in closing]
+        if dens[slug] and other:
             state = "contradiction"
             findings.append(Finding(
                 "surface_contradiction",
                 f"surface {slug!r} has a denominator ({', '.join(dens[slug])}) and "
-                f"a stop-condition saying it is not published (line "
-                f"{', '.join(str(n) for _, _, n in stop_lines)})",
+                f"a stop-condition saying it is not published or cannot be read (line "
+                f"{', '.join(str(n) for _, _, n in other)})",
                 where=slug,
             ))
+        elif dens[slug] and closing:
+            state = "denominator, closed by a stop line"
         elif dens[slug]:
             state = "denominator"
             if not batches[slug]:

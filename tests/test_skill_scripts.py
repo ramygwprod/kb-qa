@@ -182,6 +182,20 @@ def test_preflight_passes_and_names_the_python3_it_used(world):
     assert r.stdout.rstrip().splitlines()[-1].startswith(f"PASS: python3 {sys.executable}")
 
 
+def test_preflight_warns_on_an_old_tls_and_still_passes(world):
+    """#10: the interpreter's TLS decides whether some hosts can be read at all.
+    A warning only — changing the interpreter moves the pin, so it is the
+    operator's call. Checked against the python3 the gates run under."""
+    import ssl
+    assert install(world).returncode == 0
+    r = preflight(world)
+    assert r.returncode == 0, r.stdout
+    warned = "WARN: this python3's TLS is old" in r.stdout
+    assert warned == (not ssl.HAS_TLSv1_3), r.stdout
+    if warned:
+        assert ssl.OPENSSL_VERSION in r.stdout
+
+
 def test_preflight_names_the_interpreter_that_lacks_kbqa(world):
     """The failure the fixtures hit: the python3 on PATH was not the one with kbqa."""
     if subprocess.run(["/usr/bin/python3", "-m", "kbqa", "--version"],

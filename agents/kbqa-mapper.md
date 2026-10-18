@@ -56,7 +56,7 @@ Each line has exactly these keys, in this order, and no others:
 | key | value |
 |---|---|
 | `id` | the staging row's `id`, unchanged |
-| `user_story` | as the logic sheet's user-story method writes it |
+| `user_story` | as the logic sheet's user-story method writes it. It opens `As a <role>, I want` (or `As an`), and that `<role>` is this line's `role`, word for word — `/kbqa-check` fails a story whose role differs. Every other word comes from the row or the element: `/kbqa-check` lists the words that come from neither |
 | `role` | the role, verbatim from its source |
 | `role_source` | where the role came from, in the logic sheet's order: `rbac-row` (the row's own words), `rbac-vendor:<row id>` (one of this subject's roles or permissions rows — its real `id`), `apqc-closest` |
 | `actor` | `A`, `B`, `C`, `D` or `E`, as the logic sheet defines them |
@@ -88,8 +88,8 @@ one. A `needs-human` row still carries your best reading in the other keys.
 
 ## 4 · What you hand back
 
-The map file's path; rows written; `mapped` and `needs-human` counts; and each
-`needs-human` id with its note.
+The map file's path, and each `needs-human` id with its note. No counts:
+`/kbqa-check` counts `mapped` and `needs-human` from the file.
 
 ## 5 · Never
 

@@ -6,8 +6,13 @@ tools: Read, Write
 Your only source is the capture file you are given. If the capture does not say
 it, it is not evidence, however certain you are.
 
-You receive: the capture path and the fetcher's receipt (batch, sha256,
-access_date, window fields, pages — each with its `lines` and its `parts`).
+You receive the subject folder and a batch name — nothing else. **Read the
+batch's receipt from disk first**: `<subject folder>/_raw/<batch>/RECEIPT.json`,
+written by `kbqa capture`. It holds everything you copy and everything you read
+by: `capture` (the capture's path), `sha256`, `access_date`, the window fields,
+and `pages` — each with its `lines` and its `parts`. Copy from that file; never
+from a brief, a message or your memory. If the file is missing, or its `batch`
+is not the batch you were given, stop and say so.
 
 **Read one part at a time**, in order. Every page has one or more `parts`; a
 long page is split at its headings by code. For each part, Read the capture
@@ -46,12 +51,14 @@ access_date: <from the receipt>
 ---
 ```
 
-- **`source_capture_sha256`** is copied from the receipt. Its value is that the
-  agent which fetched the bytes recorded it.
+- **`source_capture_sha256`** is copied from the receipt file's `sha256`. Its
+  value is that the code which fetched the bytes recorded it.
 - **`pages:`** lists every URL with a BEGIN marker — all of them, not only the ones
   you used.
 - **`fetched_by_this_agent: false`**, always. You have no network.
-- The window fields come from the receipt, never from your own judgement.
+- The window fields come from the receipt file, never from your own judgement
+  and never from a brief: `window_offset`, `window_requested`, `window_returned`
+  and `window_end`, exactly as it holds them.
 
 ## 2 · The rows
 
@@ -109,7 +116,8 @@ fields it does not know.
 
 ## 4 · What you hand back
 
-- the staging path and the number of rows written
+- the staging path. No counts: `/kbqa-check` counts rows and terms, and a count
+  made by hand is a second number that can disagree
 - **every page that produced no row**: its URL, exactly as in its BEGIN marker,
   and in a few words what the page is (`pricing page`, `legal notice`). The
   fetcher records each as `no feature: …`, so the check knows the page was read
