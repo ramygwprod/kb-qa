@@ -32,6 +32,9 @@ from disk, so no agent retypes window fields between the capture and the rows.
 Beside it, `_raw/<batch>/FEATURES.md` lists the subject's features as they
 stand before this batch (`kbqa.features`): the row-writer reads it to tell a
 new feature from another source of one it already has (`same_feature_as`).
+And `_raw/<batch>/ROLE-ROWS.md` lists the subject's rows that may name a role,
+by the patterns in the estate's `kbqa-estate.json` (`kbqa.roles`) — for the
+mapper; with no patterns it is not written and the receipt says why.
 
 **Every failure carries its next step**, decided here, never by an agent:
 `retry` (a later run, `--resume` or `--retry-failed`), `operator` (with a
@@ -63,7 +66,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlsplit
 
-from . import __version__, fetch, features, stops
+from . import __version__, fetch, features, roles, stops
 from .htmltext import render, visible_chars
 
 BATCH_RE = re.compile(r"^(product|docs|help)-\d{4}-\d{2}-\d{2}-w\d{2}$")
@@ -204,6 +207,7 @@ def parse_select(spec: str) -> List[int]:
 STATE = "WINDOW.json"
 RECEIPT = "RECEIPT.json"
 FEATURES = "FEATURES.md"  # the subject's anchors, for the row-writer's same_feature_as
+ROLE_ROWS = "ROLE-ROWS.md"  # rows that may name a role, for the mapper (estate patterns)
 RETRY_RUNS = 3  # a page that keeps failing is retried in at most this many runs
 
 
@@ -611,7 +615,8 @@ def run(argv: Optional[List[str]] = None) -> int:
                 "content_type": r.content_type, "bytes": len(r.body),
                 "raw": f"_raw/{b}/{raw_name}", "raw_sha256": raw_sha,
                 "text_chars": visible_chars(text), "oversize": len(text) > args.max_chars,
-                "_parts": parts_of(text.split("\n"), heads, crumb, args.part_chars)}
+                "_parts": parts_of(text.split("\n"), heads, crumb, args.part_chars),
+                "_heads": heads}
         if copy_of:
             page["served_by"] = r.url
         pages.append(page)
@@ -744,6 +749,13 @@ def run(argv: Optional[List[str]] = None) -> int:
         # row-writer reads to tell a new feature from another source of one.
         _write_atomic(raw_dir / FEATURES, features.features_list(subject).encode("utf-8"))
         receipt["features"] = f"_raw/{b}/{FEATURES}"
+        listed, why = roles.role_rows_list(subject)
+        if listed is not None:
+            _write_atomic(raw_dir / ROLE_ROWS, listed.encode("utf-8"))
+            receipt["role_rows"] = f"_raw/{b}/{ROLE_ROWS}"
+        else:
+            receipt["role_rows"] = None
+            receipt["role_rows_note"] = f"not written: {why}"
         text = json.dumps(receipt, ensure_ascii=False, indent=2)
         _write_atomic(raw_dir / RECEIPT, (text + "\n").encode("utf-8"))
         print(text)
@@ -752,6 +764,7 @@ def run(argv: Optional[List[str]] = None) -> int:
     if not blocks:
         for p in pages:
             p.pop("_parts", None)
+            p.pop("_heads", None)
         receipt["capture"] = None
         receipt["note"] = ("no page was captured; no capture file was written. The window is recorded, "
                            "so the next run continues after it; its pages can be retried with --retry-failed.")
@@ -771,6 +784,10 @@ def run(argv: Optional[List[str]] = None) -> int:
                           "read_from": first + pt["read_from"],
                           "breadcrumb": pt["breadcrumb"], "headings": pt["headings"]}
                          for pt in page.pop("_parts")]
+        # Every heading of the page with its line in the capture, so the check can
+        # say which headings no row's quote falls under (heading coverage).
+        page["headings"] = [{"line": first + j, "level": lvl, "text": txt}
+                            for j, lvl, txt in page.pop("_heads")]
         line += n_lines
     data = "".join(blocks).encode("utf-8")
     _write_atomic(capture, data)

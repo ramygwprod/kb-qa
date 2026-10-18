@@ -212,6 +212,22 @@ so a source found later is a new row pointing at the anchor, and
 feature apart from its naming questions. `kbqa capture` writes the subject's
 anchors to `_raw/<batch>/FEATURES.md` for the row-writer.
 
+### Beside each receipt (since v6.20.0)
+
+- **Heading lines.** Each page in `RECEIPT.json` lists its `headings`, each with
+  its `line` in the capture, `level` and `text`. `/kbqa-check` reads them for
+  **heading coverage** — advisory, never a failure: the headings under which no
+  row's quote begins, on pages no stop line explains, are listed for a human
+  (a missed feature, or a section rightly not a row). A batch captured before
+  v6.20.0 is reported as not measured.
+- **Role-row candidates.** When the estate's `kbqa-estate.json` has a
+  `role_rows` key — a list of `{"pattern": <regex>, "fields": [<row fields>]}`,
+  matched without case, the union of all — `kbqa capture` writes
+  `_raw/<batch>/ROLE-ROWS.md`: every row of the subject a pattern matches, with
+  the words and field matched, for the mapper's role sources. The patterns are
+  the estate's vocabulary, never this tool's; without them nothing is written
+  and the receipt's `role_rows_note` says why.
+
 ## `_capture-<batch>.raw.txt` (BRONZE, immutable)
 
 ```
