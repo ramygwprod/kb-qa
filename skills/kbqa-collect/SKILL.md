@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # Collecting a subject
 
-**This copy is kbqa-collect v6.20.0**, installed with kb-qa v6.20.0.
+**This copy is kbqa-collect v6.21.0**, installed with kb-qa v6.21.0.
 
 **Invoked as**, by the operator, in a session opened at the estate root:
 
@@ -107,7 +107,9 @@ the probe flagged** (`refused: HTTP 403` and the like — the host refuses our
 fetcher — with whether its own copy answers), before scope is approved; the
 hosts in scope, each with the page that
 links to it, and any host whose ownership is unclear; hosts whose robots.txt
-stayed unreachable; the crawl delay; PDFs found; the language version. **Then
+stayed unreachable; the crawl delay; PDFs found; the language version, and the
+number of other-language copies the index left out because the English page
+exists (the operator's rule: English is enough). **Then
 stop and wait for explicit approval.** No page content is fetched before it.
 PDFs, non-English pages and any host the plan did not name need their own
 approval.

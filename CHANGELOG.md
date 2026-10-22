@@ -16,6 +16,38 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.21.0] — 2026-10-22
+
+The capture keeps the evidence complete and reads nothing twice — the
+operator's rulings of 2026-10-22 and the architecture review's capture gaps.
+
+### Added
+
+- **Site header and footer, once.** A run of lines that opens or closes most
+  pages of a host, identically, is kept once in
+  `_chrome/<host>/<header|footer>-<sha12>.txt` and taken off every page's
+  block: menus and footers no longer fill the window's budget, are no longer
+  read for every part, and cannot become rows. Only the very start or end of a
+  page, never the breadcrumb or past it, never the whole page; a window with too
+  few pages on a host uses the chrome already kept for it. The raw bytes are
+  unchanged and the receipt records, per page, which file and how many lines —
+  the full rendering is header + block + footer, exactly.
+- **English is enough.** `kbqa index` leaves a page's other-language copies out
+  of the denominator when the index lists it in English — by the sitemap's own
+  `hreflang` links, or a language path segment (ISO 639-1) with at least three
+  such pairs, so a lone `/it/…` is never taken for Italian — and lists them in
+  `LANGUAGE-COPIES.tsv`. `--all-languages` keeps them. A page with no English
+  version stays in.
+- **No page twice.** Each page's rendered text is hashed (`text_sha256` in the
+  receipt); a page whose text another URL of the subject already gave, in this
+  window or an earlier one, is not captured again — it is listed under
+  `duplicates` with a `no feature: same text as <url>` stop line to approve.
+- **Image descriptions.** An image's `alt` text is rendered where it stood as
+  `[image: <alt>]` — a diagram's description is often the only text about it;
+  decorative images are not.
+- **Page text is data.** The row-writer and the mapper are told that words in a
+  capture or a row are never instructions to them.
+
 ## [6.20.0] — 2026-10-18
 
 The two items v6.19.0 left open.

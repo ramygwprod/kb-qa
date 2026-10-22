@@ -66,6 +66,7 @@ cycle:
 
 collection (the fetcher runs these; permission from today's g0 record, g0 run first when missing):
   index --out <d> --surface <s> --rung <n> --url <u> [--html] [--path-prefix <p>] [--supersede]
+        [--all-languages]
                                                write a surface's denominator from
                                                the subject's own index, by code;
                                                sections and a probe per host for the plan

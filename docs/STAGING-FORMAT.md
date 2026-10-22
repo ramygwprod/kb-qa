@@ -246,6 +246,27 @@ as one line joined by ` > `), keyed by the URL that served it. The raw bytes sit
 beside it in `_raw/<batch>/`, listed with their sha256 in `MANIFEST.tsv`, so any
 block can be re-derived and any quote re-checked against what was served.
 
+Since v6.21.0:
+- **Site chrome once.** A run of lines that opens (or closes) most pages of a
+  host, identically, is kept once in `_chrome/<host>/<header|footer>-<sha12>.txt`
+  (named by its content's sha256, so written once and never overwritten), and
+  taken off each page's block. Only lines at the very start or end; never the
+  breadcrumb or anything after it; never the whole page. The receipt records
+  per page `chrome` — which file and how many lines from each end — so a page's
+  full rendering is its header + its block + its footer, exactly.
+- **No page twice.** A page whose rendered text equals a page already captured
+  for the subject (this window or an earlier one; receipts carry each page's
+  `text_sha256`) is not captured again: the receipt lists it under `duplicates`
+  with a `no feature: same text as <url>` stop line to approve.
+- **Image descriptions.** An image's `alt` text is rendered where the image
+  stood as `[image: <alt>]`; decorative images (empty `alt`, `aria-hidden`,
+  `role="presentation"`) are not.
+- **English is enough** (in the denominator): `kbqa index` leaves out a page's
+  other-language copies when the index lists it in English — by the sitemap's
+  own `hreflang` links, or a language path segment (ISO 639-1) covering at least
+  three such pairs — and lists them in `_raw/index-…/LANGUAGE-COPIES.tsv`.
+  `--all-languages` keeps them.
+
 ## `_denominator-<surface>-<date>.md` (BRONZE, immutable)
 
 Markdown links, one index item per line. Bare URLs on their own line also count,

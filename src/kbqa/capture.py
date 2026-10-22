@@ -67,6 +67,7 @@ from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlsplit
 
 from . import __version__, fetch, features, roles, stops
+from .chrome import strip_chrome
 from .htmltext import render, visible_chars
 
 BATCH_RE = re.compile(r"^(product|docs|help)-\d{4}-\d{2}-\d{2}-w\d{2}$")
@@ -247,6 +248,25 @@ def _stopped_urls(subject: Path) -> set:
         return set()
     from .gates.g4_completeness import stopped_urls
     return stopped_urls(f)
+
+
+def _captured_texts(subject: Path) -> Dict[str, str]:
+    """{text sha256: the URL it was captured as} for every page an earlier window
+    of this subject captured — so the same text under another URL is not
+    captured again. Receipts written before kbqa 6.21.0 carry no text hash and
+    add nothing."""
+    out: Dict[str, str] = {}
+    raw = subject / "_raw"
+    if raw.is_dir():
+        for rec in sorted(raw.glob("*/" + RECEIPT)):
+            try:
+                pages = json.loads(rec.read_text(encoding="utf-8")).get("pages") or []
+            except (OSError, json.JSONDecodeError):
+                continue
+            for pg in pages:
+                if pg.get("text_sha256") and pg.get("url"):
+                    out.setdefault(pg["text_sha256"], pg["url"])
+    return out
 
 
 def _one_line(text: str) -> str:
@@ -539,6 +559,8 @@ def run(argv: Optional[List[str]] = None) -> int:
     attempted = 0
     chars = 0
     by_host: Dict[str, Dict[str, list]] = {}
+    duplicates: List[Dict[str, object]] = []
+    seen_text: Dict[str, str] = _captured_texts(subject)  # text sha256 -> the page it was captured as
 
     def host_tally(host: str) -> Dict[str, list]:
         return by_host.setdefault(host, {"attempted": [], "refused": [], "captured": []})
@@ -602,6 +624,18 @@ def run(argv: Optional[List[str]] = None) -> int:
             needs_operator.append(_for_operator(url, failures[-1]["reason"], "unsupported", 1))
             return False
         key = copy_of or r.url  # a copy is keyed by the page it is a copy of
+        # The same text under another URL (a trailing slash, a query string) is
+        # one page: it is recorded as a copy, never captured or read twice.
+        text_sha = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        first = seen_text.get(text_sha)
+        if first is not None and first != key:
+            line = stops.try_line(url, f"no feature: same text as {first}")[0]
+            duplicates.append({"url": url, "same_text_as": first, "text_sha256": text_sha,
+                               "next_step": f"stop: {line}" if line else "operator"})
+            if line:
+                stop_lines.append(line)
+            return True
+        seen_text.setdefault(text_sha, key)
         if key != url:
             redirects.append({"requested": url, "served": r.url})
         n = len(raws) + 1
@@ -609,14 +643,12 @@ def run(argv: Optional[List[str]] = None) -> int:
         raw_name = f"{n:03d}.{ext}"
         raw_sha = hashlib.sha256(r.body).hexdigest()
         raws.append((raw_name, r.body, r.url, raw_sha, r.content_type))
-        blocks.append(f"=====BEGIN {key}=====\n{text}\n=====END {key}=====\n")
+        blocks.append(key)  # the block itself is written once the window's chrome is known
         chars += len(text)
         page = {"url": key, "requested": url, "fetch_method": method, "status": r.status,
                 "content_type": r.content_type, "bytes": len(r.body),
-                "raw": f"_raw/{b}/{raw_name}", "raw_sha256": raw_sha,
-                "text_chars": visible_chars(text), "oversize": len(text) > args.max_chars,
-                "_parts": parts_of(text.split("\n"), heads, crumb, args.part_chars),
-                "_heads": heads}
+                "raw": f"_raw/{b}/{raw_name}", "raw_sha256": raw_sha, "text_sha256": text_sha,
+                "_lines": text.split("\n"), "_heads": heads, "_crumb": crumb}
         if copy_of:
             page["served_by"] = r.url
         pages.append(page)
@@ -732,6 +764,7 @@ def run(argv: Optional[List[str]] = None) -> int:
     receipt.update({"pages": pages, "failures": failures, "excluded": excluded,
                     "redirects": redirects, "stopped": stopped,
                     "stop_lines_to_add": stop_lines, "needs_operator": needs_operator,
+                    "duplicates": duplicates,
                     "permission": permission,
                     "crawl_delay": {h: rb.crawl_delay() for h, rb in robots.items()},
                     "receipt": f"_raw/{b}/{RECEIPT}"})
@@ -763,8 +796,8 @@ def run(argv: Optional[List[str]] = None) -> int:
 
     if not blocks:
         for p in pages:
-            p.pop("_parts", None)
-            p.pop("_heads", None)
+            for k in ("_lines", "_heads", "_crumb"):
+                p.pop(k, None)
         receipt["capture"] = None
         receipt["note"] = ("no page was captured; no capture file was written. The window is recorded, "
                            "so the next run continues after it; its pages can be retried with --retry-failed.")
@@ -775,6 +808,17 @@ def run(argv: Optional[List[str]] = None) -> int:
         _write_atomic(raw_dir / name, body)
         manifest.append(f"{name}\t{sha}\t{len(body)}\t{ctype}\t{served}")
     _write_atomic(raw_dir / "MANIFEST.tsv", ("\n".join(manifest) + "\n").encode("utf-8"))
+    receipt["chrome"] = strip_chrome(subject, pages)
+    blocks = []
+    for page in pages:
+        lines_, key = page.pop("_lines"), page["url"]
+        heads, crumb = page.pop("_heads"), page.pop("_crumb")
+        text = "\n".join(lines_)
+        page["text_chars"] = visible_chars(text)
+        page["oversize"] = len(text) > args.max_chars
+        page["_parts"] = parts_of(lines_, heads, crumb, args.part_chars)
+        page["_heads"] = heads
+        blocks.append(f"=====BEGIN {key}=====\n{text}\n=====END {key}=====\n")
     line = 1
     for page, block in zip(pages, blocks):  # where each page sits, so it can be read alone
         n_lines = block.count("\n")

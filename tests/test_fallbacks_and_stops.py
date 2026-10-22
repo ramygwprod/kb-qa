@@ -23,7 +23,7 @@ import pytest
 from kbqa import capture, fetch, index, stops
 from kbqa.gates import g4_completeness, mapcheck, surfaces
 
-from test_capture import DAY, HOST, OK, PAGE, SeqWeb, _cap, _den, run_index
+from test_capture import DAY, HOST, OK, PAGE, SeqWeb, _cap, _den, ok_page, run_index
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -311,7 +311,7 @@ def test_supersede_needs_a_denominator_of_today(subject, seqweb):
 
 def test_resume_follows_the_current_denominator_only(subject, seqweb):
     old = _den(subject, n=3)
-    seqweb({f"https://{HOST}/p{i}": OK for i in range(1, 4)})
+    seqweb({f"https://{HOST}/p{i}": ok_page(i) for i in range(1, 4)})
     _cap(subject, "--surface", "docs", "--denominator", str(old), "--max-pages", "1")
     new = subject / f"_denominator-docs-{DAY}b.md"
     new.write_text(old.read_text() + "")
@@ -331,7 +331,7 @@ def test_select_prefix_takes_the_items_under_a_path_and_is_kept_on_resume(subjec
     den = subject / f"_denominator-help-{DAY}.md"
     den.write_text("Index: help, rung 3 — x\n" + "".join(
         f"https://{HOST}/hc/{lang}/a{i}\n" for i in range(3) for lang in ("en-us", "ja")))
-    w = seqweb({f"https://{HOST}/hc/{l}/a{i}": OK for i in range(3) for l in ("en-us", "ja")})
+    w = seqweb({f"https://{HOST}/hc/{l}/a{i}": ok_page(f"{l}{i}") for i in range(3) for l in ("en-us", "ja")})
     code, r = _cap(subject, "--surface", "help", "--denominator", str(den), "--select-prefix", "/hc/en-us/",
                    "--max-pages", "2")
     assert code == 0 and r["selected_items"] == 3 and r["select_prefix"] == ["/hc/en-us/"]
@@ -343,7 +343,7 @@ def test_select_prefix_takes_the_items_under_a_path_and_is_kept_on_resume(subjec
 
 def test_select_prefix_drift_and_mixing_are_refused(subject, seqweb):
     den = _den(subject, n=3)
-    seqweb({f"https://{HOST}/p{i}": OK for i in range(1, 4)})
+    seqweb({f"https://{HOST}/p{i}": ok_page(i) for i in range(1, 4)})
     code, r = _cap(subject, "--surface", "docs", "--denominator", str(den), "--select", "2", "--select-prefix", "/p")
     assert code == 1 and "not both" in r["refused"]
     _cap(subject, "--surface", "docs", "--denominator", str(den), "--select-prefix", "/p", "--max-pages", "1")

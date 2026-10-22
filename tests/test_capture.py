@@ -606,6 +606,12 @@ def seqweb(monkeypatch):
 OK = (200, PAGE.encode(), "text/html")
 
 
+def ok_page(tag) -> tuple:
+    """A page of its own: real pages never share their whole text, and since
+    v6.21.0 the same text under a second URL is recorded as a copy."""
+    return (200, PAGE.replace("</main>", f"<p>Page {tag}.</p></main>").encode(), "text/html")
+
+
 def _cap(subject, *args):
     import contextlib
     out = io.StringIO()
@@ -653,7 +659,7 @@ def test_batches_are_numbered_by_code(subject, seqweb):
 def test_a_window_that_captured_nothing_is_recorded_and_never_repeated(subject, seqweb):
     den = _den(subject, n=4)
     seqweb({f"https://{HOST}/p1": (0, b"", ""), f"https://{HOST}/p2": (0, b"", ""),
-            f"https://{HOST}/p3": OK, f"https://{HOST}/p4": OK})
+            f"https://{HOST}/p3": ok_page(3), f"https://{HOST}/p4": ok_page(4)})
     code, r = _cap(subject, "--surface", "docs", "--denominator", str(den), "--max-pages", "2")
     assert code == 1 and r["window_end"] == "error" and r["next_offset"] == 2
     assert (subject / "_raw" / f"docs-{DAY}-w01" / "WINDOW.json").exists()
@@ -665,7 +671,7 @@ def test_a_window_that_captured_nothing_is_recorded_and_never_repeated(subject, 
 
 def test_resume_continues_exactly_where_the_recorded_windows_stopped(subject, seqweb):
     den = _den(subject, n=5)
-    seqweb({f"https://{HOST}/p{i}": OK for i in range(1, 6)})
+    seqweb({f"https://{HOST}/p{i}": ok_page(i) for i in range(1, 6)})
     _cap(subject, "--surface", "docs", "--denominator", str(den), "--select", "2-6", "--max-pages", "2")
     code, r = _cap(subject, "--surface", "docs", "--denominator", str(den), "--resume", "--max-pages", "2")
     assert r["offset"] == 2 and [p["url"] for p in r["pages"]] == [f"https://{HOST}/p3", f"https://{HOST}/p4"]
@@ -688,7 +694,7 @@ def test_resume_refuses_a_changed_denominator_or_a_different_scope(subject, seqw
 
 def test_resume_refuses_a_gap_in_the_recorded_windows(subject, seqweb):
     den = _den(subject, n=5)
-    seqweb({f"https://{HOST}/p{i}": OK for i in range(1, 6)})
+    seqweb({f"https://{HOST}/p{i}": ok_page(i) for i in range(1, 6)})
     _cap(subject, "--surface", "docs", "--denominator", str(den), "--max-pages", "1")
     _cap(subject, "--surface", "docs", "--denominator", str(den), "--offset", "3", "--max-pages", "1")
     code, r = _cap(subject, "--surface", "docs", "--denominator", str(den), "--resume")

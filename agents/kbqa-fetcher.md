@@ -106,8 +106,15 @@ python3 -m kbqa index --out "<subject folder>" --surface <surface> --rung <n> --
   followed into its sitemaps, gzip included, whatever its size;
 - rungs 2, 4 and 5 (an HTML page of links): add `--html`; every link to the same
   host is listed, in page order;
-- an index covering more than the approved scope — every language of a help
-  centre, say — gets `--path-prefix <path>` **only with the operator's word**;
+- **English is enough** (the operator's ruling): when the index lists a page
+  in English and in other languages, `kbqa index` leaves the other-language
+  copies out by itself and lists each with its English page
+  (`language_copies` in its result, `LANGUAGE-COPIES.tsv` in its raw folder).
+  Report the count in the plan. `--all-languages` keeps every copy, **only with
+  the operator's word**. A page with no English version stays in the index and
+  is collected only on the operator's word, as before.
+- an index covering more than the approved scope — one part of a help centre,
+  say — gets `--path-prefix <path>` **only with the operator's word**;
   the header line records it.
 - a correction of a denominator written the same day — a path prefix the
   operator added after seeing it, say — is `--supersede`, **only with the
