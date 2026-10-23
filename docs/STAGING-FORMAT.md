@@ -366,6 +366,83 @@ Everything else — and each of these findings the evidence does not settle,
 with `why_not_by_code` — is printed under `left_findings` for the row-writer's
 fix round; structural and planner findings under `not_for_row_writer`.
 
+## `_mapdraft-<batch>-<A|B>.jsonl` and `kbqa mapstage` (since v6.22.0)
+
+The mapper no longer writes the map file. Each pass writes a **draft** — its
+judgement only — and `kbqa mapstage` writes `_map-<batch>-<A|B>.jsonl` from
+it, the file `mapcheck` reads (its format is the mapper's §2, unchanged).
+
+One JSON object per anchor row of the staging file (a row without
+`same_feature_as`), in `<subject folder>/_mapdraft-<batch>-<A|B>.jsonl`, with
+exactly these keys:
+
+```
+{"id": "example.docs.reports", "article": "", "role": "admins", "role_source": "rbac-row", "actor": "B", "want": "reports of the conversations each team closed", "so_that": "each team's week is seen", "theme": "I06", "theme_links": [], "pcf_ids": ["90002"], "confidence": "low", "status": "mapped", "note": ""}
+```
+
+| key | value |
+|---|---|
+| `id` | the anchor row's `id` |
+| `article` | `"a"`, `"an"` (before a singular role) or `""` — the mapper's choice |
+| `role`, `role_source`, `actor`, `theme`, `theme_links`, `confidence`, `status`, `note` | as in the map file |
+| `want`, `so_that` | the story's words after `I want` and after `so that`; `so_that` is `""` when the story has none |
+| `pcf_ids` | element ids only, as text (`["90002"]`), `[]` when none |
+
+`kbqa mapstage --subject <d> --batch <b> --pass <A|B> --elements <list>`:
+
+- **The story by code.** `user_story` = `"As " + article + " " + role +
+  " (APQC-closest)" + ", I want " + want + ", so that " + so_that` — the article
+  and its space only when `article` is not `""`, the tag only when
+  `role_source` is `apqc-closest`, the "so that" part only when `so_that` is
+  not empty: `As admins, I want …`, `As a marketer (APQC-closest), I want …`.
+  A `NO-FUNCTION` or `NOT-FEATURE` line with an empty `want` has no story
+  (`""`).
+- **Elements from the list.** Each id becomes
+  `{"pcf_id", "hierarchy_id", "name"}`, all three copied from the element list.
+- **The rest as drafted**, in the mapper's key order, one line per anchor in the
+  staging file's order. `mapcheck` judges the values.
+- **Rejected lines block the map file.** A line that is not a JSON object, a key
+  missing or extra (`user_story` included), a `null`, a text key that is not
+  text, an `id` that is not a row of the staging file, a row with
+  `same_feature_as`, or an id with a line already, an `article` other than the
+  three, an element id not on the list, a `want` without a `role`, no `want`
+  outside `NO-FUNCTION`/`NOT-FEATURE`, a `needs-human` note that does not open
+  with `[<name>]`; and an anchor with no line. While any is rejected no map file
+  is written: `_mapdraft-<batch>-<A|B>.rejects-<n>.jsonl` — one line per reject:
+  the draft's `line` (none for a missing anchor), `id`, `reason`, `next_step`
+  and the draft — and exit 1. Each round's file is kept, never overwritten.
+- **One correction round.** The mapper rewrites only the rejected lines, then
+  mapstage runs again. Lines still rejected in round 2 are settled only by
+  `--leave-out-rejects`: every anchor still gets exactly one line — an anchor
+  whose line is rejected or missing is written `needs-human`, its note
+  `[no rule] <the reason>`, keeping what its draft gave that can be copied (the
+  story when it can be built, the element ids on the list) — and each reject is
+  listed under `needs_operator`, with whether it was written. A rejected line
+  that is no anchor's is not written, only listed. A third run without the flag
+  is refused, and so is the flag before the correction round.
+- **The passes stay independent.** A run reads and counts only its own pass's
+  draft and rejects files; the other pass's files are never opened.
+- It never overwrites a map file. When the staging file has no anchor, nothing
+  is written and the result says so.
+- **The sidecar.** Beside the map file it writes `_map-<batch>-<A|B>.meta.json`:
+  `batch`, `pass`, `map`, `map_sha256`, `staging`, `staging_sha256` — the
+  staging bytes the map file was written from (also `staging_sha256` in the
+  result). `mapcheck` never reads it.
+- **Classifying again** (the fix round, when the row-writer changed rows):
+  `kbqa mapstage --subject <d> --batch <b> --pass <A|B> --retire` moves this
+  pass's map file, sidecar, draft and every rejects file into a new
+  `_qa/retired-<batch>-<A|B>-<n>/` (`n` from 1, one past every earlier folder of
+  that batch and pass; nothing deleted, nothing overwritten), prints each move
+  and the next step — the mapper writes a fresh draft for this pass, whose
+  rounds start again at 1. It refuses while the staging file still hashes to
+  the sidecar's `staging_sha256` (unchanged rows are not classified twice), and
+  for a map file with no sidecar. It touches only the given pass.
+
+A left-out line whose draft gave no role source, actor or theme — an anchor
+that had no line, say — carries none: `mapcheck` fails it
+(`role_source_empty`, `actor_invalid`, `theme_unknown`) until the operator
+rules on that row. Code never invents a reading to make the check pass.
+
 ## `_capture-<batch>.raw.txt` (BRONZE, immutable)
 
 ```

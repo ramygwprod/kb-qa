@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from . import __version__, autofix, capture, elements, freeze, index, mappings, probe, profile, report, stage, stops, sweep
+from . import __version__, autofix, capture, elements, freeze, index, mappings, mapstage, probe, profile, report, stage, stops, sweep
 from .gates import g0_permission, g1_capture, g2_conformance
 from .gates import g3_grounding, g4_completeness, g5_bundles, g6_integrity
 from .gates import mapcheck, surfaces
@@ -90,6 +90,19 @@ collection (the fetcher runs these; permission from today's g0 record, g0 run fi
                                                frontmatter by code; a rejected draft
                                                blocks it (one correction round, then
                                                --leave-out-rejects lists each left out)
+  mapstage --subject <d> --batch <b> --pass <A|B> --elements <list> [--leave-out-rejects]
+                                               after each mapping pass: _map-<b>-<A|B>.jsonl
+                                               from the mapper's _mapdraft-<b>-<A|B>.jsonl —
+                                               user_story and each element's hierarchy id
+                                               and name by code; a rejected line blocks it
+                                               (one correction round, then
+                                               --leave-out-rejects writes each anchor whose
+                                               line is still rejected as needs-human)
+  mapstage --subject <d> --batch <b> --pass <A|B> --retire
+                                               fix round, after rows changed: move this
+                                               pass's map, sidecar, draft and rejects
+                                               into _qa/retired-<b>-<A|B>-<n>/; refused
+                                               while the staging is unchanged
   stop add <subject dir> "- <url> | <reason>"  append one stop line, atomically, if its
                                                reason is in the vocabulary
   stop reasons                                 print the stop-reason vocabulary
@@ -227,6 +240,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     # lists it reads. Never a verdict.
     if argv[0] == "stage":
         return stage.run(argv[1:])
+    # A mapping file written by code from one pass's draft. Never a verdict.
+    if argv[0] == "mapstage":
+        return mapstage.run(argv[1:])
     # The stop-condition vocabulary, and the one atomic way to add a line.
     if argv[0] == "stop":
         return stops.run(argv[1:])

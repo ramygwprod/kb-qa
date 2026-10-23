@@ -20,9 +20,9 @@ You orchestrate. Every step is a delegation:
 
 | subagent | holds | does |
 |---|---|---|
-| `kbqa-fetcher` | `WebFetch`, `Read`, `Bash` | permission, indexes, captures, staging by code (`kbqa stage`), stop-conditions (by `kbqa stop add`), receipts |
+| `kbqa-fetcher` | `WebFetch`, `Read`, `Bash` | permission, indexes, captures, staging by code (`kbqa stage`), map files by code (`kbqa mapstage`), stop-conditions (by `kbqa stop add`), receipts |
 | `kbqa-row-writer` | `Read`, `Write` | drafts of rows, from the capture on disk alone |
-| `kbqa-mapper` | `Read`, `Write` | one classification pass of one batch |
+| `kbqa-mapper` | `Read`, `Write` | one classification pass of one batch, as a draft |
 
 **You do not fetch, write or run commands yourself, even if this session lets
 you.** The skill's tool list pre-approves `Task`, `Agent` and `Read`; it does not
@@ -220,7 +220,25 @@ wrote one (step 2 of §2).
 The passes are independent: never give one pass the other's file or output,
 never summarise one to the other, and never start B with anything A said.
 Agreement between two passes that saw each other measures nothing. Each writes
-`_map-<batch>-<A|B>.jsonl`.
+a draft, `_mapdraft-<batch>-<A|B>.jsonl`; code writes the map file from it.
+
+After each pass, `kbqa-fetcher` runs `kbqa mapstage` for that pass alone (its
+§3b) — the subject folder, the batch, the pass's letter and the configured
+`apqc_elements` path. It builds each user story from the draft, copies each
+element's hierarchy id and name from the list, and writes
+`_map-<batch>-<A|B>.jsonl`. **A rejected line blocks the map file**: the
+fetcher returns the lines it rejected — an element id not on the list, a key
+missing or extra, an id that is no anchor of the staging file, an anchor with
+no line, an article other than `a`, `an` or none, a `needs-human` note without
+its `[<name>]` — each with its reason, the rejects file and the `round`. Then,
+for that pass only — **one correction round, never two**: the same pass's
+`kbqa-mapper` again, with what it was given before and its own rejects file
+(its §2a); then `kbqa-fetcher` runs `kbqa mapstage` again. If lines are still
+rejected, `kbqa-fetcher` runs it with `--leave-out-rejects`, as that result's
+`next_step` says: every anchor whose line is still rejected is written
+`needs-human` (`[no rule] <the reason>`), and each reject is listed under
+`needs_operator` — bring every one to the operator with the batch. A pass's
+rejects and results never go to the other pass.
 
 Rows a pass cannot map are `needs-human`, with a note that opens with the rule
 or open pattern the row stops on, in brackets (`[<name>] …`). They are
@@ -242,7 +260,9 @@ Return:
   row-writer's correction of each, and every draft left out with its reason;
   **evidence not captured** and **role stated elsewhere**, as the row-writer
   listed them
-- per batch: map files written, and each pass's `needs-human` ids with their notes
+- per batch: map files written, and each pass's `needs-human` ids with their notes;
+  the lines `kbqa mapstage` rejected, with the mapper's correction of each, and
+  every anchor written `needs-human` by `--leave-out-rejects`, with its reason
 - **no counts of rows, terms or mapped lines.** Nobody in this run counts by
   hand: `/kbqa-check` counts rows, distinct terms and each pass's `mapped` and
   `needs-human` lines from the files
@@ -267,8 +287,13 @@ Pass those reasons on with the findings, word for word.
 
 1. Delegate to `kbqa-row-writer` in fix mode (its §5): the staging path, the
    capture path, and the findings, word for word.
-2. If rows changed ids or were added or dropped, re-run both `kbqa-mapper` passes
-   for that batch (§4). Otherwise the map files stand.
+2. If rows changed ids or were added or dropped: first `kbqa-fetcher` runs
+   `kbqa mapstage --retire` for pass A and for pass B (its §3b), which moves each
+   pass's map file, draft and rejects files into `_qa/retired-<batch>-<A|B>-<n>/`
+   (nothing deleted; refused while the staging file is unchanged — bring that
+   refusal to the operator). Then both `kbqa-mapper` passes run again for that
+   batch, independently, each followed by `kbqa mapstage` (§4). Otherwise the
+   map files stand.
 3. Report what changed, and stop. The operator runs `/kbqa-check` again: round 2.
    If it is still BLOCKED, it is PARKED with the operator — there is no third
    round, and you never start one.

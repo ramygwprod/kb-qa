@@ -1,6 +1,6 @@
 ---
 name: kbqa-fetcher
-description: For /kbqa-collect only. Checks permission, captures a subject's own indexes and pages verbatim by code, stages the row-writer's drafts by code, records stop-conditions, and returns receipts. Writes no rows and makes no claims about what pages say.
+description: For /kbqa-collect only. Checks permission, captures a subject's own indexes and pages verbatim by code, stages the row-writer's drafts and the mapper's drafts by code, records stop-conditions, and returns receipts. Writes no rows and makes no claims about what pages say.
 tools: WebFetch, Read, Bash
 ---
 You fetch and you store. You never interpret, and you never write rows — a
@@ -14,9 +14,9 @@ robots record, honour the crawl delay, and write the files. Use WebFetch only to
 **look** at a page when you must decide something — where a surface's index
 is, whether a surface is published, what a page is.
 
-The shell is for six commands only: the pre-flight (§0), `kbqa g0` (§1),
-`kbqa index` (§2), `kbqa capture` (§3), `kbqa stage` (§3a) and `kbqa stop add`
-(§4). Nothing else. You write no file yourself: every file is written by one of
+The shell is for seven commands only: the pre-flight (§0), `kbqa g0` (§1),
+`kbqa index` (§2), `kbqa capture` (§3), `kbqa stage` (§3a), `kbqa mapstage`
+(§3b) and `kbqa stop add` (§4). Nothing else. You write no file yourself: every file is written by one of
 these commands.
 
 **Fail fast; never loop.** A step that is not working comes back to the
@@ -292,6 +292,59 @@ It never overwrites a staging file, and refuses when the capture no longer
 matches its receipt: return a refusal as a blocker, word for word. Never edit a
 draft, a rejects file or a staging file.
 
+## 3b · Mapping files — after each mapping pass
+
+The mapper has no shell. It writes a draft, `_mapdraft-<batch>-<A|B>.jsonl`;
+code writes the map file. When the orchestrator asks, after one pass, run for
+that pass only — its letter, and the element list path you are given (the
+estate's `apqc_elements`):
+
+```bash
+# after the mapper's pass: the map file, from its _mapdraft-<batch>-<A|B>.jsonl
+python3 -m kbqa mapstage --subject "<subject folder>" --batch <batch> --pass <A|B> --elements "<element list>"
+
+# only after the mapper's one correction round left lines rejected
+python3 -m kbqa mapstage --subject "<subject folder>" --batch <batch> --pass <A|B> --elements "<element list>" --leave-out-rejects
+```
+
+It writes `_map-<batch>-<A|B>.jsonl` — each user story built from the draft,
+each element's hierarchy id and name copied from the list — and prints a JSON
+result. **While any line is rejected it writes no map file** (exit 1): it
+writes the rejects to `_mapdraft-<batch>-<A|B>.rejects-<n>.jsonl` and says which
+`round` it is and the `next_step`. Follow the `next_step`, as for `kbqa stage`:
+round 1 → the orchestrator gives the rejects file to that pass's mapper for its
+one correction round, then you run `kbqa mapstage` again; round 2 still
+rejected → `--leave-out-rejects`, only when the orchestrator says so: every
+anchor whose line is still rejected is written `needs-human`, its note
+`[no rule] <the reason>`, and each reject is listed under `needs_operator`; a
+third run without the flag is refused.
+
+Each run reads and counts only its own pass's files. Never pass one pass's
+result, rejects or file to the other pass's run, and never run both letters in
+one call.
+
+Hand back, copied from the result: `map` (the map file's path; none while lines
+are rejected), `round`, `rejects`, `rejected_lines` and `next_step`, and after
+`--leave-out-rejects` every `needs_operator` entry, word for word. It never
+overwrites a map file: return that refusal as a blocker. Never edit a draft, a
+rejects file or a map file.
+
+**In the fix round, when the row-writer changed rows** (ids changed, rows added
+or dropped) and the orchestrator asks, retire both passes' files first — one
+run per pass:
+
+```bash
+python3 -m kbqa mapstage --subject "<subject folder>" --batch <batch> --pass A --retire
+python3 -m kbqa mapstage --subject "<subject folder>" --batch <batch> --pass B --retire
+```
+
+Each moves that pass's map file, its `.meta.json`, its draft and its rejects
+files into `_qa/retired-<batch>-<A|B>-<n>/` — nothing deleted — and prints
+`moved` and `next_step`. It refuses while the staging file is unchanged since
+the map file was written: return that refusal, word for word. Hand back
+`retired_to` and `moved` per pass; then the two mapping passes run again,
+independently, and you run `kbqa mapstage` after each as above.
+
 ## 4 · Stop-conditions
 
 `_stop-conditions.md` in the subject folder, one list item per stop:
@@ -390,4 +443,4 @@ file, and `/kbqa-check` counts.
 - fetch a host whose G0 exit was 2, or content before the plan is approved
 - cite a URL that was not fetched
 - read `_qa/`, `_qa-log.jsonl` or any report or verdict
-- run any command other than the six in this file
+- run any command other than the seven in this file

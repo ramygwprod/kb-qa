@@ -843,6 +843,16 @@ in `docs/STAGING-FORMAT.md`.
 
 | action | reads | writes | exit |
 |---|---|---|---|
+| `mapstage --subject <d> --batch <b> --pass <A\|B> --elements <list> [--leave-out-rejects]` | the batch's staging file (its anchor rows: rows without `same_feature_as`), this pass's `_mapdraft-<b>-<A\|B>.jsonl` and rejects files — never the other pass's — and the element list | `_map-<b>-<A\|B>.jsonl` in the mapper's format, one line per anchor in the staging file's order: `user_story` built as `As [a\|an ]<role>[ (APQC-closest)], I want <want>[, so that <so_that>]` (the article only when the draft gives one, the tag exactly when `role_source` is `apqc-closest`, no "so that" part when `so_that` is empty; `""` for a `NO-FUNCTION`/`NOT-FEATURE` line with no `want`), each `pcf_ids` entry `{pcf_id, hierarchy_id, name}` copied from the list by id, every other key as drafted. **A rejected line blocks the file**: the run writes only `_mapdraft-<b>-<A\|B>.rejects-<n>.jsonl` — a line not a JSON object, a key missing or extra, a `null`, a text key not text, an id that is no anchor row or has a line already, an `article` other than `a`, `an` or `""`, an element id not on the list, a story that cannot be built, a `needs-human` note not opening `[<name>]`, an anchor with no line — one file per round, never overwritten. The mapper corrects once; then `--leave-out-rejects` writes the file with every anchor still on one line — an anchor whose line is rejected or missing written `needs-human`, its note `[no rule] <reason>`, with what its draft gave that can be copied — and lists each reject under `needs_operator` | 0 written (or no anchor to classify) · 1 refused, or lines rejected; a third run without `--leave-out-rejects`, or the flag before the correction round, is refused with its `next_step`; never overwrites a map file or its sidecar `_map-<b>-<A\|B>.meta.json` (the staging file's name and sha256 it was written from, also printed as `staging_sha256`; `mapcheck` never reads it) |
+| `mapstage --subject <d> --batch <b> --pass <A\|B> --retire` | this pass's map file and its sidecar, the staging file | moves this pass's `_map-<b>-<P>.jsonl`, `.meta.json`, `_mapdraft-<b>-<P>.jsonl` and every `_mapdraft-<b>-<P>.rejects-*.jsonl` into a new `_qa/retired-<b>-<P>-<n>/` (`n` one past every earlier folder of that batch and pass; nothing deleted or overwritten) and prints each move and the `next_step` (the mapper writes a fresh draft for this pass). Never touches the other pass | 0 moved · 1 refused: the staging file still has the sha256 the sidecar recorded (classifying unchanged rows again is wasted work), a map file with no sidecar, nothing to retire, or combined with `--elements` / `--leave-out-rejects` |
+
+Since v6.22.0 the mapper writes drafts and code writes the map file, so a
+story's form and an element's hierarchy id and name are never typed by an
+agent. `mapcheck` checks the result unchanged. The draft format is in
+`docs/STAGING-FORMAT.md`.
+
+| action | reads | writes | exit |
+|---|---|---|---|
 | `elements --outline <elements.jsonl>` | the APQC element list | `<list>.outline.md` beside it: the top two levels, each with its group's line ranges, and the list's sha256 | 0 / 1 |
 
 The mapping pass reads that outline, then only the groups it needs — never the

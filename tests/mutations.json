@@ -980,5 +980,320 @@
     "tests": [
       "tests/test_autofix.py"
     ]
+  },
+  {
+    "label": "mapstage: an element id not on the list is rejected",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        unknown = [i for i in pcfs if i not in elements]\n",
+    "new": "        unknown = []\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a key the draft does not carry is rejected",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if missing or extra:\n",
+    "new": "    if missing:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: an id that is not a row of the staging file is rejected",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if rid_s is None or rid_s not in anchor_set:\n",
+    "new": "        if rid_s is None:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a line for another source is rejected as one",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if rid_s is not None and rid_s in others:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: an anchor with no line is rejected",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if rid not in drafted:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: the article is a, an or nothing",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if obj[\"article\"] not in ARTICLES:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a needs-human note opens with its pattern",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if obj[\"status\"] == NEEDS_HUMAN and note_pattern(obj[\"note\"]) is None:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: one line per id",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if rid_s is not None and rid_s in first_line:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a null is rejected",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if nulls:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: no want only on a no-function or not-feature line",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if obj.get(\"theme\") not in NO_ROLE:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a want needs a role",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if not obj[\"role\"].strip():\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: the tag follows an apqc-closest role only",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if role_source == APQC_CLOSEST:\n",
+    "new": "    if True:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: no so-that part when so_that is empty",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if so_that.strip():\n",
+    "new": "    if True:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: an article only when the mapper gave one",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    story = \"As \" + (f\"{article} \" if article else \"\") + role\n",
+    "new": "    story = \"As a \" + role\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: elements copied from the list",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        out.append({\"pcf_id\": e[\"pcf_id\"], \"hierarchy_id\": e[\"hierarchy_id\"], \"name\": e[\"name\"]})\n",
+    "new": "        out.append({\"pcf_id\": i, \"hierarchy_id\": \"\", \"name\": \"\"})\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: the mapper's key order",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    return {k: built[k] for k in FIELDS}\n",
+    "new": "    return built\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: lines in the staging file's order",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    lines: List[dict] = []\n    for rid in anchors:\n",
+    "new": "    lines: List[dict] = []\n    for rid in sorted(anchors):\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a map file is never overwritten",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if p.exists():\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: rejects block the map file",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if not leave_out:\n            if round_no <= CORRECTION_ROUNDS:\n",
+    "new": "        if False:\n            if round_no <= CORRECTION_ROUNDS:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: no second correction round",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if len(earlier) >= CORRECTION_ROUNDS + 1 and not leave_out:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: leaving out only after the correction round",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if leave_out and len(earlier) < CORRECTION_ROUNDS + 1:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: each round's rejects file is its own",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    round_no = max([_round_of(p) for p in earlier] or [0]) + 1\n",
+    "new": "    round_no = 1\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: leaving out keeps a line for every anchor",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        lines.append(_left_out_line(rid, drafted.get(rid, (0, None))[1], anchor_reason[rid], elements))\n",
+    "new": "        continue\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a left-out line's note names no rule and the reason",
+    "file": "src/kbqa/mapstage.py",
+    "old": "            \"note\": f\"{LEFT_OUT_PATTERN} {reason}\"}\n",
+    "new": "            \"note\": reason}\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a left-out line keeps only elements on the list",
+    "file": "src/kbqa/mapstage.py",
+    "old": "            \"pcf_ids\": pcf_entries([i for i in ids if isinstance(i, str) and i in elements], elements),\n",
+    "new": "            \"pcf_ids\": [],\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a pass never counts the other pass's rounds",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    earlier = _rounds(subject, batch, letter)\n",
+    "new": "    earlier = _rounds(subject, batch, letter) + _rounds(subject, batch, \"B\" if letter == \"A\" else \"A\")\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a leftover sidecar is never overwritten",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    for p in (out_path, meta_path):\n",
+    "new": "    for p in (out_path,):\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: the sidecar records the staging sha256",
+    "file": "src/kbqa/mapstage.py",
+    "old": "            \"staging\": staging.name, \"staging_sha256\": staging_sha}\n",
+    "new": "            \"staging\": staging.name, \"staging_sha256\": \"\"}\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "retire: refused while the staging is unchanged",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if recorded == _sha256(staging):\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "retire: a map file without its sidecar is refused",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if not meta_path.is_file():\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "retire: numbered one past every earlier folder",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    n = max(used or [0]) + 1\n",
+    "new": "    n = len(used) + 1\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "retire: the sidecar moves with the map file",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    files = [p for p in (out_path, meta_path, subject / draft_name(batch, letter)) if p.exists()]\n",
+    "new": "    files = [p for p in (out_path, subject / draft_name(batch, letter)) if p.exists()]\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "retire: the pass's rejects files move too",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    files += _rounds(subject, batch, letter)\n",
+    "new": "    files += []\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "retire: only the given pass is touched",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    files += _rounds(subject, batch, letter)\n",
+    "new": "    files += _rounds(subject, batch, \"A\") + _rounds(subject, batch, \"B\")\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "retire: a run of its own",
+    "file": "src/kbqa/mapstage.py",
+    "old": "            if args.leave_out or args.elements:\n",
+    "new": "            if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
   }
 ]
