@@ -152,7 +152,8 @@ Per window:
    window, in this run or a later one). `kbqa capture` names the batch, slices and
    sizes the window, and records it; the fetcher returns its receipt (its §6).
 2. `kbqa-fetcher`: `kbqa stage --lists` for the batch (its §3a) — the
-   subject's features list and role-row list beside the receipt, built now so
+   subject's features list, same-feature shortlist and role-row list beside
+   the receipt, built now so
    they hold every row staged so far, earlier windows included. Keep the
    `role_rows` path or note it returns, for §4.
 3. `kbqa-row-writer`: the subject folder and the **batch name — nothing else**.

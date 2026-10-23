@@ -308,7 +308,7 @@
   {
     "label": "stage: an id the subject already has is never reused",
     "file": "src/kbqa/stage.py",
-    "old": "    taken = set(features.subject_rows(subject))\n",
+    "old": "    taken = set(existing)\n",
     "new": "    taken = set()\n",
     "tests": [
       "tests/test_stage.py"
@@ -501,6 +501,222 @@
     "new": "        elif False:\n",
     "tests": [
       "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: an exact repeat is on the same host",
+    "file": "src/kbqa/stage.py",
+    "old": "    return host, value, nq\n",
+    "new": "    return \"\", value, nq\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: an exact repeat has the same quote",
+    "file": "src/kbqa/stage.py",
+    "old": "    return host, value, nq\n",
+    "new": "    return host, value, \"\"\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: the parameter is compared when the draft has one",
+    "file": "src/kbqa/stage.py",
+    "old": "    return \"parameter\" if isinstance(param, str) and param.strip() else \"vendor_term\"\n",
+    "new": "    return \"vendor_term\"\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: code never links to a subject row that carries same_feature_as",
+    "file": "src/kbqa/stage.py",
+    "old": "        if k is not None and features.is_anchor(row):\n",
+    "new": "        if k is not None:\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: an exact repeat of an anchor gets same_feature_as by code",
+    "file": "src/kbqa/stage.py",
+    "old": "        c[\"obj\"] = {**obj, \"same_feature_as\": target}\n",
+    "new": "        pass\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: every link made by code is listed under linked_by_code",
+    "file": "src/kbqa/stage.py",
+    "old": "        linked.append(entry)\n",
+    "new": "        pass\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: a draft that names another anchor is never changed",
+    "file": "src/kbqa/stage.py",
+    "old": "        if has:\n            conflicts.append({**entry,",
+    "new": "        if False:\n            conflicts.append({**entry,",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: a draft that names the same anchor is left as it is",
+    "file": "src/kbqa/stage.py",
+    "old": "        if has == target:\n            continue\n",
+    "new": "",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: a draft that is another source is never the anchor of a repeat",
+    "file": "src/kbqa/stage.py",
+    "old": "            if not has:\n                batch_anchors[k] = n\n",
+    "new": "            batch_anchors[k] = n\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: an exact repeat of an earlier anchor draft is linked to it",
+    "file": "src/kbqa/stage.py",
+    "old": "        elif k in batch_anchors:\n",
+    "new": "        elif False:\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: a draft other drafts name as their anchor is not linked",
+    "file": "src/kbqa/stage.py",
+    "old": "        if n in named_by:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: a repeat of several anchors is listed, not linked",
+    "file": "src/kbqa/stage.py",
+    "old": "            if len(ids_of) > 1 and has not in ids_of:\n",
+    "new": "            if False:\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: linked_by_code names the id given to an anchor draft",
+    "file": "src/kbqa/stage.py",
+    "old": "            e[\"anchor\"] = ids.get(e[\"anchor_line\"])\n",
+    "new": "            pass\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage --lists: the shortlist is written and named in the result",
+    "file": "src/kbqa/stage.py",
+    "old": "        out[\"same_feature\"] = f\"_raw/{batch}/{shortlist.NAME}\"\n",
+    "new": "        out[\"same_feature\"] = None\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage --lists: the shortlist reads only a capture that matches its receipt",
+    "file": "src/kbqa/stage.py",
+    "old": "        text = _capture_text(subject, receipt)\n",
+    "new": "        text = (subject / Path(receipt[\"capture\"]).name).read_text(encoding=\"utf-8\")\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "shortlist: two words in common at least",
+    "file": "src/kbqa/shortlist.py",
+    "old": "MIN_SHARED = 2 ",
+    "new": "MIN_SHARED = 1 ",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "shortlist: at most ten anchors a page",
+    "file": "src/kbqa/shortlist.py",
+    "old": "MAX_PER_PAGE = 10 ",
+    "new": "MAX_PER_PAGE = 11 ",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "shortlist: stop words are not compared",
+    "file": "src/kbqa/shortlist.py",
+    "old": "if len(w) >= MIN_LEN and w not in STOP_WORDS}",
+    "new": "if len(w) >= MIN_LEN}",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "shortlist: words of two characters or fewer are not compared",
+    "file": "src/kbqa/shortlist.py",
+    "old": "MIN_LEN = 3 ",
+    "new": "MIN_LEN = 1 ",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "shortlist: only parameter-like tokens of the page's text count",
+    "file": "src/kbqa/shortlist.py",
+    "old": "if \"_\" in t or CAMEL_RE.search(t)]",
+    "new": "]",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "shortlist: a camelCase identifier is parameter-like",
+    "file": "src/kbqa/shortlist.py",
+    "old": "if \"_\" in t or CAMEL_RE.search(t)]",
+    "new": "if \"_\" in t]",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "shortlist: the page's headings count",
+    "file": "src/kbqa/shortlist.py",
+    "old": "    return heads | _union(",
+    "new": "    return _union(",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "shortlist: anchors only",
+    "file": "src/kbqa/shortlist.py",
+    "old": "    anchors = {rid: r for rid, r in rows.items() if is_anchor(r)}\n",
+    "new": "    anchors = dict(rows)\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "shortlist: highest score first, then id",
+    "file": "src/kbqa/shortlist.py",
+    "old": "    scored.sort(key=lambda x: (-x[1], x[0]))\n",
+    "new": "    scored.sort(key=lambda x: x[0])\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
     ]
   }
 ]

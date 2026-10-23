@@ -211,7 +211,8 @@ so a source found later is a new row pointing at the anchor, and
 (`map_line_for_another_source`); G5 counts a repeated term whose rows are one
 feature apart from its naming questions. `kbqa stage --lists` writes the
 subject's anchors to `_raw/<batch>/FEATURES.md` for the row-writer (`kbqa
-capture` did, before v6.22.0).
+capture` did, before v6.22.0), and, since v6.22.0, the same-feature shortlist
+`_raw/<batch>/SAME-FEATURE.md` (below).
 
 ### Beside each receipt (since v6.20.0)
 
@@ -229,6 +230,21 @@ capture` did, before v6.22.0).
   mapper's role sources. The patterns are the estate's vocabulary, never this
   tool's; without them nothing is written and the result's `role_rows_note`
   says why.
+- **Same-feature shortlist** (since v6.22.0). `kbqa stage --lists` writes
+  `_raw/<batch>/SAME-FEATURE.md` and names it in its result (`same_feature`):
+  one section per page of the window, in the receipt's order, listing up to 10
+  of the subject's anchors that share at least 2 words with the page. Words are
+  normalised alike on both sides — lowercase, runs of letters and digits, minus
+  a short fixed stop-word list (`kbqa.shortlist.STOP_WORDS`) and words of 2
+  characters or fewer. An anchor's words come from its `vendor_term`,
+  `parameter` and `what_it_does`; a page's from its headings (the receipt's)
+  and its parameter-like tokens — identifiers containing `_` or written in
+  camelCase — in its parts' own lines. The score is the number of words in
+  common; order is score (highest first), then id. One line per candidate:
+  `id | score | words in common | vendor_term | parent_path | what_it_does`.
+  Candidates only: the row-writer judges sameness. When the capture cannot be
+  read (none written, or no longer the receipt's), the shortlist is not
+  written and `same_feature_note` says why; the other lists are still written.
 
 ## `_draft-<batch>.jsonl` and `kbqa stage` (since v6.22.0)
 
@@ -280,6 +296,21 @@ One JSON object per line, in `<subject folder>/_draft-<batch>.jsonl`:
   that draft must be the anchor: it carries no `same_feature_as` of its own
   (one step, never a chain). A link to a rejected draft is rejected with that
   draft's reason. Otherwise the row gets the id given to the named draft.
+- **Exact repeats, linked by code.** A draft whose `parameter` (when it has
+  one, else its `vendor_term`, as written) and whose quote — the capture's
+  exact text, folded as G3 folds — are identical, on the same host, to those
+  of an anchor of the subject (feature tree or a staging file) or of an
+  earlier anchor draft of this batch gets `same_feature_as` set by code to
+  that anchor (a draft anchor as `draft:<line>`, resolved as above). Each link
+  is listed under `linked_by_code`: the draft's `line`, the `anchor` id (and
+  `anchor_line` for a draft anchor) and what `matched` (`host`, the name
+  compared, `quote`). A row that carries `same_feature_as` is never a target.
+  Nothing is changed, and the draft is listed under `link_conflicts` with a
+  `reason`, when it already names another anchor, when it repeats several
+  anchors of the subject at once, or when other drafts name it as their
+  anchor (`draft:<line>`), since linking it would leave them pointing at a
+  row that is not an anchor. A draft that already names the same anchor is
+  left as it is and not listed.
 - **Rejected drafts block the staging file.** Also rejected: a page or part the
   receipt does not have, a field no row carries, a missing judgement field, a
   line that is not a JSON object, and a page drafted `no_row` that also has
@@ -303,7 +334,8 @@ One JSON object per line, in `<subject folder>/_draft-<batch>.jsonl`:
   listed under `pages_without_row_or_no_row`.
 - It never overwrites a staging file. When no draft became a row it writes no
   staging file. The result is printed as JSON: the round, counts, the staging
-  and rejects paths, the rejected lines and reasons, and the `next_step`.
+  and rejects paths, the rejected lines and reasons, `linked_by_code`,
+  `link_conflicts`, and the `next_step`.
 
 ## `_capture-<batch>.raw.txt` (BRONZE, immutable)
 

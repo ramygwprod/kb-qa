@@ -256,9 +256,11 @@ python3 -m kbqa stage --subject "<subject folder>" --batch <batch> --leave-out-r
 ```
 
 `--lists` writes `_raw/<batch>/FEATURES.md` (the subject's features, every row
-staged so far, earlier windows included) and, when the estate names patterns,
-`_raw/<batch>/ROLE-ROWS.md`; it prints their paths (`role_rows`, or
-`role_rows_note` saying why there is none). Hand back the `role_rows` path or
+staged so far, earlier windows included), `_raw/<batch>/SAME-FEATURE.md` (the
+same-feature shortlist per page, for the row-writer) and, when the estate names
+patterns, `_raw/<batch>/ROLE-ROWS.md`; it prints their paths (`same_feature`
+or `same_feature_note`, `role_rows` or `role_rows_note`, saying why one is not
+written). Hand back the `role_rows` path or
 note: the mappers read it.
 
 Without `--lists` it writes `_collect-<batch>-staging.md` and prints a JSON

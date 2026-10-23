@@ -35,6 +35,18 @@ batch's receipt, so nothing a code can copy is typed by an agent:
 `draft:<line>` (1-based line of the draft file), which code resolves to the id
 it gives that draft — an anchor, never another source, never rejected.
 
+**Exact repeats are linked by code.** A draft whose `parameter` (when it has
+one, else its `vendor_term`) and whose quote — the capture's exact text, folded
+by `normalise_for_match` — are identical, on the same host, to those of an
+anchor already in the subject, or of an earlier anchor draft of this batch, gets
+`same_feature_as` set to that anchor (`draft:<line>` for a draft, resolved as
+above). Each is listed under `linked_by_code` with what matched. A draft that
+already names that anchor is left as it is; one that names another anchor is
+changed in nothing and listed under `link_conflicts`, as is a repeat of several
+anchors at once, or of a draft that other drafts name as their anchor (linking
+it would leave them pointing at a row that is not an anchor). Code never links
+to a row that itself carries `same_feature_as`.
+
 **A rejected draft blocks the staging file.** Each run that rejects a draft
 writes only `_draft-<batch>.rejects-<n>.jsonl` (each reject with its draft
 line, reason and suggested next step; never overwritten) and exits 1. The
@@ -47,8 +59,11 @@ which round it is. The staging file is never overwritten.
 `--lists` writes, before the row-writer runs, the lists it and the mapper read:
 `_raw/<batch>/FEATURES.md` (the subject's anchors, `kbqa.features`) and
 `_raw/<batch>/ROLE-ROWS.md` (rows that may name a role, `kbqa.roles`, only when
-the estate names patterns). Built when they are needed, they hold every row
-staged so far — the windows before this one included.
+the estate names patterns), and `_raw/<batch>/SAME-FEATURE.md`, the
+same-feature shortlist per page of the window (`kbqa.shortlist`; not written,
+with the reason under `same_feature_note`, when the window has no capture to
+read). Built when they are needed, they hold every row staged so far — the
+windows before this one included.
 
 Both print one JSON result. Exit 0 when the files were written, 1 when refused.
 """
@@ -62,8 +77,9 @@ import sys
 import unicodedata
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
-from . import features, roles, stops
+from . import features, roles, shortlist, stops
 from .parsing import _QUOTE_MAP, normalise_for_match, parse_capture
 from .profile import conventions
 
@@ -134,6 +150,24 @@ def find_quote(text: str, quote: str) -> List[str]:
         spans.append(text[at[i]:at[i + len(nq) - 1] + 1])
         i = folded.find(nq, i + 1)
     return spans
+
+
+def repeat_field(row: dict) -> str:
+    """The name compared for exact repeats: `parameter` when the row has one,
+    else `vendor_term`."""
+    param = row.get("parameter")
+    return "parameter" if isinstance(param, str) and param.strip() else "vendor_term"
+
+
+def repeat_key(url: object, row: dict, quote: object) -> Optional[Tuple[str, str, str]]:
+    """What makes two rows exact repeats: (host, the name as written, the quote
+    folded by `normalise_for_match`). None when one of them is missing."""
+    value = row.get(repeat_field(row))
+    host = (urlparse(str(url or "")).hostname or "").lower()
+    nq = normalise_for_match(quote) if isinstance(quote, str) else ""
+    if not host or not nq or not isinstance(value, str) or not value.strip():
+        return None
+    return host, value, nq
 
 
 def _write_atomic(path: Path, data: bytes) -> None:
@@ -215,11 +249,26 @@ def _capture_text(subject: Path, receipt: Dict) -> str:
 
 
 def lists(subject: Path, batch: str) -> Dict[str, object]:
-    """Write the subject's features list and role-row list beside the receipt."""
-    _receipt(subject, batch)
+    """Write the subject's features list, role-row list and same-feature
+    shortlist beside the receipt."""
+    receipt = _receipt(subject, batch)
     raw = subject / "_raw" / batch
+    same: Optional[str] = None
+    try:
+        text = _capture_text(subject, receipt)
+        same = shortlist.same_feature_list(batch, receipt["pages"], text.split("\n"),
+                                           features.subject_rows(subject))
+        same_why = ""
+    except Refused as exc:
+        same_why = str(exc)
     _write_atomic(raw / FEATURES, features.features_list(subject).encode("utf-8"))
     out: Dict[str, object] = {"batch": batch, "features": f"_raw/{batch}/{FEATURES}"}
+    if same is not None:
+        _write_atomic(raw / shortlist.NAME, same.encode("utf-8"))
+        out["same_feature"] = f"_raw/{batch}/{shortlist.NAME}"
+    else:
+        out["same_feature"] = None
+        out["same_feature_note"] = f"not written: {same_why}"
     listed, why = roles.role_rows_list(subject)
     if listed is not None:
         _write_atomic(raw / ROLE_ROWS, listed.encode("utf-8"))
@@ -292,7 +341,8 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
     if not subject_slug:
         raise Refused(f"the subject folder's name {subject.name!r} gives no id prefix")
     surface = receipt.get("surface") or batch.split("-", 1)[0]
-    taken = set(features.subject_rows(subject))
+    existing = features.subject_rows(subject)
+    taken = set(existing)
     id_re = re.compile(conv.id_pattern)
 
     rejects: Dict[int, dict] = {}
@@ -404,6 +454,66 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
         if n in rejects:
             del candidates[n]
 
+    # Exact repeats: the same name and the same quote on the same host as an
+    # anchor — of the subject, or an earlier anchor draft of this batch — are
+    # linked by code. Anchors only: a row that carries same_feature_as is never
+    # a target. A draft that names another anchor is listed, never changed.
+    subject_anchors: Dict[Tuple[str, str, str], List[str]] = {}
+    for rid, row in existing.items():
+        k = repeat_key(row.get("source_url"), row, row.get("source_quote"))
+        if k is not None and features.is_anchor(row):
+            subject_anchors.setdefault(k, []).append(rid)
+    named_by: Dict[int, List[int]] = {}  # draft line -> the drafts that name it as their anchor
+    for n in sorted(candidates):
+        t = target_of(n)
+        if t is not None:
+            named_by.setdefault(t, []).append(n)
+    batch_anchors: Dict[Tuple[str, str, str], int] = {}
+    linked: List[dict] = []
+    conflicts: List[dict] = []
+    for n in sorted(candidates):
+        c = candidates[n]
+        obj = c["obj"]
+        k = repeat_key(c["url"], obj, c["exact"])
+        has = obj.get("same_feature_as")
+        if k is None:
+            continue
+        field = repeat_field(obj)
+        matched = {"host": k[0], field: k[1], "quote": c["exact"]}
+        if k in subject_anchors:
+            ids_of = subject_anchors[k]
+            if len(ids_of) > 1 and has not in ids_of:
+                conflicts.append({"line": n, "same_feature_as": has, "anchor": ids_of,
+                                  "matched": matched, "reason": f"an exact repeat of {len(ids_of)} anchors of "
+                                  "the subject: which one is the feature is not code's to choose"})
+                continue
+            target, anchor_line = (has if has in ids_of else ids_of[0]), None
+        elif k in batch_anchors:
+            anchor_line = batch_anchors[k]
+            target = f"{DRAFT_REF}{anchor_line}"
+        else:
+            if not has:
+                batch_anchors[k] = n
+            continue
+        if has == target:
+            continue
+        entry: Dict[str, object] = {"line": n, "anchor": target if anchor_line is None else None}
+        if anchor_line is not None:
+            entry["anchor_line"] = anchor_line  # the id it is given is filled in below
+        entry["matched"] = matched
+        if has:
+            conflicts.append({**entry, "same_feature_as": has,
+                              "reason": "the draft names another anchor: nothing changed"})
+            continue
+        if n in named_by:
+            conflicts.append({**entry, "same_feature_as": None,
+                              "reason": f"draft line(s) {', '.join(map(str, named_by[n]))} name this draft as "
+                                        "their anchor: linking it would leave them pointing at a row that is "
+                                        "not an anchor, so nothing changed"})
+            continue
+        c["obj"] = {**obj, "same_feature_as": target}
+        linked.append(entry)
+
     rows: List[dict] = []
     ids: Dict[int, str] = {}
     for n in sorted(candidates):
@@ -440,6 +550,10 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
             reject(row["_line"], candidates[row["_line"]]["obj"],
                    f"same_feature_as names draft line {t}, which is rejected: {rejects[t]['reason']}")
     rows = [{k: v for k, v in r.items() if k != "_line"} for r in rows if r["_line"] not in rejects]
+    for e in linked + conflicts:
+        if "anchor_line" in e:
+            e["anchor"] = ids.get(e["anchor_line"])
+    linked = [e for e in linked if e["line"] not in rejects]
 
     with_rows = {r["source_url"] for r in rows}
     for url, words in no_row.items():
@@ -464,6 +578,8 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
     accounted = with_rows | set(no_row)
     result["pages_without_row_or_no_row"] = [u for u in pages if u not in accounted]
     result["stop_lines_to_add"] = stop_lines
+    result["linked_by_code"] = linked
+    result["link_conflicts"] = conflicts
     if stop_lines_refused:
         result["stop_lines_refused"] = stop_lines_refused
     if listed and not leave_out:

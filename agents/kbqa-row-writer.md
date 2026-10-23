@@ -35,8 +35,9 @@ batch's receipt from disk first**: `<subject folder>/_raw/<batch>/RECEIPT.json`,
 written by `kbqa capture`. It holds everything you read by: `capture` (the
 capture's path) and `pages` — each with its `url`, its `lines` and its `parts`.
 If the file is missing, or its `batch` is not the batch you were given, stop
-and say so. Beside it, `_raw/<batch>/FEATURES.md` is the subject's features
-list (§2a), written just before you were started.
+and say so. Beside it, `_raw/<batch>/SAME-FEATURE.md` (the same-feature
+shortlist per page) and `_raw/<batch>/FEATURES.md` (the subject's features
+list) are written just before you were started (§2a).
 
 **Read one part at a time**, in order. Every page has one or more `parts`; a
 long page is split at its headings by code. For each part, Read the capture
@@ -122,12 +123,19 @@ feature in a later batch — is a row of its own, grounded by its own quote, tha
 adds `same_feature_as: <the anchor's id>`. Nothing is folded and nothing is
 dropped; only the anchor is classified.
 
-- **Read the features list first** (`_raw/<batch>/FEATURES.md`): the
-  subject's anchors as they stand before this batch, earlier windows included,
-  one line each — `id | vendor_term | parent_path | what_it_does`, grouped by
-  breadcrumb, with an outline of line ranges. Read the outline, then only the
-  groups that could hold your page's features (offset and limit) — never the
-  whole file.
+- **Read the shortlist first** (`_raw/<batch>/SAME-FEATURE.md`), your
+  page's section: up to 10 of the subject's anchors that share at least two
+  words with the page's headings and its parameter-like names (`due_date`,
+  `customerId`), each `id | score | words in common | vendor_term |
+  parent_path | what_it_does`, highest score first. It is a shortlist, not an
+  answer: a shared word is not the same feature, and an anchor it does not
+  list may still be one.
+- **Then the features list** (`_raw/<batch>/FEATURES.md`), for what the
+  shortlist cannot settle: the subject's anchors as they stand before this
+  batch, earlier windows included, one line each — `id | vendor_term |
+  parent_path | what_it_does`, grouped by breadcrumb, with an outline of line
+  ranges. Read the outline, then only the groups that could hold your page's
+  features (offset and limit) — never the whole file.
 - A feature on your page that is listed there → your draft adds
   `same_feature_as` with that row's `id`, copied exactly. Always the anchor's
   id: never a row that itself carries `same_feature_as`.
@@ -143,6 +151,12 @@ dropped; only the anchor is classified.
   asked about; a wrong link hides a feature.
 - A feature listed nowhere is new: your row is its anchor, with no
   `same_feature_as`.
+- **Exact repeats are linked by code.** When your draft has the same
+  `parameter` (or, without one, the same `vendor_term`) and the same quoted
+  words, on the same host, as an anchor — of the subject, or an earlier
+  anchor draft of yours — `kbqa stage` adds `same_feature_as` itself. You may
+  still write it; a draft that names another anchor is never changed by code,
+  only reported to the operator.
 
 ## 3 · The quote is the whole job
 

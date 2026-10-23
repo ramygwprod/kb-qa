@@ -70,7 +70,8 @@ The test for which layer something belongs in:
 | `fetch.py` | the one request path for collection: permission from today's G0 record (G0 run first when missing), path rules for `Claude-User`, `ClaudeBot` and `*`, crawl delay; TLS failures final |
 | `htmltext.py` | HTML to capture text — a fixed rendering, same bytes in, same text out |
 | `capture.py` | `kbqa capture`: one window verbatim, raw bytes and the receipt kept in `_raw/<batch>/`; the site-copy fallback; a `next_step` on every failure |
-| `stage.py` | `kbqa stage`: the staging file from the row-writer's drafts — frontmatter from the receipt, each quote's exact capture text from its part's own lines, ids unique in the subject, rejects listed; `--lists` writes `FEATURES.md` and `ROLE-ROWS.md` before the row-writer |
+| `stage.py` | `kbqa stage`: the staging file from the row-writer's drafts — frontmatter from the receipt, each quote's exact capture text from its part's own lines, ids unique in the subject, exact repeats linked by code, rejects listed; `--lists` writes `FEATURES.md`, `SAME-FEATURE.md` and `ROLE-ROWS.md` before the row-writer |
+| `shortlist.py` | the same-feature shortlist `SAME-FEATURE.md`: per page, the anchors sharing words with its headings and parameter-like tokens — candidates only |
 | `index.py` | `kbqa index`: a surface's denominator from `llms.txt`, a sitemap or an HTML index page; `--supersede`; sections; the plan's probe per host |
 | `stops.py` | `kbqa stop`: the one stop-reason vocabulary, and the atomic append of a stop line |
 | `elements.py` | `kbqa elements --outline`: the APQC list's top two levels with line ranges, so mapping reads parts |
