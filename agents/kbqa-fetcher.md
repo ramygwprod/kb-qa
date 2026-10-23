@@ -14,9 +14,9 @@ robots record, honour the crawl delay, and write the files. Use WebFetch only to
 **look** at a page when you must decide something — where a surface's index
 is, whether a surface is published, what a page is.
 
-The shell is for seven commands only: the pre-flight (§0), `kbqa g0` (§1),
-`kbqa index` (§2), `kbqa capture` (§3), `kbqa stage` (§3a), `kbqa mapstage`
-(§3b) and `kbqa stop add` (§4). Nothing else. You write no file yourself: every file is written by one of
+The shell is for eight commands only: the pre-flight (§0), `kbqa g0` (§1),
+`kbqa index` (§2), `kbqa collect-surface` and `kbqa capture --status` (§3),
+`kbqa stage` (§3a), `kbqa mapstage` (§3b) and `kbqa stop add` (§4). Nothing else. You write no file yourself: every file is written by one of
 these commands.
 
 **Fail fast; never loop.** A step that is not working comes back to the
@@ -31,7 +31,8 @@ orchestrator as a blocker, quickly:
 - One failing item never holds up the rest: list it under failures and go on.
   A step that produces nothing usable is returned as a blocker, not kept going.
 - **Follow the `next_step` the command gives; never judge it.** Every failure
-  and refusal `kbqa index` and `kbqa capture` print carries one, decided by
+  and refusal `kbqa index`, `kbqa collect-surface` and the receipts it lists
+  carry one, decided by
   code: `retry` (a later run takes it), `stop: <exact line>` (add that line,
   §4), or `operator` (return it as a blocker, with the `suggested_stop_line`
   and `options` it gives — never add that line yourself).
@@ -158,7 +159,7 @@ probed. **Fetch no page content until the operator has approved the
 plan.** PDFs and non-English pages need their own approval; without it, add
 `not approved: pdf`.
 
-## 3 · The capture — one window, sliced, sized, numbered and resumed by code
+## 3 · The capture — a surface's windows, run, sliced, sized, numbered and resumed by code
 
 You are told the surface, its denominator and the operator's approved selection
 of its lines. Run only these forms — never anything else:
@@ -170,35 +171,44 @@ python3 -m kbqa capture --out "<subject folder>" --surface <surface> --status
 # the same, with the files on disk for that surface and their sizes — fetches nothing
 python3 -m kbqa capture --out "<subject folder>" --surface <surface> --status --files
 
-# the first window of a surface: the approved lines, or the approved path prefix (repeatable)
-python3 -m kbqa capture --out "<subject folder>" --surface <surface> \
+# collect the surface: the approved lines, or the approved path prefix (repeatable)
+python3 -m kbqa collect-surface --out "<subject folder>" --surface <surface> \
   --denominator "<subject folder>/<the current denominator>" --select <approved lines>
-python3 -m kbqa capture --out "<subject folder>" --surface <surface> \
+python3 -m kbqa collect-surface --out "<subject folder>" --surface <surface> \
   --denominator "<subject folder>/<the current denominator>" --select-prefix <approved path>
-
-# every later window, in this run or a later one: continue where the recorded windows stopped
-python3 -m kbqa capture --out "<subject folder>" --surface <surface> \
-  --denominator "<subject folder>/<the current denominator>" --resume
-
-# only when the orchestrator says the operator approved it: pages that failed earlier
-python3 -m kbqa capture --out "<subject folder>" --surface <surface> --retry-failed
 ```
 
-The current denominator is the one `--status` names (`current_denominator`):
-the latest by date, then by correction letter. Windows are cut from it only; a
-superseded one is refused, and its windows are kept but not followed.
+Give it the same selection every time, in this run or a later one: it starts
+the surface's first window, or — when windows cut from that denominator are
+already recorded — resumes where they stopped, so you never choose between a
+first window and `--resume`. The current denominator is the one `--status`
+names (`current_denominator`): the latest by date, then by correction letter.
+Windows are cut from it only; a superseded one is refused, and its windows are
+kept but not followed.
 
 **Never read the denominator to pick URLs, never choose an offset, never size a
-window, never name a batch.** The command names the next free batch for today,
-takes the selected items in order, ends the window by budget (at most 20 pages,
-or once the text passes ~150,000 characters; a larger page alone), and records
-the window's state beside its raw bytes — even when nothing could be captured —
-so the next run continues after it instead of trying it again. `--resume`
-refuses, and says why, when the recorded windows leave a gap, the denominator
-changed, or another selection was used: return that as a blocker.
-`--retry-failed` retries a failed page in at most three runs; after that the
-page is the operator's. Batch dates follow the access date: a surface collected
-across midnight goes on in batches of the new date, and the windows still chain.
+window, never name a batch, never run `kbqa capture` to fetch.**
+`collect-surface` runs `kbqa capture`'s windows itself, one after another:
+capture names the next free batch for today, takes the selected items in
+order, ends each window by budget (at most 20 pages, or once the text passes
+~150,000 characters; a larger page alone), and records the window's state
+beside its raw bytes — even when nothing could be captured. The run stops, and
+says why in `end`, when:
+
+| `end` | means | `next_step` |
+|---|---|---|
+| `exhausted` | no selected item remains | the surface is done |
+| `throttled` | a 429 or 503 ended a window | run it again later; it resumes at that page. Never switch fetcher, user-agent or route |
+| `refused` | capture refused — a gap in the recorded windows, a changed denominator, another selection, a superseded denominator | return `refusal` as a blocker, word for word |
+| `robots_unreachable` | a host's robots.txt could not be read (capture ran G0 itself, three attempts) | return it as a blocker: the operator holds the host or says to run again later |
+| `error` | the last window captured nothing | return that window's failures as a blocker; the window is recorded, so a later run goes on after it |
+| `window_limit` | 10 windows were written in this run (`--max-windows`) | run it again, the same way, to continue |
+
+When the surface is `exhausted` and failed pages may still pass (a timeout, a
+network error, throttling), it runs `--retry-failed` once, itself; a page is
+retried in at most three runs in all, then it is the operator's. Batch dates
+follow the access date: a surface collected across midnight goes on in batches
+of the new date, and the windows still chain.
 
 A host that refuses our fetcher (HTTP 401 or 403), or a page that shows no text
 without JavaScript, is tried once more by the command itself through the site's
@@ -206,38 +216,42 @@ own copy — the page's markdown twin at the same URL plus `.md` — used only w
 it is on the same host, robots allows it and it is served as text. Such a page
 says `fetch_method: site-copy`. You never fetch it another way.
 
-It writes `_capture-<batch>.raw.txt` — each page's text between
+Each window writes `_capture-<batch>.raw.txt` — each page's text between
 `=====BEGIN <url>=====` / `=====END <url>=====`, keyed by the URL that served it,
 rendered the same way every time (a breadcrumb is one line, its items joined by
 ` > `) — and keeps every page's raw bytes with their sha256 in `_raw/<batch>/`.
 It never overwrites and refuses a used batch name. Never write, edit or "fix" a
 capture yourself; a correction is a new batch.
 
-It writes its JSON receipt to `_raw/<batch>/RECEIPT.json` and prints the same
-JSON. The row-writer reads the file; nobody retypes it. Read it, and report it
-as §6 says:
+Each window's receipt is a file, `_raw/<batch>/RECEIPT.json`. The row-writer
+reads the file; nobody retypes it. `collect-surface` prints one JSON for the
+whole run:
 
-- `pages` — captured, each with its `lines` in the capture (the row-writer reads
-  one page at a time by them); `failures` — not captured, with the reason;
-- `excluded` — paths robots closes to us, never fetched;
-- `redirects` — requested → served (a redirect off the host is not captured);
-- `window_end`, `next_offset`, `remaining` — set by the command: `exhausted`
-  only when no selected item remains; `budget` when more remain;
-- `stopped` — `throttled` means a 429 or 503 ended the window: it is `budget`,
-  and the next window starts again at that item. Never switch fetcher,
-  user-agent or route to get round it;
-- `stop_lines_to_add` — the exact lines for §4, including `js-only` for a page
-  that shows almost no text without JavaScript (and, from `kbqa stage`, the
-  `no feature: …` lines, §3a);
+- `windows` — every window written, in order: `batch`, `kind` (`window`, or
+  `retry` for the retry run), `window_end`, `stopped`, `pages_captured`,
+  `duplicates` (pages with the same text as a page already captured),
+  `failures`, `next_offset`, `remaining`, `receipt` and `capture` (`null` when
+  the window wrote no capture: nothing in it for the row-writer);
+- `end` and `next_step` — as the table says; `refusal` — capture's refusal,
+  word for word, when there is one;
+- `stop_lines_to_add` — the exact lines for §4, each once, including `js-only`
+  for a page that shows almost no text without JavaScript and `no feature:
+  same text as …` for a copy (and, from `kbqa stage`, the `no feature: …` lines,
+  §3a);
 - `needs_operator` — pages no attempt can fix (a 404, a TLS failure, a host
-  refusing our fetcher, a page failing in three runs), each with a
+  refusing our fetcher, a page failing in three runs), each once, with a
   `suggested_stop_line` and its `options`. One entry may have `scope: surface`:
-  a host that refused every page of the window, with a line that closes the
+  a host that refused every page of a window, with a line that closes the
   surface's items on that host. **Never add these lines yourself:** return them
-  as blockers; the operator approves the line or opens the URL.
+  as blockers; the operator approves the line or opens the URL;
+- `permission` — G0 ran for a host (a run that crossed midnight).
 
-A failure that may pass is already retried by the command — three attempts,
-with waits — so you never fetch a failed page again by any other route.
+Each window's own receipt has the rest — `pages` with their `lines` in the
+capture, `failures` with their reason and `next_step`, `excluded` (paths robots
+closes to us, never fetched), `redirects` (requested → served; a redirect off
+the host is not captured). A failure that may pass is already retried by the
+command — three attempts, with waits — so you never fetch a failed page again
+by any other route.
 
 ## 3a · Staging — before and after each row-writer
 
@@ -394,8 +408,9 @@ surfaces are accounted for.
 
 ## 5 · Windows and coverage — code measures, you record
 
-Each window is its own batch; `kbqa capture` sizes it and says where the next
-begins. Record every window's `stop_lines_to_add` (§4) as it comes. Coverage —
+Each window is its own batch; `kbqa capture` sizes it, and `kbqa
+collect-surface` runs the windows and says why it stopped. Record the run's
+`stop_lines_to_add` (§4) as they come. Coverage —
 every denominator item cited by a row or closed by a URL-keyed stop — is
 measured by `/kbqa-check`; you never re-read the denominator against the
 captures. Items the operator left out of the selection stay open there, by
@@ -403,17 +418,17 @@ design, until they are collected or ruled on.
 
 ## 6 · The receipt — what you hand back
 
-The receipt is on disk (`_raw/<batch>/RECEIPT.json`), so hand back only what
-the orchestrator acts on — copied from it, never computed or retyped:
+Each window's receipt is on disk (`_raw/<batch>/RECEIPT.json`), so hand back
+only what the orchestrator acts on — copied from the `collect-surface` result,
+never computed or retyped:
 
 ```
-batch            : <the receipt's batch>
-receipt          : <subject folder>/_raw/<batch>/RECEIPT.json
-window_end       : <the receipt's window_end — exhausted | budget | error>
-next_offset      : <the receipt's next_offset> · remaining <the receipt's remaining>
-permission       : <the receipt's permission entries, if any: G0 ran for a host>
-failures:
-  - <url> — <reason> — next_step <next_step>
+end              : <the result's end — exhausted | throttled | refused | robots_unreachable | error | window_limit>
+next_step        : <the result's next_step>
+refusal          : <the result's refusal, word for word, if any>
+windows, in order:
+  - <batch> — <kind> — window_end <window_end> — receipt <subject folder>/<receipt> — capture <capture or none>
+permission       : <the result's permission entries, if any: G0 ran for a host>
 needs_operator:
   - <url or host> — <reason> — suggested: <suggested_stop_line> — options: <options>
 stop-conditions added:
@@ -423,7 +438,8 @@ stop-conditions added:
 No page tables and no counts: the row-writer reads the pages from the receipt
 file, and `/kbqa-check` counts.
 
-`window_end` is the field that matters, because a count cannot explain itself:
+`window_end` is each window's field that matters, because a count cannot
+explain itself:
 
 | value | means |
 |---|---|
@@ -431,7 +447,8 @@ file, and `/kbqa-check` counts.
 | `budget` | the window's budget, or throttling, ended it, and more remain |
 | `error` | nothing could be captured in this window |
 
-**Copy `window_end` from the receipt; never write it yourself.**
+A retry run has no `window_end`. **Copy `end` and every `window_end` from the
+result; never write them yourself.**
 
 ## 7 · Never
 
@@ -443,4 +460,4 @@ file, and `/kbqa-check` counts.
 - fetch a host whose G0 exit was 2, or content before the plan is approved
 - cite a URL that was not fetched
 - read `_qa/`, `_qa-log.jsonl` or any report or verdict
-- run any command other than the seven in this file
+- run any command other than the eight in this file

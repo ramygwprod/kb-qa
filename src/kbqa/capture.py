@@ -662,7 +662,9 @@ def run(argv: Optional[List[str]] = None) -> int:
         try:
             rb = robots_of(host)
         except fetch.FetchError as exc:
-            return refuse(str(exc), permission=permission)
+            # Named apart, so a caller tells "robots unreachable" from any other refusal.
+            unreachable = {"robots_unreachable": host} if isinstance(exc, fetch.RobotsUnreachable) else {}
+            return refuse(str(exc), permission=permission, **unreachable)
         if rb.site_wide_refused():
             stop_here(url, "refused: robots (site-wide)", "refused", url, "refused: robots")
             continue

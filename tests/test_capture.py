@@ -192,8 +192,11 @@ def test_no_robots_record_from_today_runs_g0_first(subject, web, monkeypatch):
     assert no not in w.asked, "today's rules decide, not yesterday's record"
 
 
-def test_robots_unreachable_in_three_attempts_fetches_nothing(subject, web):
+def test_robots_unreachable_in_three_attempts_fetches_nothing(subject, web, monkeypatch):
+    from kbqa.gates import g0_permission
     (subject / f"_robots-{HOST}-{DAY}.txt").unlink()
+    # The suite never reaches the network: robots.txt is unreachable by simulation.
+    monkeypatch.setattr(g0_permission, "_fetch", lambda host: (None, "URLError: simulated: host unreachable"))
     w = web({f"https://{HOST}/p": (200, PAGE.encode(), "text/html")})
     code, r = run_capture(subject, f"https://{HOST}/p")
     assert code == 1 and "could not be read in 3 attempts" in r["refused"] and r["next_step"] == "operator"

@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from . import __version__, autofix, capture, elements, freeze, index, mappings, mapstage, probe, profile, report, stage, stops, sweep
+from . import __version__, autofix, capture, collect_surface, elements, freeze, index, mappings, mapstage, probe, profile, report, stage, stops, sweep
 from .gates import g0_permission, g1_capture, g2_conformance
 from .gates import g3_grounding, g4_completeness, g5_bundles, g6_integrity
 from .gates import mapcheck, surfaces
@@ -81,6 +81,15 @@ collection (the fetcher runs these; permission from today's g0 record, g0 run fi
                                                capture one window verbatim: raw
                                                bytes kept, text by a fixed rendering,
                                                the receipt in _raw/<batch>/RECEIPT.json
+  collect-surface --out <d> --surface <s> --denominator <f> [--select <lines> | --select-prefix <p>...]
+          [--max-windows <n>] [--max-pages <n>] [--max-chars <n>]
+                                               capture's windows for one surface (the first,
+                                               then --resume) until exhausted, throttled,
+                                               refused, robots unreachable, a window that
+                                               captured nothing, or --max-windows (10);
+                                               then --retry-failed once when exhausted.
+                                               One JSON: the windows, the end state, one
+                                               merged needs_operator and stop-line list
   stage --subject <d> --batch <b> --lists      before the row-writer: the subject's features
                                                and role-row lists beside the receipt
   stage --subject <d> --batch <b> [--leave-out-rejects]
@@ -236,6 +245,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         return index.run(argv[1:])
     if argv[0] == "capture":
         return capture.run(argv[1:])
+    # capture's windows for one surface, run until code says stop. Writes
+    # nothing but what capture writes.
+    if argv[0] == "collect-surface":
+        return collect_surface.run(argv[1:])
     # The staging file written by code from the row-writer's drafts, and the
     # lists it reads. Never a verdict.
     if argv[0] == "stage":

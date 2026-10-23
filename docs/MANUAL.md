@@ -312,11 +312,15 @@ edit toward it.
 /kbqa-collect <Subject Name>
 ```
 
-It cannot fetch and it cannot write — it delegates to the `kbqa-fetcher` and
-`kbqa-row-writer` subagents, window by window, until the fetcher reports the
-source exhausted or stops on budget and parks with an offset, then to two
-independent `kbqa-mapper` passes per batch. It returns a receipt per window and
-**no verdict**.
+It cannot fetch and it cannot write — it delegates to the `kbqa-fetcher`,
+`kbqa-row-writer` and `kbqa-mapper` subagents. Per surface, the fetcher runs
+`kbqa collect-surface`, which captures window after window by code until the
+selection is exhausted, the host throttles, something needs the operator, or
+the run's budget of windows is used, and parks with an offset. Then, for each
+window it wrote, in order: `kbqa stage --lists`, the row-writer's drafts,
+`kbqa stage` (one correction round for rejected drafts), two independent
+`kbqa-mapper` passes, each followed by `kbqa mapstage`. It returns a receipt
+per window and **no verdict**.
 
 **Check**, once it returns:
 
@@ -825,6 +829,7 @@ refusal carries a `next_step` decided by code: `retry`, `operator` (with a
 |---|---|---|---|
 | `index --out <d> --surface <s> --rung <n> --url <u> [--html] [--path-prefix <p>] [--supersede] [--all-languages]` | the subject's `llms.txt`, sitemap (indexes and gzip followed) or HTML index page; then one GET of one item per host with today's robots record, its body never read (`probe`) | `_denominator-<surface>-<date>.md`, in the index's own order and words; `--path-prefix` (operator-approved) is recorded in its header; `--supersede` (operator-approved, same day) writes `…-<date>b.md` (then `c`, …) naming the file it supersedes, which stays; the receipt's `sections` summarise it — an llms.txt by its own `##` headings, otherwise by host and path — with line ranges, and `probe` flags a host answering 401/403 with whether its `.md` copy answers | 0 written · 1 refused |
 | `capture --out <d> --surface <s> --denominator <f> --select <lines> \| --select-prefix <path>… \| --resume` · `--retry-failed` · `--status [--files]` (or `--url <u>…`) | one window, sliced from the approved selection — by line, or by URL path prefix (repeatable) — and sized by budget (20 pages / ~150,000 characters by default); a page answering 401/403, or showing no text without JavaScript, is tried once through its markdown twin (`<url>.md`, same host, robots-allowed, served as text: `fetch_method: site-copy`) | `_capture-<batch>.raw.txt` — each page's text by a fixed rendering, a breadcrumb as one ` > ` line — and `_raw/<batch>/`, with the receipt as `_raw/<batch>/RECEIPT.json` | 0 if any page was captured · 1 otherwise; names the next free batch; records every window's state in `_raw/<batch>/WINDOW.json`, even when nothing was captured; windows are cut from the current denominator only (latest by date, then letter); `--resume` follows only the windows of that denominator and refuses a gap, a changed denominator or another selection; `--status --files` lists the surface's denominators, captures, staging, map files, receipts and robots records with sizes, fetching nothing; a TLS failure is final (one attempt); a failure that may pass gets 3 attempts in a run and `--retry-failed` at most 3 runs, then goes to `needs_operator` with a suggested stop line; the receipt sets `window_end` (`exhausted` only when no selected item remains), `next_offset`, and each page's line range; a 429/503 ends the window (`stopped: throttled`) |
+| `collect-surface --out <d> --surface <s> --denominator <f> [--select <lines> \| --select-prefix <path>…] [--max-windows <n>] [--max-pages <n>] [--max-chars <n>]` | `capture`'s windows for one surface, run by `capture`'s own code in this process: the first window (or `--resume` when windows cut from this denominator are recorded), then `--resume`, until the selection is `exhausted`, a window is throttled, `capture` refuses, a host's robots.txt is unreachable, a window captures nothing (`window_end: error`), or `--max-windows` (10) windows were written in this run; then, when the surface is exhausted and failed pages may still pass, `--retry-failed` once (`capture`'s 3-run limit stays the limit) | nothing of its own: only what each `capture` run writes. It never stages rows or maps — the row-writer and the mappers run per window after it. Prints one JSON: every window written (`batch`, `kind`, `window_end`, `stopped`, `pages_captured`, `duplicates`, `failures`, `next_offset`, `remaining`, `receipt`, `capture`), `end` (`exhausted` · `throttled` · `refused` · `robots_unreachable` · `error` · `window_limit`) with its `next_step`, `capture`'s `refusal` word for word, one merged `needs_operator` (each URL once, a surface-wide item once per host, with the pages given up on when exhausted), the merged `stop_lines_to_add` (each line once) and `permission` | 0 if a window captured a page, or the surface was already exhausted · 1 otherwise; a surface already exhausted is not asked again (only its failed pages); a superseded denominator is refused by `capture` as before |
 
 Each page in a capture receipt also lists its `parts`: a page over ~20,000
 characters is split at headings (at line ends where a section has none), and

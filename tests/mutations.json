@@ -1295,5 +1295,203 @@
     "tests": [
       "tests/test_mapstage.py"
     ]
+  },
+  {
+    "label": "collect-surface: stops when the selection is exhausted",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    if r.get(\"window_end\") == \"exhausted\":\n        return \"exhausted\"\n",
+    "new": "    if False:\n        return \"exhausted\"\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: stops when a window is throttled",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    if (r.get(\"stopped\") or {}).get(\"reason\") == \"throttled\":\n        return \"throttled\"\n",
+    "new": "    if False:\n        return \"throttled\"\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: a window that captured nothing stops the surface",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    if r.get(\"window_end\") == \"error\":\n        return \"error\"\n",
+    "new": "    if False:\n        return \"error\"\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: robots unreachable is its own end",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        return \"robots_unreachable\" if r.get(\"robots_unreachable\") else \"refused\"\n",
+    "new": "        return \"refused\"\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: the refusal is printed, not hidden",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        out[\"refusal\"] = refusal\n",
+    "new": "        pass\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: --max-windows bounds the run",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        if len(windows) >= args.max_windows:\n",
+    "new": "        if len(windows) > args.max_windows:\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: --max-windows below 1 is refused",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    if args.max_windows < 1:\n",
+    "new": "    if args.max_windows < 0:\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: later windows resume",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        resume = [\"--resume\"] if _chain(subject, surface, den) else []\n",
+    "new": "        resume = []\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: the first window does not resume",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        resume = [\"--resume\"] if _chain(subject, surface, den) else []\n",
+    "new": "        resume = [\"--resume\"]\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: the loop reads window_end, never capture's exit code",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        end = take(_capture(window_args + resume)[1])\n",
+    "new": "        code_, r_ = _capture(window_args + resume)\n        end = take(r_) or (\"error\" if code_ else None)\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: an exhausted surface is not asked again",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    if already_exhausted:\n        end = \"exhausted\"\n",
+    "new": "    if False:\n        end = \"exhausted\"\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: a superseded denominator is never taken as done",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        and current is not None and current.name == den.name\n",
+    "new": "        and True\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: retry only at the end of the selection",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    if end == \"exhausted\":  # failed pages wait for the end of the selection\n",
+    "new": "    if True:\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: retry only when a page may still pass",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        if retryable:\n",
+    "new": "        if True:\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: a retry run's own end is kept",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "            end = take(_capture(base + [\"--retry-failed\"])[1]) or \"exhausted\"\n",
+    "new": "            take(_capture(base + [\"--retry-failed\"])[1])\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: pages given up on are the operator's",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        merge_operator(needs_operator, given_up)\n",
+    "new": "        pass\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: needs_operator once per URL",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        if k not in seen:\n",
+    "new": "        if True:\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: a surface-wide item once per host",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    return (\"host\", item.get(\"host\"))  # a surface-wide item: one per host\n",
+    "new": "    return (\"host\", id(item))\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: each stop line once",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        if ln not in into:\n",
+    "new": "        if True:\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: exit 0 for a surface already done",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    return 0 if already_exhausted or any(",
+    "new": "    return 0 if any(",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: exit 1 when nothing was captured",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "any(w[\"pages_captured\"] for w in windows) else 1",
+    "new": "True else 1",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "capture: robots unreachable is named apart",
+    "file": "src/kbqa/capture.py",
+    "old": "isinstance(exc, fetch.RobotsUnreachable) else {}",
+    "new": "False else {}",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
   }
 ]
