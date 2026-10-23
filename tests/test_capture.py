@@ -10,6 +10,7 @@ the network is never reached: `kbqa.fetch._open` is replaced by a fake web.
 import gzip
 import io
 import json
+import os
 import urllib.error
 from pathlib import Path
 
@@ -620,7 +621,16 @@ def _cap(subject, *args):
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
         code = capture.run(["--out", str(subject), "--date", DAY, *args])
-    return code, json.loads(out.getvalue())
+    r = json.loads(out.getvalue())
+    # A capture always comes well before its rows (the row-writer runs in
+    # between). On a filesystem whose clock ticks coarsely — the Linux CI
+    # runners — a staging file written in the same tick shares the capture's
+    # mtime, and G1 rightly refuses that; so the capture is dated a minute back.
+    cap = r.get("capture")
+    if cap and Path(cap).exists():
+        t = Path(cap).stat().st_mtime - 60
+        os.utime(cap, (t, t))
+    return code, r
 
 
 def test_a_failure_that_may_pass_gets_three_attempts_then_stops(subject, seqweb):
