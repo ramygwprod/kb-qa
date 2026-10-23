@@ -1,6 +1,6 @@
 # kbqa — user manual
 
-**Version 6.21.0** · for operators and for maker agents
+**Version 6.22.0** · for operators and for maker agents
 
 Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -10,7 +10,7 @@ Extending or maintaining the package? See [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.21.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.22.0"
 # Day to day, the pipeline is two commands with a human between them:
 #
 #   /kbqa-collect <Subject Name>     collect until the source runs out
@@ -18,7 +18,7 @@ pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.21.0"
 #
 # Everything below is what those do, and what to run when you want it by hand.
 
-python -m kbqa --version          # must print 6.21.0
+python -m kbqa --version          # must print 6.22.0
 ```
 
 **Audit a corpus** — needs no captures, changes nothing, answers "what here can
@@ -101,7 +101,7 @@ python3 -m venv .venv
 For an estate or CI, install from the pinned tag rather than a branch:
 
 ```bash
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.21.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.22.0"
 ```
 
 **Always a tag, never a branch.** A branch would let the gates and the data they
@@ -312,11 +312,17 @@ edit toward it.
 /kbqa-collect <Subject Name>
 ```
 
-It cannot fetch and it cannot write — it delegates to the `kbqa-fetcher` and
-`kbqa-row-writer` subagents, window by window, until the fetcher reports the
-source exhausted or stops on budget and parks with an offset, then to two
-independent `kbqa-mapper` passes per batch. It returns a receipt per window and
-**no verdict**.
+It cannot fetch and it cannot write — it delegates to the `kbqa-fetcher`,
+`kbqa-row-writer` and `kbqa-mapper` subagents. Per surface, the fetcher runs
+`kbqa collect-surface`, which captures window after window by code until the
+selection is exhausted, the host throttles, something needs the operator, or
+the run's budget of windows is used, and parks with an offset. Then, for each
+window it lists as `unstaged` — every window with a capture and no staging
+file, an earlier run's first — in order: `kbqa stage --lists`, the row-writer's
+drafts, `kbqa stage` (one correction round for rejected drafts; a page with no
+row and no reason is a reject), two independent `kbqa-mapper` passes, each
+followed by `kbqa mapstage` — skipped when every page was drafted `no_row`. It
+returns a receipt per window and **no verdict**.
 
 **Check**, once it returns:
 
@@ -346,6 +352,19 @@ establishes the list ever ended.
 `planner` findings go back to planning; only `fixable` ones return to the
 row-writer, and with the finding, never the gate name. Handing a maker *"G3
 failed, 14 rows"* produces fourteen edited quotes.
+
+**Code fixes first.** For a batch BLOCKED in round 1, `/kbqa-check` runs
+`python3 -m kbqa autofix --subject <d> --batch <b>` (§6, Fix round): a grade's
+known respelling, the breadcrumb and its depth from the receipt, `id` first —
+each from the evidence, recorded in `_qa/<b>.autofix-<n>.json`, the old bytes
+kept; run again on the bytes it wrote, it says `already applied` and gives the
+same `left_findings`. The row-writer's one fix round (`/kbqa-collect <Subject>
+fix <batch>`) then receives only its `left_findings`. When that round changes
+the set of anchor ids, both mapping passes are retired and run again
+(`kbqa mapstage --retire`, which refuses when the anchors are the same). Check
+again after that round, not
+before it: the staging file's new bytes are the batch's round 2 (G1 still holds:
+the capture is older than the rewritten staging file).
 
 ### 5.2 · Operator — a mapping round
 
@@ -774,10 +793,12 @@ file.
 ## 6 · All available actions
 
 Thirteen checking actions. **Ten are read-only by default; three write, and
-only ever to `_qa/`, the log, or a robots artifact.** No action mutates
-collected data — if something in a pipeline appears to "fix" a row, it is not
-kbqa doing it. Two more actions collect (§6, Collection): they create a
-denominator or a capture, and never overwrite one.
+only ever to `_qa/`, the log, or a robots artifact.** No checking action
+mutates collected data. One action does, and only in the fix round:
+`autofix` (§6, Fix round) rewrites a staging file for the findings code can fix
+exactly, records every change and keeps the old bytes — anything else that
+appears to "fix" a row is not kbqa doing it. Two more actions collect (§6,
+Collection): they create a denominator or a capture, and never overwrite one.
 
 ### Gates — check one thing, emit a verdict
 
@@ -791,7 +812,7 @@ denominator or a capture, and never overwrite one.
 | `g5 --rows <f>…` | rows | nothing | **always 0** — advisory |
 | `g6 --root <dir>` | whole corpus and its `_qa/` verdicts | nothing | 0 / 1 — also FAILs on a CLEAR batch not in `feature-tree.md` |
 | `surfaces --subject <d> [--stops <f>]` | the subject's denominators, batches and `_stop-conditions.md` | nothing | 0 / 1 — each of `product`, `docs`, `help` is indexed or stopped |
-| `mapcheck --staging <f> --map <A> [--map <B>] --codebook <f> --elements <f> [--subject <d>]` | staging, the mapping files, codebook, element list | nothing | 0 / 1 — well-formed and every code exists; never that a mapping is right |
+| `mapcheck --staging <f> --map <A> [--map <B>] --codebook <f> --elements <f> [--subject <d>]` | staging, the mapping files, codebook, element list | nothing | 0 / 1 — well-formed and every code exists; never that a mapping is right. `element_dominates` is raised for an element on more than 30 % of the batch's anchor rows **and on at least two of them**: below two rows the share measures nothing — on a batch of three anchors one element on one row is 33 % by arithmetic alone, so a tiny batch is never sent to a human for it |
 
 Every gate's counts carry `scanned`. A gate that scanned 0 items has checked
 nothing: the report marks the batch **NOT CHECKED**, which is never CLEAR.
@@ -813,13 +834,33 @@ refusal carries a `next_step` decided by code: `retry`, `operator` (with a
 | action | fetches | writes | exit |
 |---|---|---|---|
 | `index --out <d> --surface <s> --rung <n> --url <u> [--html] [--path-prefix <p>] [--supersede] [--all-languages]` | the subject's `llms.txt`, sitemap (indexes and gzip followed) or HTML index page; then one GET of one item per host with today's robots record, its body never read (`probe`) | `_denominator-<surface>-<date>.md`, in the index's own order and words; `--path-prefix` (operator-approved) is recorded in its header; `--supersede` (operator-approved, same day) writes `…-<date>b.md` (then `c`, …) naming the file it supersedes, which stays; the receipt's `sections` summarise it — an llms.txt by its own `##` headings, otherwise by host and path — with line ranges, and `probe` flags a host answering 401/403 with whether its `.md` copy answers | 0 written · 1 refused |
-| `capture --out <d> --surface <s> --denominator <f> --select <lines> \| --select-prefix <path>… \| --resume` · `--retry-failed` · `--status [--files]` (or `--url <u>…`) | one window, sliced from the approved selection — by line, or by URL path prefix (repeatable) — and sized by budget (20 pages / ~150,000 characters by default); a page answering 401/403, or showing no text without JavaScript, is tried once through its markdown twin (`<url>.md`, same host, robots-allowed, served as text: `fetch_method: site-copy`) | `_capture-<batch>.raw.txt` — each page's text by a fixed rendering, a breadcrumb as one ` > ` line — and `_raw/<batch>/`, with the receipt as `_raw/<batch>/RECEIPT.json` | 0 if any page was captured · 1 otherwise; names the next free batch; records every window's state in `_raw/<batch>/WINDOW.json`, even when nothing was captured; windows are cut from the current denominator only (latest by date, then letter); `--resume` follows only the windows of that denominator and refuses a gap, a changed denominator or another selection; `--status --files` lists the surface's denominators, captures, staging, map files, receipts and robots records with sizes, fetching nothing; a TLS failure is final (one attempt); a failure that may pass gets 3 attempts in a run and `--retry-failed` at most 3 runs, then goes to `needs_operator` with a suggested stop line; the receipt sets `window_end` (`exhausted` only when no selected item remains), `next_offset`, and each page's line range; a 429/503 ends the window (`stopped: throttled`) |
+| `capture --out <d> --surface <s> --denominator <f> --select <lines> \| --select-prefix <path>… \| --resume` · `--retry-failed` · `--status [--files]` (or `--url <u>…`) | one window, sliced from the approved selection — by line, or by URL path prefix (repeatable) — and sized by budget (20 pages / ~150,000 characters by default); a page answering 401/403, or showing no text without JavaScript, is tried once through its markdown twin (`<url>.md`, same host, robots-allowed, served as text: `fetch_method: site-copy`) | `_capture-<batch>.raw.txt` — each page's text by a fixed rendering, a breadcrumb as one ` > ` line — and `_raw/<batch>/`, with the receipt as `_raw/<batch>/RECEIPT.json` | 0 if any page was captured · 1 otherwise; names the next free batch; records every window's state in `_raw/<batch>/WINDOW.json`, even when nothing was captured; windows are cut from the current denominator only (latest by date, then letter); `--resume` follows only the windows of that denominator and refuses a gap, a changed denominator or another selection; `--status --files` lists the surface's denominators, captures, the row-writer's drafts, staging, the mappers' drafts, map files, the rejects files of `stage` and `mapstage`, receipts and robots records with sizes, fetching nothing; a TLS failure is final (one attempt); a failure that may pass gets 3 attempts in a run and `--retry-failed` at most 3 runs, then goes to `needs_operator` with a suggested stop line; the receipt sets `window_end` (`exhausted` only when no selected item remains), `next_offset`, and each page's line range; a 429/503 ends the window (`stopped: throttled`) |
+| `collect-surface --out <d> --surface <s> --denominator <f> [--select <lines> \| --select-prefix <path>…] [--max-windows <n>] [--max-pages <n>] [--max-chars <n>]` | `capture`'s windows for one surface, run by `capture`'s own code in this process: the first window (or `--resume` when windows cut from this denominator are recorded), then `--resume`, until the selection is `exhausted`, a window is throttled, `capture` refuses, a host's robots.txt is unreachable, a window captures nothing (`window_end: error`), or `--max-windows` (10) windows were written in this run; then, when the surface is exhausted and failed pages may still pass, `--retry-failed` once (`capture`'s 3-run limit stays the limit) | nothing of its own: only what each `capture` run writes. It never stages rows or maps — the row-writer and the mappers run per window after it. Prints one JSON: every window written (`batch`, `kind`, `window_end`, `stopped`, `pages_captured`, `duplicates`, `failures`, `next_offset`, `remaining`, `receipt`, `capture`), `unstaged` — every window of this surface, from this run or any earlier one, with a capture file and no `_collect-<b>-staging.md`, in batch order, each with its `state` (no drafts yet · drafts not yet staged · every page drafted `no_row`, nothing to stage), so the per-window steps for those run first and no captured window is lost — `end` (`exhausted` · `throttled` · `refused` · `robots_unreachable` · `error` · `window_limit`) with its `next_step`, `capture`'s `refusal` word for word, one merged `needs_operator` (each URL once, a surface-wide item once per host, with the pages given up on when exhausted), the merged `stop_lines_to_add` (each line once) and `permission` | 0 if a window captured a page, or the surface was already exhausted · 1 otherwise; a surface already exhausted is not asked again (only its failed pages); a superseded denominator is refused by `capture` as before |
 
 Each page in a capture receipt also lists its `parts`: a page over ~20,000
 characters is split at headings (at line ends where a section has none), and
 each part carries its own lines, where to start reading for a few lines of
 overlap, and its context — the page's breadcrumb and the headings above it — so
 a part read alone loses nothing. Rows come only from a part's own lines.
+
+| action | reads | writes | exit |
+|---|---|---|---|
+| `stage --subject <d> --batch <b> --lists` | the receipt, its capture, the feature tree, every staging file, the estate's `role_rows` patterns | `_raw/<batch>/FEATURES.md` (the subject's anchors), `_raw/<batch>/SAME-FEATURE.md` (per page of the window, up to 10 anchors sharing at least 2 normalised words with the page's headings and parameter-like tokens, scored, with the words in common — candidates only; else `same_feature_note` says why) and `_raw/<batch>/ROLE-ROWS.md` (rows that may name a role; only when the estate names patterns, else `role_rows_note` says why). Run **before** the row-writer, so they hold every row staged so far, earlier windows included | 0 written · 1 refused — also once the batch's staging file exists (the lists are what the drafts were written from; `stage` refreshes `ROLE-ROWS.md` itself) |
+| `stage --subject <d> --batch <b> [--leave-out-rejects]` | the receipt, its capture (sha256 and pages checked against the receipt), `_draft-<batch>.jsonl`, every id the subject has | `_collect-<batch>-staging.md`: the frontmatter copied from the receipt; per draft, `source_quote` = the capture's exact text of the quote found once in its part's own lines (whitespace, quotes and dashes folded, nothing else), `source_url`, `access_date`, `parent_path` (the part's breadcrumb, else `unknown`), `depth_level` (its levels counted, else `unknown`), `canonical: NOVEL`, and an `id` `<subject>.<surface>.<breadcrumb's last item>.<vendor_term>` (slugs; `-2`, `-3`… past any id the subject already has); `same_feature_as: "draft:<line>"` becomes the id given to that draft (an anchor of this batch, not rejected); an exact repeat — the same `parameter` (else `vendor_term`) and quote, on the same host, as an anchor of the subject or an earlier anchor draft — gets `same_feature_as` by code, listed under `linked_by_code`; a draft naming another anchor is never changed, only listed under `link_conflicts`. **A rejected draft blocks the staging file**: the run writes only `_draft-<batch>.rejects-<n>.jsonl` — its quote not in the part's own lines, or there more than once, a page or part the receipt does not have, a field no row carries, a link to a draft that is no anchor, a `same_feature_as` id that is not an anchor of the subject (no row of the tree or any staging file, or a row that is itself another source), an enumerated field (`evidence_grade`, `confidence`, `mechanism`, `outcome`, `interface_type`) outside the profile's values — except a known grade respelling, which is written in the schema's spelling and listed under `respelt_by_code` — and a receipt page no draft line names (no row and no `no_row`: "no row and no reason", listed by its page) — each with its line (or page), reason and next step, one file per round, never overwritten. The row-writer corrects the rejected lines once; drafts still rejected are left out only with `--leave-out-rejects`, which writes the staging file and lists each under `needs_operator`. Pages drafted `no_row` come back as `stop_lines_to_add` (`no feature: …`); when every page is drafted `no_row` there is no staging file and `next_step` is `no rows — skip mapping for this batch`. After writing the staging file it refreshes `_raw/<batch>/ROLE-ROWS.md` so the mappers see the batch's own rows (`role_rows_refreshed`, else `role_rows_note` says why) | 0 written (or every page `no_row` and nothing rejected) · 1 refused, or drafts rejected; a third run without `--leave-out-rejects`, or the flag before the correction round, is refused with its `next_step`; never overwrites a staging file |
+
+Since v6.22.0 the row-writer writes drafts and code writes the staging file;
+`capture` no longer writes `FEATURES.md` or `ROLE-ROWS.md`. The draft format is
+in `docs/STAGING-FORMAT.md`.
+
+| action | reads | writes | exit |
+|---|---|---|---|
+| `mapstage --subject <d> --batch <b> --pass <A\|B> --elements <list> [--leave-out-rejects]` | the batch's staging file (its anchor rows: rows without `same_feature_as`), this pass's `_mapdraft-<b>-<A\|B>.jsonl` and rejects files — never the other pass's — and the element list | `_map-<b>-<A\|B>.jsonl` in the mapper's format, one line per anchor in the staging file's order: `user_story` built as `As [a\|an ]<role>[ (APQC-closest)], I want <want>[, so that <so_that>]` (the article only when the draft gives one, the tag exactly when `role_source` is `apqc-closest`, no "so that" part when `so_that` is empty; `""` for a `NO-FUNCTION`/`NOT-FEATURE` line with no `want`), each `pcf_ids` entry `{pcf_id, hierarchy_id, name}` copied from the list by id, every other key as drafted. **A rejected line blocks the file**: the run writes only `_mapdraft-<b>-<A\|B>.rejects-<n>.jsonl` — a line not a JSON object, a key missing or extra, a `null`, a text key not text, an id that is no anchor row or has a line already, an `article` other than `a`, `an` or `""`, an element id not on the list, a story that cannot be built, a `needs-human` note not opening `[<name>]`, an anchor with no line — one file per round, never overwritten. The mapper corrects once; then `--leave-out-rejects` writes the file with every anchor still on one line — an anchor whose line is rejected or missing written `needs-human`, its note `[no rule] <reason>`, with what its draft gave that can be copied — and lists each reject under `needs_operator` | 0 written (or no anchor to classify) · 1 refused, or lines rejected; a third run without `--leave-out-rejects`, or the flag before the correction round, is refused with its `next_step`; never overwrites a map file or its sidecar `_map-<b>-<A\|B>.meta.json` (the staging file's name and sha256 it was written from, also printed as `staging_sha256`; `mapcheck` never reads it) |
+| `mapstage --subject <d> --batch <b> --pass <A\|B> --retire [--no-record]` | this pass's map file and its sidecar, the staging file (its anchor ids) | moves this pass's `_map-<b>-<P>.jsonl`, `.meta.json`, `_mapdraft-<b>-<P>.jsonl` and every `_mapdraft-<b>-<P>.rejects-*.jsonl` into a new `_qa/retired-<b>-<P>-<n>/` (`n` one past every earlier folder of that batch and pass; nothing deleted or overwritten) and prints each move, `anchor_set_changed` with `anchors_added` / `anchors_removed` (the anchor ids — rows without `same_feature_as` — of the staging file now against the ids the map file has lines for) and the `next_step` (the mapper writes a fresh draft for this pass). `--no-record`, **only on the operator's word**, retires a map file that has no `.meta.json` (written before sidecars existed) and writes `RETIRED-WITHOUT-RECORD.txt` into the folder saying so. Never touches the other pass | 0 moved · 1 refused: the staging file still has the sha256 the sidecar recorded (classifying unchanged rows again is wasted work), the staging bytes changed but its anchor ids did not (nothing to re-map: the map file stands, check again), a map file with no sidecar (`next_step`: `--no-record`, on the operator's word), `--no-record` with a sidecar present or with no map file, nothing to retire, or combined with `--elements` / `--leave-out-rejects` |
+
+Since v6.22.0 the mapper writes drafts and code writes the map file, so a
+story's form and an element's hierarchy id and name are never typed by an
+agent. `mapcheck` checks the result unchanged. The draft format is in
+`docs/STAGING-FORMAT.md`.
 
 | action | reads | writes | exit |
 |---|---|---|---|
@@ -877,6 +918,15 @@ detect — the fetcher records `gated: login` from what it sees.
 |---|---|---|
 | `report --vendor-dir <d> --batch <b> [--denominator <f>] [--stops <f>] [--log <f>]` | staging, capture, denominator, stops | `_qa/<b>.report.md`, `_qa/<b>.report.json`, one verdict per gate, one log line |
 | `sweep --root <c> [--field-values] [--exclude <glob>] [--vendor-depth N] [--out <f>] [--recollect <f.jsonl>]` | every staging and capture under root | `_qa-estate-audit.md` and `.json` at the root; with `--recollect`, the re-collection list at that path |
+
+### Fix round — what code can fix exactly, before the row-writer
+
+| action | reads | writes | exit |
+|---|---|---|---|
+| `autofix --subject <d> --batch <b>` | `_qa/<b>.report.json` — refused unless its `staging_sha256` is the staging file's current sha256 — the staging file, and for a breadcrumb the receipt and its capture (sha256 and pages checked, as `stage` checks them) | only when a fix applies, never over an existing file: `_qa/<b>.staging-before-autofix-<n>.md` (the old bytes), `_qa/<b>.autofix-<n>.json` (each change: finding code, row id, line, field, before, after; the staging sha256 before and after), then the staging file, atomically; `n` is one past every earlier run. Fixes `evidence_grade_spelling` (a known respelling only: another case or spaces, or bare `verify` → `[verify]`), `parent_path_empty` and `depth_unknown_with_breadcrumb` (re-derived as `stage` derives them, from the parts of the row's page in the receipt that hold its quote — only when they give one breadcrumb and the staging file names the receipt's capture; a depth only when the row's `parent_path` is that breadcrumb), `id_not_first_key` (`id` moved first, no value changed). Only rows whose line reads as `stage` writes it; every other line keeps its bytes and place. Prints `fixed` and `left_for_row_writer` per code, `left_findings` word for word with `why_not_by_code`, `resolved_by_a_fix` (schema findings on a fixed field that no longer fails), `not_for_row_writer` (structural and planner), `files_written`, `next_step` | 0 ran (fixes or none), or already applied: run again while the staging file is the bytes an earlier run wrote (its `_qa/<b>.autofix-<n>.json` `staging_sha256_after`, and the report is not on those bytes), it writes nothing and prints `already_applied`, that record's `left_findings` and the next step — the row-writer's fix round (or the check, when it left nothing) · 1 refused: no report, a report of other bytes, a report of round 2 or later (the round from `_qa-log.jsonl` when the report names none; `next_step`: the batch is PARKED for the operator — autofix is part of the one fix round, never a second), a legacy batch name (never edited), the staging file changing while it ran |
+
+The new bytes are the batch's next round: run `autofix` on a round-1 report,
+give what it leaves to the row-writer, then check again (§5.1).
 
 ### Diagnostics, interpretation guards and metadata — never write rows
 
@@ -950,7 +1000,7 @@ not a report.
 | `depth_unknown_with_breadcrumb` | fixable | issue | The page shows a breadcrumb: count its levels for the depth, or use the level the page names (current-convention batches) |
 | `duplicate_id` | fixable | issue | Two rows share an id; establish which is which |
 | `duplicate_page_block` | structural | issue | A URL captured twice; re-fetch cleanly |
-| `element_dominates` | planner | issue | One APQC element on > 30 % of rows — a human reads a sample first |
+| `element_dominates` | planner | issue | One APQC element on > 30 % of rows, and on at least two rows — a human reads a sample first |
 | `empty_denominator` | structural | gap | Re-capture the index surface |
 | `evidence_grade_spelling` | fixable | issue | Use the schema's spelling of the grade (current-convention batches) |
 | `frontmatter_unparseable` | fixable | issue | Correct the frontmatter |
@@ -1082,7 +1132,7 @@ and the data they judge change in the same push.
 
 ```bash
 pip install --upgrade pip
-pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.21.0"
+pip install "git+https://github.com/ramygwprod/kb-qa.git@v6.22.0"
 ```
 
 > `pip < 21.3` cannot read this project's metadata and installs an empty package

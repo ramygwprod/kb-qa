@@ -215,8 +215,8 @@ defined by what it **cannot** do — and where it cannot be, the limit is named.
 
 | | tools | can fetch | can write | can run commands |
 |---|---|---|---|---|
-| `kbqa-fetcher` | `WebFetch`, `Write`, `Read`, `Bash` | yes | captures, indexes, stops | four named commands |
-| `kbqa-row-writer` | `Read`, `Write` | **no** | staging only | **no** |
+| `kbqa-fetcher` | `WebFetch`, `Write`, `Read`, `Bash` | yes | captures, indexes, stops, staging by `kbqa stage` | six named commands |
+| `kbqa-row-writer` | `Read`, `Write` | **no** | drafts only (code writes the staging file) | **no** |
 | `kbqa-mapper` | `Read`, `Write` | **no** | map files only | **no** |
 
 A subagent's `tools:` list is an allowlist: the row-writer has no network, so

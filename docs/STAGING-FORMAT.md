@@ -209,8 +209,10 @@ so a source found later is a new row pointing at the anchor, and
 `same_feature_not_anchor`); G6 that no tree row points at nothing
 (`tree_same_feature_dangling`); `mapcheck` that only anchors have mapping lines
 (`map_line_for_another_source`); G5 counts a repeated term whose rows are one
-feature apart from its naming questions. `kbqa capture` writes the subject's
-anchors to `_raw/<batch>/FEATURES.md` for the row-writer.
+feature apart from its naming questions. `kbqa stage --lists` writes the
+subject's anchors to `_raw/<batch>/FEATURES.md` for the row-writer (`kbqa
+capture` did, before v6.22.0), and, since v6.22.0, the same-feature shortlist
+`_raw/<batch>/SAME-FEATURE.md` (below).
 
 ### Beside each receipt (since v6.20.0)
 
@@ -222,11 +224,262 @@ anchors to `_raw/<batch>/FEATURES.md` for the row-writer.
   v6.20.0 is reported as not measured.
 - **Role-row candidates.** When the estate's `kbqa-estate.json` has a
   `role_rows` key — a list of `{"pattern": <regex>, "fields": [<row fields>]}`,
-  matched without case, the union of all — `kbqa capture` writes
-  `_raw/<batch>/ROLE-ROWS.md`: every row of the subject a pattern matches, with
-  the words and field matched, for the mapper's role sources. The patterns are
-  the estate's vocabulary, never this tool's; without them nothing is written
-  and the receipt's `role_rows_note` says why.
+  matched without case, the union of all — `kbqa stage --lists` writes
+  `_raw/<batch>/ROLE-ROWS.md` (`kbqa capture` did, before v6.22.0): every row
+  of the subject a pattern matches, with the words and field matched, for the
+  mapper's role sources. The patterns are the estate's vocabulary, never this
+  tool's; without them nothing is written and the result's `role_rows_note`
+  says why.
+- **Same-feature shortlist** (since v6.22.0). `kbqa stage --lists` writes
+  `_raw/<batch>/SAME-FEATURE.md` and names it in its result (`same_feature`):
+  one section per page of the window, in the receipt's order, listing up to 10
+  of the subject's anchors that share at least 2 words with the page. Words are
+  normalised alike on both sides — lowercase, runs of letters and digits, minus
+  a short fixed stop-word list (`kbqa.shortlist.STOP_WORDS`) and words of 2
+  characters or fewer. An anchor's words come from its `vendor_term`,
+  `parameter` and `what_it_does`; a page's from its headings (the receipt's)
+  and its parameter-like tokens — identifiers containing `_` or written in
+  camelCase — in its parts' own lines. The score is the number of words in
+  common; order is score (highest first), then id. One line per candidate:
+  `id | score | words in common | vendor_term | parent_path | what_it_does`.
+  Candidates only: the row-writer judges sameness. When the capture cannot be
+  read (none written, or no longer the receipt's), the shortlist is not
+  written and `same_feature_note` says why; the other lists are still written.
+- **Once staged, never rebuilt.** `kbqa stage --lists` refuses once the batch's
+  staging file exists: the lists are what the drafts were written from. `kbqa
+  stage` itself writes `ROLE-ROWS.md` again right after it writes the staging
+  file, so the mappers see the batch's own rows (`role_rows_refreshed` in its
+  result, or `role_rows_note` saying why not).
+
+## `_draft-<batch>.jsonl` and `kbqa stage` (since v6.22.0)
+
+The row-writer no longer writes the staging file. It writes **drafts** — what
+only it can judge — and `kbqa stage` writes `_collect-<batch>-staging.md` from
+them, copying everything else by code.
+
+One JSON object per line, in `<subject folder>/_draft-<batch>.jsonl`:
+
+```
+{"page": "https://docs.example.test/hooks/retries", "part": 0, "quote": "Failed webhook calls are retried for up to 24 hours.", "vendor_term": "Retries", "what_it_does": "Retries a failed webhook call for up to a day.", "evidence_grade": "official-doc", "confidence": "high", "mechanism": "Native", "outcome": "yes"}
+{"page": "https://docs.example.test/pricing", "no_row": "pricing page"}
+```
+
+| key | value |
+|---|---|
+| `page` | the page's `url`, exactly as in the receipt |
+| `part` | the index of the part in that page's `parts`, from 0 — the part the row-writer read the words in |
+| `quote` | the words chosen, from that part's own lines |
+| `vendor_term`, `what_it_does`, `evidence_grade`, `confidence`, `mechanism`, `outcome` | the row-writer's judgement, as in the row table; every draft carries all six |
+| `same_feature_as` | when the feature already has a row: the anchor's `id` (from `FEATURES.md`), or `draft:<line>` — another draft of this batch, by its 1-based line in the drafts file, which code replaces with the id it gives that draft |
+| `interface_type`, `operation`, `parameter`, `source_typo`, `mechanism_raw`, `outcome_raw`, `mechanism_via` | only when they apply; copied to the row as written |
+| `no_row` | instead of all the above: a page read that holds no row, in a few words (`{"page": …, "no_row": …}` and nothing else) |
+
+`kbqa stage --subject <d> --batch <b>`:
+
+- **Frontmatter from the receipt.** `batch`, `source_capture`,
+  `source_capture_sha256`, `pages` (every page, in capture order),
+  `fetched_by_this_agent: false`, the window fields the receipt has
+  (`window_offset`, `window_requested`, `window_returned`, `window_end`) and
+  `access_date`. It refuses when the capture no longer hashes to the receipt's
+  sha256, or its pages are not the receipt's.
+- **The quote is the capture's.** The draft's quote is looked for in the part's
+  own lines only, folded as G3 folds (NFKC, quotes, dashes, whitespace — never
+  spelling); the capture's exact text of the one span found becomes
+  `source_quote`. Not found, or found more than once (overlaps included), the
+  draft is rejected: never the nearest match, never the draft's own wording.
+- **The rest by code.** `source_url` (the page), `access_date`, `parent_path`
+  (the part's breadcrumb as captured, else `unknown`), `depth_level` (the
+  breadcrumb's levels counted, else `unknown`), `canonical: NOVEL`, and `id`:
+  `<subject folder>.<surface>.<breadcrumb's last item>.<vendor_term>`, each
+  segment a slug (lowercase ASCII letters and digits, other runs as `-`); a page
+  with no breadcrumb has no breadcrumb segment. An id the subject already has —
+  in the feature tree or any staging file — or that an earlier draft of the
+  batch took gets `-2`, `-3`…; the same drafts on the same subject give the same
+  ids. `id` is the first key of every row.
+- **A link inside the batch.** `same_feature_as: "draft:<line>"` must name a
+  line that holds a row draft — not a `no_row` line, not the draft itself — and
+  that draft must be the anchor: it carries no `same_feature_as` of its own
+  (one step, never a chain). A link to a rejected draft is rejected with that
+  draft's reason. Otherwise the row gets the id given to the named draft.
+- **Exact repeats, linked by code.** A draft whose `parameter` (when it has
+  one, else its `vendor_term`, as written) and whose quote — the capture's
+  exact text, folded as G3 folds — are identical, on the same host, to those
+  of an anchor of the subject (feature tree or a staging file) or of an
+  earlier anchor draft of this batch gets `same_feature_as` set by code to
+  that anchor (a draft anchor as `draft:<line>`, resolved as above). Each link
+  is listed under `linked_by_code`: the draft's `line`, the `anchor` id (and
+  `anchor_line` for a draft anchor) and what `matched` (`host`, the name
+  compared, `quote`). A row that carries `same_feature_as` is never a target.
+  Nothing is changed, and the draft is listed under `link_conflicts` with a
+  `reason`, when it already names another anchor, when it repeats several
+  anchors of the subject at once, or when other drafts name it as their
+  anchor (`draft:<line>`), since linking it would leave them pointing at a
+  row that is not an anchor. A draft that already names the same anchor is
+  left as it is and not listed.
+- **What stage checks before the check.** A `same_feature_as` that is not
+  `draft:<line>` must name an anchor of the subject — a row of the feature tree
+  or of a staging file that carries no `same_feature_as` itself — else the
+  draft is rejected. An enumerated field — `evidence_grade`, `confidence`,
+  `mechanism`, `outcome`, and `interface_type` when given — must hold one of the
+  profile's values (`Profile.enumerated`: for this profile the schema's grades
+  `official-doc`, `help`, `marketing`, `verified`, `[verify]`; `high`,
+  `medium`, `low`; the `mechanism` and `outcome` values of the row table; `API`,
+  `SDK`, `webhook`, `CLI`, `user interface`), else the draft is rejected. A
+  grade written another known way — another case or spaces, or bare `verify` —
+  is the one exception: it is the respelling `kbqa autofix` would fix, so stage
+  writes the schema's spelling directly and lists it under `respelt_by_code`
+  (`line`, `field`, `before`, `after`).
+- **Every page has a row or a reason.** A page of the receipt that no draft
+  line names — neither a row nor a `no_row` line — is a reject of its own, by
+  `page` (no `line`), reason `no row and no reason: …`; it blocks the staging
+  file like any reject, and the correction round gives the page its rows or
+  its `no_row` line.
+- **Rejected drafts block the staging file.** Also rejected: a page or part the
+  receipt does not have, a field no row carries, a missing judgement field, a
+  line that is not a JSON object, and a page drafted `no_row` that also has
+  rows. While any draft is rejected, stage writes no staging file: it writes
+  `_draft-<batch>.rejects-<n>.jsonl` — one line per reject: the draft's line,
+  the reason, a suggested next step and the draft itself — and exits 1. `n` is
+  the run (`round` in the result); each round's file is kept, never
+  overwritten.
+- **One correction round.** After round 1 the row-writer rewrites only the
+  rejected lines of its drafts file, in place, and stage runs again. Drafts
+  still rejected in round 2 are left out only by
+  `kbqa stage … --leave-out-rejects`, which writes the staging file without
+  them, writes that round's rejects file, and prints each under
+  `needs_operator` with its reason and next step — never silently. A third run
+  without the flag is refused, its `next_step` naming the flag; the flag
+  before the correction round is refused too. There is no second correction
+  round.
+- **No row.** Each page drafted `no_row` comes back as a suggested stop line,
+  `- <url> | no feature: <words>`, under `stop_lines_to_add`, for the fetcher to
+  add with `kbqa stop add`; the pages that end with neither a staged row nor a
+  `no_row` line are listed under `pages_without_row_or_no_row`.
+- It never overwrites a staging file. When no draft became a row it writes no
+  staging file; when that is because every page was drafted `no_row`, its
+  `next_step` is `no rows — skip mapping for this batch`. The result is printed as JSON: the round, counts, the staging
+  and rejects paths, the rejected lines and reasons, `linked_by_code`,
+  `link_conflicts`, and the `next_step`.
+
+### `kbqa autofix` — the fix round's mechanical part (since v6.22.0)
+
+Before the row-writer's one fix round, `kbqa autofix --subject <d> --batch <b>`
+fixes in the staging file the findings that have one right answer computed from
+the evidence. It reads `_qa/<batch>.report.json` and refuses unless that report
+was made on the staging file's current bytes (`staging_sha256`), refuses a
+report of round 2 or later (the round from `_qa-log.jsonl` when the report
+names none: autofix is part of the one fix round, and a round-2 batch is the
+operator's), and it never edits a batch whose name is not
+`<surface>-<YYYY-MM-DD>-wNN`.
+
+| finding | fixed when | to |
+|---|---|---|
+| `evidence_grade_spelling` | the value is a known respelling of one schema grade: another case or spaces, or bare `verify` | the schema's spelling (`official-doc`, `help`, `marketing`, `verified`, `[verify]`) |
+| `parent_path_empty` | the row's `source_url` is a page of the receipt, the parts of it whose own lines hold the row's `source_quote` give one breadcrumb, the receipt and capture agree, and the staging file names that capture's sha256 | that breadcrumb, else `unknown` — as `kbqa stage` writes it; and its levels counted as `depth_level` when that was `unknown` |
+| `depth_unknown_with_breadcrumb` | as above, and the row's `parent_path` is exactly that breadcrumb | the breadcrumb's levels counted |
+| `id_not_first_key` | the row has an `id` | the same row with `id` first; no value changes |
+
+Only a row whose line reads exactly as `kbqa stage` writes it is rewritten, so
+nothing but the fixed fields changes; every other line keeps its bytes and its
+place, and the line numbers in the report stay true. When a fix applies it
+writes `_qa/<batch>.staging-before-autofix-<n>.md` (the old bytes) and
+`_qa/<batch>.autofix-<n>.json` (each change: `code`, `id`, `line`, `field`,
+`before`, `after`; the staging sha256 before and after), then the staging file
+atomically; `n` counts the batch's runs, and no earlier file is overwritten.
+Everything else — and each of these findings the evidence does not settle,
+with `why_not_by_code` — is printed under `left_findings` for the row-writer's
+fix round; structural and planner findings under `not_for_row_writer`.
+
+Run again while the staging file is the bytes an earlier run wrote — an
+`_qa/<batch>.autofix-<n>.json` whose `staging_sha256_after` is the staging
+file's sha256, and a report that is not on those bytes — autofix exits 0 with
+`already applied`: it writes nothing and prints that record (`already_applied`),
+its `left_findings`, and the next step, the row-writer's fix round.
+
+## `_mapdraft-<batch>-<A|B>.jsonl` and `kbqa mapstage` (since v6.22.0)
+
+The mapper no longer writes the map file. Each pass writes a **draft** — its
+judgement only — and `kbqa mapstage` writes `_map-<batch>-<A|B>.jsonl` from
+it, the file `mapcheck` reads (its format is the mapper's §2, unchanged).
+
+One JSON object per anchor row of the staging file (a row without
+`same_feature_as`), in `<subject folder>/_mapdraft-<batch>-<A|B>.jsonl`, with
+exactly these keys:
+
+```
+{"id": "example.docs.reports", "article": "", "role": "admins", "role_source": "rbac-row", "actor": "B", "want": "reports of the conversations each team closed", "so_that": "each team's week is seen", "theme": "I06", "theme_links": [], "pcf_ids": ["90002"], "confidence": "low", "status": "mapped", "note": ""}
+```
+
+| key | value |
+|---|---|
+| `id` | the anchor row's `id` |
+| `article` | `"a"`, `"an"` (before a singular role) or `""` — the mapper's choice |
+| `role`, `role_source`, `actor`, `theme`, `theme_links`, `confidence`, `status`, `note` | as in the map file |
+| `want`, `so_that` | the story's words after `I want` and after `so that`; `so_that` is `""` when the story has none |
+| `pcf_ids` | element ids only, as text (`["90002"]`), `[]` when none |
+
+`kbqa mapstage --subject <d> --batch <b> --pass <A|B> --elements <list>`:
+
+- **The story by code.** `user_story` = `"As " + article + " " + role +
+  " (APQC-closest)" + ", I want " + want + ", so that " + so_that` — the article
+  and its space only when `article` is not `""`, the tag only when
+  `role_source` is `apqc-closest`, the "so that" part only when `so_that` is
+  not empty: `As admins, I want …`, `As a marketer (APQC-closest), I want …`.
+  A `NO-FUNCTION` or `NOT-FEATURE` line with an empty `want` has no story
+  (`""`).
+- **Elements from the list.** Each id becomes
+  `{"pcf_id", "hierarchy_id", "name"}`, all three copied from the element list.
+- **The rest as drafted**, in the mapper's key order, one line per anchor in the
+  staging file's order. `mapcheck` judges the values.
+- **Rejected lines block the map file.** A line that is not a JSON object, a key
+  missing or extra (`user_story` included), a `null`, a text key that is not
+  text, an `id` that is not a row of the staging file, a row with
+  `same_feature_as`, or an id with a line already, an `article` other than the
+  three, an element id not on the list, a `want` without a `role`, no `want`
+  outside `NO-FUNCTION`/`NOT-FEATURE`, a `needs-human` note that does not open
+  with `[<name>]`; and an anchor with no line. While any is rejected no map file
+  is written: `_mapdraft-<batch>-<A|B>.rejects-<n>.jsonl` — one line per reject:
+  the draft's `line` (none for a missing anchor), `id`, `reason`, `next_step`
+  and the draft — and exit 1. Each round's file is kept, never overwritten.
+- **One correction round.** The mapper rewrites only the rejected lines, then
+  mapstage runs again. Lines still rejected in round 2 are settled only by
+  `--leave-out-rejects`: every anchor still gets exactly one line — an anchor
+  whose line is rejected or missing is written `needs-human`, its note
+  `[no rule] <the reason>`, keeping what its draft gave that can be copied (the
+  story when it can be built, the element ids on the list) — and each reject is
+  listed under `needs_operator`, with whether it was written. A rejected line
+  that is no anchor's is not written, only listed. A third run without the flag
+  is refused, and so is the flag before the correction round.
+- **The passes stay independent.** A run reads and counts only its own pass's
+  draft and rejects files; the other pass's files are never opened.
+- It never overwrites a map file. When the staging file has no anchor, nothing
+  is written and the result says so.
+- **The sidecar.** Beside the map file it writes `_map-<batch>-<A|B>.meta.json`:
+  `batch`, `pass`, `map`, `map_sha256`, `staging`, `staging_sha256` — the
+  staging bytes the map file was written from (also `staging_sha256` in the
+  result). `mapcheck` never reads it.
+- **Classifying again** (the fix round, when the set of anchor ids changed):
+  `kbqa mapstage --subject <d> --batch <b> --pass <A|B> --retire` moves this
+  pass's map file, sidecar, draft and every rejects file into a new
+  `_qa/retired-<batch>-<A|B>-<n>/` (`n` from 1, one past every earlier folder of
+  that batch and pass; nothing deleted, nothing overwritten), prints each move
+  and the next step — the mapper writes a fresh draft for this pass, whose
+  rounds start again at 1. It refuses while the staging file still hashes to
+  the sidecar's `staging_sha256` (unchanged rows are not classified twice), and
+  when the bytes changed but the anchor ids did not — the ids of the rows
+  without `same_feature_as` now, against the ids the map file has lines for:
+  nothing to re-map, the map file stands. Its result says `anchor_set_changed`
+  with `anchors_added` and `anchors_removed`. A map file with no sidecar (one
+  written before sidecars existed) is refused, unless
+  `--retire --no-record` is given — on the operator's word only: it is retired
+  like any other and `RETIRED-WITHOUT-RECORD.txt` in the folder says it was
+  retired without a record, on the operator's word, with the staging sha256 at
+  that moment. It touches only the given pass.
+
+A left-out line whose draft gave no role source, actor or theme — an anchor
+that had no line, say — carries none: `mapcheck` fails it
+(`role_source_empty`, `actor_invalid`, `theme_unknown`) until the operator
+rules on that row. Code never invents a reading to make the check pass.
 
 ## `_capture-<batch>.raw.txt` (BRONZE, immutable)
 

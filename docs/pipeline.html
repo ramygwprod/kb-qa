@@ -148,7 +148,7 @@
     <p class="lede">Every collected claim traces to a verbatim quote in a page capture stored before the claim was written — or it fails a gate. This is how that holds, end to end.</p>
     <div class="regimes">
       <span class="regime"><b>/kbqa-collect</b> &nbsp;owns collection and classification</span>
-      <span class="regime"><b>kbqa v6.21.0</b> &nbsp;owns verification · G0–G6</span>
+      <span class="regime"><b>kbqa v6.22.0</b> &nbsp;owns verification · G0–G6</span>
       <span class="regime"><b>agents/</b> &nbsp;make the role split structural</span>
     </div>
   </header>
@@ -160,7 +160,7 @@
 
     <figure>
       <div class="scroll">
-        <svg viewBox="0 0 980 620" role="img" aria-label="Pipeline flow: a human planner names the subject; the fetcher checks robots.txt, captures pages and the vendor index to Bronze, and returns a receipt; the row-writer reads only that capture and writes staging rows to Silver; a human carries the batch across an isolation boundary to the checker, which runs gates G1 to G4 and produces classified findings that return to the planner.">
+        <svg viewBox="0 0 980 620" role="img" aria-label="Pipeline flow: a human planner names the subject; the fetcher checks robots.txt, captures pages and the vendor index to Bronze, and returns a receipt; the row-writer reads only that capture and writes drafts, from which kbqa stage writes the staging rows to Silver; a human carries the batch across an isolation boundary to the checker, which runs gates G1 to G4 and produces classified findings that return to the planner.">
           <defs>
             <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M 0 1 L 9 5 L 0 9 z" fill="currentColor"/>
@@ -215,8 +215,8 @@
 
           <!-- C2 -->
           <rect class="nd" x="490" y="416" width="190" height="46" rx="5"/>
-          <text class="t" x="585" y="437" text-anchor="middle">Staging rows</text>
-          <text class="t-sm tag-silver" x="585" y="452" text-anchor="middle">SILVER · QUOTE PER CLAIM</text>
+          <text class="t" x="585" y="437" text-anchor="middle">Drafts → kbqa stage</text>
+          <text class="t-sm tag-silver" x="585" y="452" text-anchor="middle">SILVER · QUOTE COPIED BY CODE</text>
 
           <!-- D1 -->
           <rect class="nd nd-key" x="740" y="416" width="210" height="56" rx="5"/>
@@ -283,13 +283,13 @@
       </div>
       <div class="cell">
         <h3>row-writer</h3>
-        <div class="tools"><span class="has">Read</span><span class="has">Write</span><span class="has">Bash</span><span class="hasnt">WebFetch</span></div>
-        <p>Holds no network tool, so the capture on disk is its only possible source. Invention is not forbidden here — it is unreachable.</p>
+        <div class="tools"><span class="has">Read</span><span class="has">Write</span><span class="hasnt">Bash</span><span class="hasnt">WebFetch</span></div>
+        <p>Holds no network tool and no shell, so the capture on disk is its only possible source. It writes drafts — the words to quote and its judgement — and <code>kbqa stage</code> copies the quote as the capture prints it, the page, the breadcrumb and the id. Invention is not forbidden here — it is unreachable.</p>
       </div>
       <div class="cell">
         <h3>kbqa-check</h3>
         <div class="tools"><span class="has">Bash</span><span class="has">Read</span><span class="hasnt">Write</span><span class="hasnt">Edit</span></div>
-        <p>Runs the gates and reads verdicts. Cannot modify a gate, a capture, or a row — so it cannot make a failing batch pass.</p>
+        <p>Runs the gates and reads verdicts. Cannot modify a gate, a capture, or a row itself; the only change to a staging file it runs is <code>kbqa autofix</code>'s, the fixes code computes exactly from the evidence, each recorded — so it cannot make a failing batch pass.</p>
       </div>
     </div>
     <p style="font-size:15px;color:var(--ink-3)">The hash travels in the receipt rather than being recomputed by the row-writer. A hash produced and verified on the same side proves only that a file hashes to its own hash.</p>

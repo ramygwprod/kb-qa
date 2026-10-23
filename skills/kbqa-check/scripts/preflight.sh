@@ -19,8 +19,8 @@
 # KBQA_REPO, KBQA_SKILLS_HOME, KBQA_AGENTS_HOME, KBQA_SKILL_COPIES (newline-separated
 # paths; empty = skip the copy check).
 
-PINNED="${KBQA_PINNED:-v6.21.0}"
-EXPECTED_MANIFEST="${KBQA_EXPECTED_MANIFEST:-8bd267e8fb28d05ef59aa6081eb761132262e0e85ada97d4466380e184ce6827}"
+PINNED="${KBQA_PINNED:-v6.22.0}"
+EXPECTED_MANIFEST="${KBQA_EXPECTED_MANIFEST:-77c0ca183fff62ffea4cf1217bcb113b4cdad6a4ff34a8d5c9bbb0009720826e}"
 REPO="${KBQA_REPO:-https://github.com/ramygwprod/kb-qa.git}"
 INSTALL="python3 -m pip install --force-reinstall \"git+${REPO}@${PINNED}\""
 SKILLS_HOME="${KBQA_SKILLS_HOME:-$HOME/.claude/skills}"

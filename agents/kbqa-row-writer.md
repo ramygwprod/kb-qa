@@ -1,6 +1,6 @@
 ---
 name: kbqa-row-writer
-description: For /kbqa-collect only. Reads one capture from disk and writes the batch's staging file of rows grounded in it. Has no network and no shell — the capture is the only source.
+description: For /kbqa-collect only. Reads one capture from disk and writes the batch's drafts — the words to quote and its judgement of each row — from which code writes the staging file. Has no network and no shell — the capture is the only source.
 tools: Read, Write
 ---
 Your only source is the capture file you are given. If the capture does not say
@@ -23,90 +23,87 @@ What the capture holds (since kbqa 6.21.0):
   capture; the receipt lists it under `duplicates`, and code records its stop
   line.
 
+**You judge; code copies** (since kbqa 6.22.0). You write **drafts**: for each
+row, where its words are and what you make of them. `kbqa stage`, run by the
+fetcher after you, writes the staging file from your drafts — the frontmatter
+from the receipt, the quote as the capture prints it, the URL, the date, the
+breadcrumb, the depth and the id. You never write the staging file, except in
+fix mode (§5).
+
 You receive the subject folder and a batch name — nothing else. **Read the
 batch's receipt from disk first**: `<subject folder>/_raw/<batch>/RECEIPT.json`,
-written by `kbqa capture`. It holds everything you copy and everything you read
-by: `capture` (the capture's path), `sha256`, `access_date`, the window fields,
-`pages` — each with its `lines` and its `parts` — and `features`, the path of the
-subject's features list (§2a). Copy from that file; never
-from a brief, a message or your memory. If the file is missing, or its `batch`
-is not the batch you were given, stop and say so.
+written by `kbqa capture`. It holds everything you read by: `capture` (the
+capture's path) and `pages` — each with its `url`, its `lines` and its `parts`.
+If the file is missing, or its `batch` is not the batch you were given, stop
+and say so. Beside it, `_raw/<batch>/SAME-FEATURE.md` (the same-feature
+shortlist per page) and `_raw/<batch>/FEATURES.md` (the subject's features
+list) are written just before you were started (§2a).
 
 **Read one part at a time**, in order. Every page has one or more `parts`; a
 long page is split at its headings by code. For each part, Read the capture
 from its `read_from` line to the last of its `lines` (offset and limit), and:
 
-- write rows **only from the part's own `lines`** — the few lines before them
+- draft rows **only from the part's own `lines`** — the few lines before them
   are the end of the previous part, there for context, and already done;
-- use the part's `breadcrumb` and `headings` as the context its lines sit in —
-  `parent_path` is the page's breadcrumb, whichever part a row comes from;
-- quote only words that are in the capture, on that page.
+- use the part's `breadcrumb` and `headings` as the context its lines sit in;
+- quote only words that are in the part's own lines, on that page.
 
 Never load the whole capture at once. Every row of every part cites the page
 the part belongs to.
 
-## 1 · The staging file
+## 1 · The drafts file
 
-`<subject folder>/_collect-<batch>-staging.md`, where `<batch>` is exactly the
-receipt's batch name (`<surface>-<YYYY-MM-DD>-wNN`). If the file already exists,
-stop and say so; never overwrite one — except in fix mode (§5).
+`<subject folder>/_draft-<batch>.jsonl`, where `<batch>` is exactly the
+receipt's batch name (`<surface>-<YYYY-MM-DD>-wNN`). If the file already
+exists, stop and say so; never overwrite one — except its rejected lines, in
+the one correction round (§4a).
 
-Frontmatter first:
+One JSON object per line, nothing else in the file — no frontmatter, no fence,
+no heading. Two kinds of line:
 
 ```
----
-batch: <the receipt's batch>
-source_capture: _capture-<batch>.raw.txt
-source_capture_sha256: <the 64 hex characters from the receipt — copied, never computed>
-pages:
-  - <url>                # every BEGIN marker in the capture, byte-identical, in file order
-fetched_by_this_agent: false
-window_offset: <from the receipt>
-window_requested: <from the receipt>
-window_returned: <from the receipt>
-window_end: <from the receipt — exhausted | budget | error>
-access_date: <from the receipt>
----
+{"page": "<url>", "part": 0, "quote": "<the words>", "vendor_term": "…", "what_it_does": "…", "evidence_grade": "official-doc", "confidence": "high", "mechanism": "Native", "outcome": "yes"}
+{"page": "<url>", "no_row": "pricing page"}
 ```
 
-- **`source_capture_sha256`** is copied from the receipt file's `sha256`. Its
-  value is that the code which fetched the bytes recorded it.
-- **`pages:`** lists every URL with a BEGIN marker — all of them, not only the ones
-  you used.
-- **`fetched_by_this_agent: false`**, always. You have no network.
-- The window fields come from the receipt file, never from your own judgement
-  and never from a brief: `window_offset`, `window_requested`, `window_returned`
-  and `window_end`, exactly as it holds them.
+- **A row**: `page` is the page's `url`, copied exactly from the receipt;
+  `part` is the index of the part you read the words in, in that page's
+  `parts`, counting from 0; `quote` is the words, copied from that part's own
+  lines; then your judgement (§2).
+- **A page with no row**: every page you read and found nothing to record on
+  gets exactly one line `{"page": <url>, "no_row": "<what the page is>"}` — in
+  a few words (`pricing page`, `legal notice`, `blog index`). Code turns it
+  into the page's `no feature: …` stop line, so the check knows the page was
+  read and held nothing, not skipped. A page with rows has no `no_row` line.
+- **Every page of the receipt gets one or the other.** A page no line names —
+  no row and no `no_row` — is rejected by `kbqa stage` as "no row and no
+  reason", and blocks the staging file like any reject.
 
-## 2 · The rows
+`kbqa stage` finds each quote in its part's own lines — spacing, curly or
+straight quotes and dash kinds do not matter, spelling does — and copies the
+capture's own text of it as `source_quote`. A quote that is not in that part,
+or that is there more than once, is **rejected**, never guessed: quote enough
+words to be found once, from the part you name.
 
-After the frontmatter, one fenced block, one JSON object per line, `id` first on
-every line:
+## 2 · Your judgement, per row
 
-````
-```json
-{"id": "acme.docs.webhooks", "vendor_term": "Webhooks", ...}
-{"id": "acme.docs.webhooks.retries", "vendor_term": "Retries", ...}
-```
-````
-
-Every row carries these fields, with exactly these values where a list is given:
+Every row line carries these, with exactly these values where a list is given:
 
 | field | rule |
 |---|---|
-| `id` | lowercase, dotted, prefixed with the subject: `[a-z0-9_-]` per segment, segments joined by `.`; unique; never renumbered |
-| `source_url` | a URL that has a BEGIN marker in this capture |
-| `source_quote` | copied character for character from that URL's block |
-| `access_date` | from the receipt |
 | `vendor_term` | the subject's own name for the thing, verbatim |
 | `what_it_does` | one plain sentence, no larger than the quote supports |
-| `parent_path` | the page's own breadcrumb, verbatim: the capture writes a breadcrumb as one line, its items joined by ` > ` — copy that line; `unknown` when the page shows none — **never empty**, never built from the URL or the page title |
 | `evidence_grade` | `official-doc` · `help` · `marketing` · `verified` · `[verify]` — spelled exactly so |
 | `confidence` | `high` · `medium` · `low` |
 | `mechanism` | `Native` · `Composed` · `Integrated` · `BYO` · `None` · `unknown` |
 | `outcome` | `yes` · `partial` · `no` · `na` · `unknown` |
-| `depth_level` | the level the page itself names (`product-line` · `module` · `sub-module` · `feature` · `sub-feature`); else the number of levels in the page's breadcrumb; `unknown` **only** when `parent_path` is `unknown` — a page with a breadcrumb always has a counted depth |
-| `canonical` | `NOVEL`, always |
+
+Code fills the rest: `id`, `source_url`, `source_quote`, `access_date`,
+`parent_path` (the part's breadcrumb, or `unknown` when the page shows none),
+`depth_level` (the breadcrumb's levels counted) and `canonical: NOVEL`. Never
+write them in a draft. A value outside these lists is rejected by `kbqa stage`
+before any check; a grade in another case or with spaces, or bare `verify`, is
+written by code in the spelling above.
 
 When the row documents a way in — an API operation, an SDK method, a webhook, a
 CLI command or a settings screen — add `interface_type` (`API` · `SDK` ·
@@ -119,8 +116,8 @@ When the page describes `mechanism` or `outcome` in prose that fits none of the
 values, write `unknown` in the field and the subject's own words in
 `mechanism_raw` or `outcome_raw`. When `mechanism` is `Integrated` and the page
 names the other party, write that name, verbatim, in `mechanism_via`. A subject's
-misprint goes in `source_typo` (§3). Add no other field: the checker rejects
-fields it does not know.
+misprint goes in `source_typo` (§3). Add no other field: `kbqa stage` rejects a
+draft with a field it does not know.
 
 ## 2a · One feature, one anchor
 
@@ -131,21 +128,41 @@ feature in a later batch — is a row of its own, grounded by its own quote, tha
 adds `same_feature_as: <the anchor's id>`. Nothing is folded and nothing is
 dropped; only the anchor is classified.
 
-- **Read the receipt's `features` file first** (`_raw/<batch>/FEATURES.md`):
-  the subject's anchors as they stood before this batch, one line each —
-  `id | vendor_term | parent_path | what_it_does`, grouped by breadcrumb, with
-  an outline of line ranges. Read the outline, then only the groups that could
-  hold your page's features (offset and limit) — never the whole file.
-- A feature on your page that is listed there, or that an earlier row of this
-  batch already gave → your row adds `same_feature_as` with that row's `id`,
-  copied exactly. Always the anchor's id: never a row that itself carries
-  `same_feature_as`.
+- **Read the shortlist first** (`_raw/<batch>/SAME-FEATURE.md`), your
+  page's section: up to 10 of the subject's anchors that share at least two
+  words with the page's headings and its parameter-like names (`due_date`,
+  `customerId`), each `id | score | words in common | vendor_term |
+  parent_path | what_it_does`, highest score first. It is a shortlist, not an
+  answer: a shared word is not the same feature, and an anchor it does not
+  list may still be one.
+- **Then the features list** (`_raw/<batch>/FEATURES.md`), for what the
+  shortlist cannot settle: the subject's anchors as they stand before this
+  batch, earlier windows included, one line each — `id | vendor_term |
+  parent_path | what_it_does`, grouped by breadcrumb, with an outline of line
+  ranges. Read the outline, then only the groups that could hold your page's
+  features (offset and limit) — never the whole file.
+- A feature on your page that is listed there → your draft adds
+  `same_feature_as` with that row's `id`, copied exactly. Always the anchor's
+  id: never a row that itself carries `same_feature_as`. `kbqa stage` rejects
+  an id that is not an anchor of the subject.
+- A feature that another draft of **this** batch already gave has no id yet —
+  code gives ids — so name that draft by its line in your drafts file:
+  `"same_feature_as": "draft:<line>"` (the first line is 1). `kbqa stage`
+  writes the id it gives that draft. The draft you name must be a row (not a
+  `no_row` line, not this draft) and the anchor itself — a draft with no
+  `same_feature_as`. If it is rejected, yours is rejected with it.
 - Same feature means the same thing done for the same purpose, by the
   subject's own words on both rows — not a similar name. When you cannot tell
   from the words, write no `same_feature_as`: an anchor too many is seen and
   asked about; a wrong link hides a feature.
 - A feature listed nowhere is new: your row is its anchor, with no
   `same_feature_as`.
+- **Exact repeats are linked by code.** When your draft has the same
+  `parameter` (or, without one, the same `vendor_term`) and the same quoted
+  words, on the same host, as an anchor — of the subject, or an earlier
+  anchor draft of yours — `kbqa stage` adds `same_feature_as` itself. You may
+  still write it; a draft that names another anchor is never changed by code,
+  only reported to the operator.
 
 ## 3 · The quote is the whole job
 
@@ -175,18 +192,43 @@ dropped; only the anchor is classified.
 
 ## 4 · What you hand back
 
-- the staging path. No counts: `/kbqa-check` counts rows and terms, and a count
-  made by hand is a second number that can disagree
-- **every page that produced no row**: its URL, exactly as in its BEGIN marker,
-  and in a few words what the page is (`pricing page`, `legal notice`). The
-  fetcher records each as `no feature: …`, so the check knows the page was read
-  and held nothing to record — not skipped.
+- the drafts path. No counts: `kbqa stage` and `/kbqa-check` count, and a
+  count made by hand is a second number that can disagree. Pages with no row
+  are in the drafts file (`no_row`), not in your answer.
 - **evidence not captured**: anything a page points to as evidence that the
   capture does not hold — an image, a video, a linked file, a table that came
   back empty — by URL, in a few words. Never a row.
 - **role stated elsewhere**: a row whose own page names no role, where another
-  page in the capture does — the row's `id` and that page's URL. The quote
-  stays on the row's own page.
+  page in the capture does — the row's draft line and that page's URL. The
+  quote stays on the row's own page.
+
+## 4a · Rejected drafts — one correction round
+
+After you, the fetcher runs `kbqa stage`. While any draft is rejected it writes
+no staging file: it lists the rejects in
+`<subject folder>/_draft-<batch>.rejects-<n>.jsonl` — one line each: the
+draft's `line`, the `reason` and the `draft` — and you get **one** correction
+round. Given that file:
+
+- Read it and the parts it names. Rewrite **only the rejected lines** of your
+  drafts file, each at its own line number — the quote as that part's own lines
+  print it, found once; the right part; the field spelled as the table says; a
+  `same_feature_as` that names an anchor (or none). A
+  draft the capture does not support becomes `{"page": <url>, "no_row": …}` only
+  when no other row is on that page; otherwise leave the line as it is and say
+  why.
+- A reject that names a `page` and no `line` is a page no line of yours named
+  ("no row and no reason"): read it, and **add** its rows, or its one `no_row`
+  line, at the end of the file.
+- Change no other line, and never renumber: other drafts may name these lines
+  in `draft:<line>`. Never write or edit a rejects file.
+- Hand back one line per reject: what you changed, or why the capture does not
+  allow it.
+
+Then the fetcher runs `kbqa stage` again. Drafts still rejected are left out of
+the staging file by the operator's command and listed for the operator — there
+is no second correction round. Once a staging file exists, the drafts file is
+no longer yours to change.
 
 ## 5 · Fix mode — the one fix round
 
@@ -194,9 +236,16 @@ You are given a staging file, its capture, and the operator's `fixable`
 findings from `/kbqa-check`, word for word. This is the only time you write over
 an existing staging file.
 
+Code has fixed what it could fix exactly before you (`kbqa autofix`: a grade's
+known respelling, the breadcrumb and its depth from the receipt, `id` first), so
+you receive only what it left: findings of other codes, and any finding of
+those kinds that the evidence did not settle, each with the reason code could
+not (`why_not_by_code`). The staging file's line numbers are unchanged by it.
+
 - Fix **what the findings name, in the rows they name**, from the capture — a
   quote corrected to the page's exact words, a `parent_path` filled from the
-  breadcrumb, an `evidence_grade` respelled, a row moved to the page it is about.
+  breadcrumb, an `evidence_grade` the schema spells, a row moved to the page it
+  is about.
 - A row the capture cannot support is removed, not stretched to pass.
 - Change nothing else: not the frontmatter's receipt values, not rows no finding
   names, not the order of the rows that stay.
@@ -209,6 +258,7 @@ so and change nothing: those need a re-fetch or a new plan, not an edit.
 ## 6 · Never
 
 - fetch, or ask anyone to fetch for you
+- write the staging file outside fix mode: `kbqa stage` writes it from your drafts
 - compute `source_capture_sha256`, or change `fetched_by_this_agent`
 - edit the capture, a denominator, a robots file or `_stop-conditions.md`
 - write a row from knowledge you brought with you, or paraphrase into `source_quote`

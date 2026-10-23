@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from . import __version__, capture, elements, freeze, index, mappings, probe, profile, report, stops, sweep
+from . import __version__, autofix, capture, collect_surface, elements, freeze, index, mappings, mapstage, probe, profile, report, stage, stops, sweep
 from .gates import g0_permission, g1_capture, g2_conformance
 from .gates import g3_grounding, g4_completeness, g5_bundles, g6_integrity
 from .gates import mapcheck, surfaces
@@ -63,6 +63,14 @@ cycle:
                                                audit the whole estate: which
                                                batches can be checked at all;
                                                --recollect writes the re-collection list
+  autofix --subject <d> --batch <b>            before the row-writer's fix round: fix in the
+                                               staging file only what code can fix exactly
+                                               (a grade's spelling, parent_path and depth
+                                               from the receipt, id first), on the report
+                                               of its current bytes; every change recorded
+                                               in _qa/<b>.autofix-<n>.json, the old bytes kept;
+                                               run again on the bytes it wrote: "already
+                                               applied", with what it left
 
 collection (the fetcher runs these; permission from today's g0 record, g0 run first when missing):
   index --out <d> --surface <s> --rung <n> --url <u> [--html] [--path-prefix <p>] [--supersede]
@@ -75,6 +83,45 @@ collection (the fetcher runs these; permission from today's g0 record, g0 run fi
                                                capture one window verbatim: raw
                                                bytes kept, text by a fixed rendering,
                                                the receipt in _raw/<batch>/RECEIPT.json
+  collect-surface --out <d> --surface <s> --denominator <f> [--select <lines> | --select-prefix <p>...]
+          [--max-windows <n>] [--max-pages <n>] [--max-chars <n>]
+                                               capture's windows for one surface (the first,
+                                               then --resume) until exhausted, throttled,
+                                               refused, robots unreachable, a window that
+                                               captured nothing, or --max-windows (10);
+                                               then --retry-failed once when exhausted.
+                                               One JSON: the windows, every window with a
+                                               capture and no staging file (unstaged, from
+                                               earlier runs too), the end state, one merged
+                                               needs_operator and stop-line list
+  stage --subject <d> --batch <b> --lists      before the row-writer: the subject's features
+                                               and role-row lists beside the receipt;
+                                               refused once the batch is staged
+  stage --subject <d> --batch <b> [--leave-out-rejects]
+                                               after it: the staging file from the
+                                               row-writer's _draft-<batch>.jsonl — quotes
+                                               copied from the capture, ids and the
+                                               frontmatter by code; a rejected draft (or
+                                               a page with no row and no reason, a link
+                                               to no anchor, a value outside the profile)
+                                               blocks it (one correction round, then
+                                               --leave-out-rejects lists each left out);
+                                               ROLE-ROWS.md refreshed after it is written
+  mapstage --subject <d> --batch <b> --pass <A|B> --elements <list> [--leave-out-rejects]
+                                               after each mapping pass: _map-<b>-<A|B>.jsonl
+                                               from the mapper's _mapdraft-<b>-<A|B>.jsonl —
+                                               user_story and each element's hierarchy id
+                                               and name by code; a rejected line blocks it
+                                               (one correction round, then
+                                               --leave-out-rejects writes each anchor whose
+                                               line is still rejected as needs-human)
+  mapstage --subject <d> --batch <b> --pass <A|B> --retire [--no-record]
+                                               fix round, after the anchor ids changed:
+                                               move this pass's map, sidecar, draft and
+                                               rejects into _qa/retired-<b>-<A|B>-<n>/;
+                                               refused while the staging is unchanged or
+                                               its anchor ids are; --no-record (operator's
+                                               word only) retires a map with no sidecar
   stop add <subject dir> "- <url> | <reason>"  append one stop line, atomically, if its
                                                reason is in the vocabulary
   stop reasons                                 print the stop-reason vocabulary
@@ -188,6 +235,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     if argv[0] == "report":
         return report.run(argv[1:])
 
+    # The fixes code can compute exactly from a report and the receipt, made
+    # before the row-writer's fix round. Never a verdict.
+    if argv[0] == "autofix":
+        return autofix.run(argv[1:])
+
     # Estate-wide audit. Records what can be checked; does not gate.
     if argv[0] == "sweep":
         return sweep.run(argv[1:])
@@ -203,6 +255,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         return index.run(argv[1:])
     if argv[0] == "capture":
         return capture.run(argv[1:])
+    # capture's windows for one surface, run until code says stop. Writes
+    # nothing but what capture writes.
+    if argv[0] == "collect-surface":
+        return collect_surface.run(argv[1:])
+    # The staging file written by code from the row-writer's drafts, and the
+    # lists it reads. Never a verdict.
+    if argv[0] == "stage":
+        return stage.run(argv[1:])
+    # A mapping file written by code from one pass's draft. Never a verdict.
+    if argv[0] == "mapstage":
+        return mapstage.run(argv[1:])
     # The stop-condition vocabulary, and the one atomic way to add a line.
     if argv[0] == "stop":
         return stops.run(argv[1:])

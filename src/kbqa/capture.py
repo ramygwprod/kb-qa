@@ -29,12 +29,10 @@ page's line range in the capture, so the row-writer reads one page at a time.
 **The receipt is a file**, `_raw/<batch>/RECEIPT.json`, beside the window's
 state (`WINDOW.json`), and the same JSON is printed. The row-writer reads it
 from disk, so no agent retypes window fields between the capture and the rows.
-Beside it, `_raw/<batch>/FEATURES.md` lists the subject's features as they
-stand before this batch (`kbqa.features`): the row-writer reads it to tell a
-new feature from another source of one it already has (`same_feature_as`).
-And `_raw/<batch>/ROLE-ROWS.md` lists the subject's rows that may name a role,
-by the patterns in the estate's `kbqa-estate.json` (`kbqa.roles`) — for the
-mapper; with no patterns it is not written and the receipt says why.
+The lists read beside it — `FEATURES.md` for the row-writer, `ROLE-ROWS.md`
+for the mapper — are written by `kbqa stage --lists` just before the row-writer
+runs, so they hold every row staged by then, earlier windows included (since
+kbqa 6.22.0; capture wrote them before).
 
 **Every failure carries its next step**, decided here, never by an agent:
 `retry` (a later run, `--resume` or `--retry-failed`), `operator` (with a
@@ -49,6 +47,11 @@ it by the page's own URL and the receipt says `fetch_method: site-copy`.
 Batch dates follow the access date: a surface collected across midnight goes
 on in batches of the new date (`…-10-17-w07` → `…-10-18-w01`); its windows
 still chain, because the chain is read from the windows' state, not their names.
+
+`--status --files` lists the surface's files on disk with their sizes:
+denominators, captures, receipts, the row-writer's drafts, staging files, the
+mappers' drafts, map files, the rejects files of `kbqa stage` and `kbqa
+mapstage`, robots records and the subject's stop conditions.
 
 It never overwrites: an existing capture or raw folder stops it. It exits 0 if
 at least one page was captured, 1 otherwise. A 429 or 503 ends the window there
@@ -66,7 +69,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlsplit
 
-from . import __version__, fetch, features, roles, stops
+from . import __version__, fetch, stops
 from .chrome import strip_chrome
 from .htmltext import render, visible_chars
 
@@ -207,8 +210,6 @@ def parse_select(spec: str) -> List[int]:
 
 STATE = "WINDOW.json"
 RECEIPT = "RECEIPT.json"
-FEATURES = "FEATURES.md"  # the subject's anchors, for the row-writer's same_feature_as
-ROLE_ROWS = "ROLE-ROWS.md"  # rows that may name a role, for the mapper (estate patterns)
 RETRY_RUNS = 3  # a page that keeps failing is retried in at most this many runs
 
 
@@ -346,6 +347,14 @@ def _retry_state(subject: Path, windows: List[Dict]):
 SUBJECT_FILES = ("_stop-conditions.md",)
 
 
+REJECTS_RE = re.compile(r"\.rejects-\d+\.jsonl$")
+
+
+def _rejects(p: Path) -> bool:
+    """A rejects file of `kbqa stage` or `kbqa mapstage`: `<draft>.rejects-<n>.jsonl`."""
+    return REJECTS_RE.search(p.name) is not None
+
+
 def _files(subject: Path, surface: str) -> Dict[str, List[Dict[str, object]]]:
     """A read-only inventory of what is on disk for a surface, with sizes."""
     def entry(p: Path) -> Dict[str, object]:
@@ -356,6 +365,10 @@ def _files(subject: Path, surface: str) -> Dict[str, List[Dict[str, object]]]:
         "captures": [entry(p) for p in names if p.name.startswith(f"_capture-{surface}-")],
         "staging": [entry(p) for p in names if p.name.startswith(f"_collect-{surface}-")],
         "maps": [entry(p) for p in names if p.name.startswith(f"_map-{surface}-")],
+        "drafts": [entry(p) for p in names if p.name.startswith(f"_draft-{surface}-") and not _rejects(p)],
+        "map_drafts": [entry(p) for p in names if p.name.startswith(f"_mapdraft-{surface}-") and not _rejects(p)],
+        "rejects": [entry(p) for p in names if p.name.startswith((f"_draft-{surface}-", f"_mapdraft-{surface}-"))
+                    and _rejects(p)],
         "robots_records": [entry(p) for p in names if p.name.startswith("_robots-")],
         "subject": [entry(subject / n) for n in SUBJECT_FILES if (subject / n).is_file()],
         "receipts": [],
@@ -666,7 +679,9 @@ def run(argv: Optional[List[str]] = None) -> int:
         try:
             rb = robots_of(host)
         except fetch.FetchError as exc:
-            return refuse(str(exc), permission=permission)
+            # Named apart, so a caller tells "robots unreachable" from any other refusal.
+            unreachable = {"robots_unreachable": host} if isinstance(exc, fetch.RobotsUnreachable) else {}
+            return refuse(str(exc), permission=permission, **unreachable)
         if rb.site_wide_refused():
             stop_here(url, "refused: robots (site-wide)", "refused", url, "refused: robots")
             continue
@@ -782,17 +797,6 @@ def run(argv: Optional[List[str]] = None) -> int:
     _write_atomic(raw_dir / STATE, (json.dumps(state, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
 
     def finish(code: int) -> int:
-        # The subject's features as they stand before this batch's rows: what the
-        # row-writer reads to tell a new feature from another source of one.
-        _write_atomic(raw_dir / FEATURES, features.features_list(subject).encode("utf-8"))
-        receipt["features"] = f"_raw/{b}/{FEATURES}"
-        listed, why = roles.role_rows_list(subject)
-        if listed is not None:
-            _write_atomic(raw_dir / ROLE_ROWS, listed.encode("utf-8"))
-            receipt["role_rows"] = f"_raw/{b}/{ROLE_ROWS}"
-        else:
-            receipt["role_rows"] = None
-            receipt["role_rows_note"] = f"not written: {why}"
         text = json.dumps(receipt, ensure_ascii=False, indent=2)
         _write_atomic(raw_dir / RECEIPT, (text + "\n").encode("utf-8"))
         print(text)
