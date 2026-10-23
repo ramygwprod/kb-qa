@@ -752,7 +752,11 @@ def run(argv: Optional[List[str]] = None) -> int:
     if kind == "window" and args.denominator:
         next_offset = offset + attempted
         remaining = len(selection) - next_offset
-        window_end = ("error" if not blocks else
+        # A window ends in error only when it captured nothing and every page it
+        # tried failed. A window whose pages were all copies of pages already
+        # captured has done its work: it ends like any other window, or the
+        # surface could never reach `exhausted`.
+        window_end = ("error" if not blocks and not duplicates else
                       "exhausted" if remaining == 0 and not stopped else "budget")
         fields = {"denominator": Path(args.denominator).name, "denominator_sha256": den_sha,
                   "select": select_spec, "select_prefix": prefixes, "selected_items": len(selection),
@@ -794,6 +798,12 @@ def run(argv: Optional[List[str]] = None) -> int:
         print(text)
         return code
 
+    if not blocks and duplicates and not failures:
+        receipt["capture"] = None
+        receipt["note"] = ("every page of this window has the same text as a page already captured; "
+                           "no capture file was written and there is nothing for the row-writer. Each copy's "
+                           "stop line is in stop_lines_to_add.")
+        return finish(0)
     if not blocks:
         for p in pages:
             for k in ("_lines", "_heads", "_crumb"):

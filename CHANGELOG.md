@@ -41,7 +41,9 @@ operator's rulings of 2026-10-22 and the architecture review's capture gaps.
 - **No page twice.** Each page's rendered text is hashed (`text_sha256` in the
   receipt); a page whose text another URL of the subject already gave, in this
   window or an earlier one, is not captured again — it is listed under
-  `duplicates` with a `no feature: same text as <url>` stop line to approve.
+  `duplicates` with a `no feature: same text as <url>` stop line to approve. A
+  window whose pages were all copies ends like any other window (never as
+  `error`), so a surface whose last pages are copies still reaches `exhausted`.
 - **Image descriptions.** An image's `alt` text is rendered where it stood as
   `[image: <alt>]` — a diagram's description is often the only text about it;
   decorative images are not.

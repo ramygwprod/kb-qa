@@ -197,3 +197,20 @@ def test_a_breadcrumb_shared_by_every_page_is_never_chrome(subject, web):
     for p in r["pages"]:
         assert lines[p["lines"][0]] == "Docs > Guides", "the breadcrumb opens every page's block"
         assert p["chrome"]["header_lines"] == 2
+
+
+def test_a_last_window_of_copies_still_finishes_the_surface(subject, web):
+    pages = _pages(3, chrome=False)
+    pages[f"https://{HOST}/p4"] = pages[f"https://{HOST}/p1"]
+    web(pages)
+    _cap(subject, "--surface", "docs", "--denominator", str(_den(subject, n=4)), "--max-pages", "3")
+    code, r = _cap(subject, "--surface", "docs", "--denominator", str(_den(subject, n=4)), "--resume")
+    assert code == 0, "a window of copies did its work"
+    assert r["window_end"] == "exhausted" and r["capture"] is None
+    assert r["stop_lines_to_add"] == [f"- https://{HOST}/p4 | no feature: same text as https://{HOST}/p1"]
+    import contextlib, io
+    from kbqa import capture
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        capture.run(["--out", str(subject), "--date", DAY, "--surface", "docs", "--status"])
+    assert json.loads(out.getvalue())["exhausted"] is True
