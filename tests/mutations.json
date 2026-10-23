@@ -259,5 +259,23 @@
     "tests": [
       "tests/test_release_tooling.py"
     ]
+  },
+  {
+    "label": "capture: a window of copies is not an error",
+    "file": "src/kbqa/capture.py",
+    "old": "window_end = (\"error\" if not blocks and not duplicates else",
+    "new": "window_end = (\"error\" if not blocks else",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "capture: a window of copies exits 0 with its stop lines",
+    "file": "src/kbqa/capture.py",
+    "old": "if not blocks and duplicates and not failures:",
+    "new": "if False:",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
   }
 ]
