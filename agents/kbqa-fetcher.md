@@ -168,7 +168,8 @@ of its lines. Run only these forms — never anything else:
 # what is recorded for a surface: windows, where to resume, failed pages — fetches nothing
 python3 -m kbqa capture --out "<subject folder>" --surface <surface> --status
 
-# the same, with the files on disk for that surface and their sizes — fetches nothing
+# the same, with the files on disk for that surface and their sizes — denominators,
+# captures, receipts, drafts, staging files, map drafts, map files, rejects files — fetches nothing
 python3 -m kbqa capture --out "<subject folder>" --surface <surface> --status --files
 
 # collect the surface: the approved lines, or the approved path prefix (repeatable)
@@ -232,6 +233,11 @@ whole run:
   `duplicates` (pages with the same text as a page already captured),
   `failures`, `next_offset`, `remaining`, `receipt` and `capture` (`null` when
   the window wrote no capture: nothing in it for the row-writer);
+- `unstaged` — every window of this surface with a capture file and no staging
+  file, from this run **and every earlier run**, in order, each with its
+  `state` (no drafts yet; drafts written, not staged; every page drafted
+  `no_row`, nothing to stage). Hand it back whole: the orchestrator runs the
+  per-window steps for these first, so no captured window is lost;
 - `end` and `next_step` — as the table says; `refusal` — capture's refusal,
   word for word, when there is one;
 - `stop_lines_to_add` — the exact lines for §4, each once, including `js-only`
@@ -275,7 +281,8 @@ same-feature shortlist per page, for the row-writer) and, when the estate names
 patterns, `_raw/<batch>/ROLE-ROWS.md`; it prints their paths (`same_feature`
 or `same_feature_note`, `role_rows` or `role_rows_note`, saying why one is not
 written). Hand back the `role_rows` path or
-note: the mappers read it.
+note: the mappers read it. `--lists` is refused once the batch's staging file
+exists — the lists are what the drafts were written from: return that refusal.
 
 Without `--lists` it writes `_collect-<batch>-staging.md` and prints a JSON
 result. **While any draft is rejected it writes no staging file** (exit 1): it
@@ -300,7 +307,17 @@ Hand back, copied from the result:
   word;
 - `stop_lines_to_add` — one `no feature: …` line per page the row-writer
   drafted `no_row`: add each with `kbqa stop add` (§4);
-- `pages_without_row_or_no_row` — pages the drafts do not account for.
+- `pages_without_row_or_no_row` — pages that end with neither a staged row nor
+  a `no_row` line. A page **no draft line names at all** is a reject of its
+  own, by page, "no row and no reason": it blocks the staging file like any
+  reject, and the row-writer's correction round gives it its rows or its
+  `no_row` line;
+- `respelt_by_code` — grades written another known way that code wrote in the
+  schema's spelling (line, before, after);
+- `role_rows_refreshed` (or `role_rows_note`) — `ROLE-ROWS.md` written again
+  after the staging file, so the mappers see the batch's own rows;
+- a `next_step` of `no rows — skip mapping for this batch` — every page was
+  drafted `no_row`: there is no staging file, and no mapping pass for it.
 
 It never overwrites a staging file, and refuses when the capture no longer
 matches its receipt: return a refusal as a blocker, word for word. Never edit a
@@ -343,9 +360,10 @@ are rejected), `round`, `rejects`, `rejected_lines` and `next_step`, and after
 overwrites a map file: return that refusal as a blocker. Never edit a draft, a
 rejects file or a map file.
 
-**In the fix round, when the row-writer changed rows** (ids changed, rows added
-or dropped) and the orchestrator asks, retire both passes' files first — one
-run per pass:
+**In the fix round, after the row-writer's fix**, when the orchestrator asks,
+run the retire for both passes — one run per pass. Code decides whether there
+is anything to re-map: only a changed set of anchor ids (rows without
+`same_feature_as`) is.
 
 ```bash
 python3 -m kbqa mapstage --subject "<subject folder>" --batch <batch> --pass A --retire
@@ -354,10 +372,24 @@ python3 -m kbqa mapstage --subject "<subject folder>" --batch <batch> --pass B -
 
 Each moves that pass's map file, its `.meta.json`, its draft and its rejects
 files into `_qa/retired-<batch>-<A|B>-<n>/` — nothing deleted — and prints
-`moved` and `next_step`. It refuses while the staging file is unchanged since
-the map file was written: return that refusal, word for word. Hand back
-`retired_to` and `moved` per pass; then the two mapping passes run again,
-independently, and you run `kbqa mapstage` after each as above.
+`moved`, `anchor_set_changed` (with `anchors_added` and `anchors_removed`) and
+`next_step`. It refuses while the staging file is unchanged since the map file
+was written, and when the bytes changed but the anchor ids did not (nothing to
+re-map: the map files stand): return that refusal, word for word. Hand back
+`retired_to`, `moved` and `anchor_set_changed` per pass; then the two mapping
+passes run again, independently, and you run `kbqa mapstage` after each as
+above.
+
+A map file with **no record** (no `.meta.json`, written before kbqa 6.22.0) is
+refused too: return that refusal. Only when the orchestrator brings the
+operator's word, run, for that pass:
+
+```bash
+python3 -m kbqa mapstage --subject "<subject folder>" --batch <batch> --pass <A|B> --retire --no-record
+```
+
+It retires the file like any other and writes `RETIRED-WITHOUT-RECORD.txt` into
+the folder, saying it was retired without a record on the operator's word.
 
 ## 4 · Stop-conditions
 

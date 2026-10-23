@@ -373,6 +373,23 @@ def test_status_files_lists_the_surfaces_files_with_sizes(subject, seqweb):
     assert code == 1 and "--status" in r["refused"]
 
 
+def test_status_files_lists_drafts_map_drafts_and_rejects_files(subject, seqweb):
+    den = _den(subject, n=1)
+    seqweb({f"https://{HOST}/p1": OK})
+    _, r = _cap(subject, "--surface", "docs", "--denominator", str(den))
+    b = r["batch"]
+    names = [f"_draft-{b}.jsonl", f"_draft-{b}.rejects-1.jsonl", f"_mapdraft-{b}-A.jsonl",
+             f"_mapdraft-{b}-B.jsonl", f"_mapdraft-{b}-A.rejects-1.jsonl", "_draft-help-2026-10-18-w01.jsonl"]
+    for n in names:
+        (subject / n).write_text("{}\n")
+    code, st = _cap(subject, "--surface", "docs", "--status", "--files")
+    f = st["files"]
+    assert code == 0
+    assert f["drafts"] == [{"name": f"_draft-{b}.jsonl", "bytes": 3}]
+    assert [x["name"] for x in f["map_drafts"]] == [f"_mapdraft-{b}-A.jsonl", f"_mapdraft-{b}-B.jsonl"]
+    assert [x["name"] for x in f["rejects"]] == [f"_draft-{b}.rejects-1.jsonl", f"_mapdraft-{b}-A.rejects-1.jsonl"]
+
+
 # ── #12 sections from the index's own headings; #24 the plan's probe ────────
 
 def test_an_llms_txt_is_sectioned_by_its_own_headings(subject, seqweb):

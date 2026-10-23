@@ -113,7 +113,7 @@ def test_the_parameter_is_compared_when_the_draft_has_one(api):
     b = r["batch"]
     _staged(d, _anchor("x.due-param", "Invoice due", DUE, parameter="due_date"),  # the parameter matches
             _anchor("x.due-term", "Due date", DUE))                                # only the term does
-    _drafts(d, b, _due(P1))
+    _drafts(d, b, _due(P1), {"page": P2, "no_row": "another operation"})
     code, out = _run("--subject", str(d), "--batch", b)
     assert code == 0, out
     assert [(e["line"], e["anchor"], e["matched"]["parameter"]) for e in out["linked_by_code"]] == \
@@ -153,7 +153,7 @@ def test_a_draft_that_names_another_anchor_is_never_changed_only_listed(api):
     d, r = api
     b = r["batch"]
     _staged(d, _anchor("x.due", "Due date", DUE, parameter="due_date"), _anchor("x.other", "Other", "Other"))
-    _drafts(d, b, _due(P1, same_feature_as="x.other"))
+    _drafts(d, b, _due(P1, same_feature_as="x.other"), {"page": P2, "no_row": "another operation"})
     code, out = _run("--subject", str(d), "--batch", b)
     assert code == 0 and out["linked_by_code"] == [], out
     assert _rows(out)[0]["same_feature_as"] == "x.other"

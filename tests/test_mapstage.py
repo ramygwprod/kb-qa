@@ -314,9 +314,25 @@ def _retire(d, letter="A", *extra):
     return code, json.loads(out.getvalue())
 
 
-def _change_rows(d):
+def _change_text(d):
+    """The staging bytes change; its anchors stay the same."""
     stg = d / f"_collect-{B}-staging.md"
     stg.write_text(stg.read_text().replace("in one place.", "in one shared place."))
+
+
+def _change_rows(d, rid="example.docs.api"):
+    """The rows change and the anchor set with them: `rid` becomes another
+    source of the inbox, so it is no longer an anchor."""
+    stg = d / f"_collect-{B}-staging.md"
+    head = f'{{"id": "{rid}", '
+    assert head in stg.read_text()
+    stg.write_text(stg.read_text().replace(head, head + '"same_feature_as": "example.docs.inbox", '))
+
+
+def _draft_now(d):
+    """The draft lines of the anchors the staging file has now."""
+    anchors = mapstage._anchors(d / f"_collect-{B}-staging.md")[0]
+    return [x for x in _draft() if x["id"] in anchors]
 
 
 def test_the_map_file_records_the_staging_it_was_written_from(subject):
@@ -344,17 +360,18 @@ def test_retire_moves_and_keeps_every_file_of_the_pass(subject):
     assert {n: (dest / n).read_bytes() for n in names} == before  # moved whole, nothing lost
     assert not any((subject / n).exists() for n in names)
     assert "fresh draft for pass A" in r["next_step"]
-    _write(subject, "A", _draft())  # the pass starts again at round 1
+    assert r["anchor_set_changed"] is True and r["anchors_removed"] == ["example.docs.api"], r
+    assert r["anchors_added"] == [] and "without_record" not in r
+    _write(subject, "A", _draft_now(subject))  # the pass starts again at round 1
     code, r = _run(subject)
     assert code == 0 and r["round"] == 1
 
 
 def test_retired_folders_are_numbered_and_never_reused(subject):
-    for n in (1, 2):
-        _write(subject, "A", _draft())
+    for n, rid in ((1, "example.docs.api"), (2, "example.docs.roles")):
+        _write(subject, "A", _draft_now(subject))
         assert _run(subject)[0] == 0
-        _change_rows(subject) if n == 1 else (subject / f"_collect-{B}-staging.md").write_text(
-            (subject / f"_collect-{B}-staging.md").read_text() + "\n")
+        _change_rows(subject, rid)
         code, r = _retire(subject)
         assert code == 0 and r["retired_to"].endswith(f"retired-{B}-A-{n}"), r
     assert (subject / "_qa" / f"retired-{B}-A-1" / f"_map-{B}-A.jsonl").is_file()
@@ -379,6 +396,46 @@ def test_retire_refuses_a_map_file_without_its_record(subject):
     _change_rows(subject)
     code, r = _retire(subject)
     assert code == 1 and "cannot be told" in r["refused"] and (subject / f"_map-{B}-A.jsonl").is_file()
+    assert "--no-record" in r["next_step"] and "operator's word" in r["next_step"]
+
+
+def test_retire_refuses_when_the_bytes_changed_but_the_anchor_set_did_not(subject):
+    _write(subject, "A", _draft())
+    assert _run(subject)[0] == 0
+    _change_text(subject)
+    code, r = _retire(subject)
+    assert code == 1 and "anchor ids" in r["refused"] and "nothing to re-map" in r["refused"], r
+    assert "keep" in r["next_step"] and "/kbqa-check" in r["next_step"]
+    assert (subject / f"_map-{B}-A.jsonl").is_file() and not (subject / "_qa").exists()
+
+
+def test_a_map_file_without_a_record_is_retired_on_the_operators_word(subject):
+    """A v6.21.0 map file has no sidecar: --no-record retires it and the folder says so."""
+    _write(subject, "A", _draft())
+    assert _run(subject)[0] == 0
+    (subject / f"_map-{B}-A.meta.json").unlink()
+    kept = (subject / f"_map-{B}-A.jsonl").read_bytes()
+    code, r = _retire(subject, "A", "--no-record")
+    dest = subject / "_qa" / f"retired-{B}-A-1"
+    assert code == 0 and r["retired_to"] == str(dest), r
+    assert (dest / f"_map-{B}-A.jsonl").read_bytes() == kept
+    note = dest / mapstage.NO_RECORD_NOTE
+    assert r["without_record"] == str(note) and "without a record" in note.read_text()
+    assert "operator's word" in note.read_text()
+    assert r["anchor_set_changed"] is False  # reported, never a refusal on the operator's word
+
+
+def test_no_record_is_only_for_a_map_file_without_one(subject):
+    _write(subject, "A", _draft())
+    assert _run(subject)[0] == 0
+    _change_rows(subject)
+    code, r = _retire(subject, "A", "--no-record")
+    assert code == 1 and "is there, so retire without --no-record" in r["refused"]
+    assert (subject / f"_map-{B}-A.jsonl").is_file() and not (subject / "_qa").exists()
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = mapstage.run(["--subject", str(subject), "--batch", B, "--pass", "A", "--no-record"])
+    assert code == 1 and "with --retire only" in json.loads(out.getvalue())["refused"]
 
 
 def test_retire_refuses_with_nothing_to_retire_or_other_flags(subject):
@@ -431,3 +488,27 @@ def test_a_pass_never_reads_or_counts_the_other_pass(subject):
     code, r = _run(subject)
     assert code == 0 and r["round"] == 2 and r["map"] == str(subject / f"_map-{B}-A.jsonl")
     assert (subject / f"_map-{B}-B.jsonl").read_text() == "{}\n"
+
+
+# ── dominance on a tiny batch (v6.22.0) ──────────────────────────────────────
+
+def _dominance(d, lines):
+    _write(d, "A", lines)
+    assert _run(d)[0] == 0
+    v, _ = _mapcheck(d, "A")
+    return [f.message for f in v.findings if f.code == "element_dominates"]
+
+
+def test_three_anchors_on_three_elements_are_not_dominated(subject):
+    """One row of three is 33 % by arithmetic: below two rows the share measures nothing."""
+    _change_rows(subject)  # three anchors left: inbox, reports, roles
+    lines = _draft_now(subject)
+    assert len(lines) == 3 and len({x["pcf_ids"][0] for x in lines}) == 3
+    assert _dominance(subject, lines) == []
+
+
+def test_two_of_three_anchors_on_one_element_are_still_flagged(subject):
+    _change_rows(subject)
+    lines = [x for x in _draft(l1={"pcf_ids": ["90001"]}) if x["id"] != "example.docs.api"]
+    [msg] = _dominance(subject, lines)
+    assert "element 90001" in msg and "on 2 of 3 rows" in msg

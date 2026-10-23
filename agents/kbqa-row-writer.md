@@ -75,6 +75,9 @@ no heading. Two kinds of line:
   a few words (`pricing page`, `legal notice`, `blog index`). Code turns it
   into the page's `no feature: …` stop line, so the check knows the page was
   read and held nothing, not skipped. A page with rows has no `no_row` line.
+- **Every page of the receipt gets one or the other.** A page no line names —
+  no row and no `no_row` — is rejected by `kbqa stage` as "no row and no
+  reason", and blocks the staging file like any reject.
 
 `kbqa stage` finds each quote in its part's own lines — spacing, curly or
 straight quotes and dash kinds do not matter, spelling does — and copies the
@@ -98,7 +101,9 @@ Every row line carries these, with exactly these values where a list is given:
 Code fills the rest: `id`, `source_url`, `source_quote`, `access_date`,
 `parent_path` (the part's breadcrumb, or `unknown` when the page shows none),
 `depth_level` (the breadcrumb's levels counted) and `canonical: NOVEL`. Never
-write them in a draft.
+write them in a draft. A value outside these lists is rejected by `kbqa stage`
+before any check; a grade in another case or with spaces, or bare `verify`, is
+written by code in the spelling above.
 
 When the row documents a way in — an API operation, an SDK method, a webhook, a
 CLI command or a settings screen — add `interface_type` (`API` · `SDK` ·
@@ -138,7 +143,8 @@ dropped; only the anchor is classified.
   features (offset and limit) — never the whole file.
 - A feature on your page that is listed there → your draft adds
   `same_feature_as` with that row's `id`, copied exactly. Always the anchor's
-  id: never a row that itself carries `same_feature_as`.
+  id: never a row that itself carries `same_feature_as`. `kbqa stage` rejects
+  an id that is not an anchor of the subject.
 - A feature that another draft of **this** batch already gave has no id yet —
   code gives ids — so name that draft by its line in your drafts file:
   `"same_feature_as": "draft:<line>"` (the first line is 1). `kbqa stage`
@@ -206,10 +212,14 @@ round. Given that file:
 
 - Read it and the parts it names. Rewrite **only the rejected lines** of your
   drafts file, each at its own line number — the quote as that part's own lines
-  print it, found once; the right part; the field spelled as the table says. A
+  print it, found once; the right part; the field spelled as the table says; a
+  `same_feature_as` that names an anchor (or none). A
   draft the capture does not support becomes `{"page": <url>, "no_row": …}` only
   when no other row is on that page; otherwise leave the line as it is and say
   why.
+- A reject that names a `page` and no `line` is a page no line of yours named
+  ("no row and no reason"): read it, and **add** its rows, or its one `no_row`
+  line, at the end of the file.
 - Change no other line, and never renumber: other drafts may name these lines
   in `draft:<line>`. Never write or edit a rejects file.
 - Hand back one line per reject: what you changed, or why the capture does not
@@ -228,8 +238,9 @@ an existing staging file.
 
 Code has fixed what it could fix exactly before you (`kbqa autofix`: a grade's
 known respelling, the breadcrumb and its depth from the receipt, `id` first), so
-you receive only what it left — for those four findings with the reason code
-could not settle them. The staging file's line numbers are unchanged by it.
+you receive only what it left: findings of other codes, and any finding of
+those kinds that the evidence did not settle, each with the reason code could
+not (`why_not_by_code`). The staging file's line numbers are unchanged by it.
 
 - Fix **what the findings name, in the rows they name**, from the capture — a
   quote corrected to the page's exact words, a `parent_path` filled from the

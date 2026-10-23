@@ -115,8 +115,8 @@ def test_the_quote_is_the_captures_exact_text_never_the_drafts(window):
 def test_the_page_fields_are_filled_by_code(window):
     d, r = window
     b = r["batch"]
-    _drafts(d, b, *GOOD[:3], _row(P2, "# Delivery reports", "Delivery reports", interface_type="API",
-                                  operation="list reports"))
+    _drafts(d, b, *GOOD, _row(P2, "# Delivery reports", "Delivery reports", interface_type="API",
+                              operation="list reports"))
     _, out = _run("--subject", str(d), "--batch", b)
     rows = [rp.obj for rp in parse_staging(Path(out["staging"])).rows]
     assert [o["id"] for o in rows] == ["example-co.docs.retries.retries", "example-co.docs.retries.retry-limit",
@@ -166,7 +166,7 @@ def test_a_quote_not_in_the_part_is_rejected_and_listed(window):
     d, r = window
     b = r["batch"]
     _drafts(d, b, GOOD[0], _row(P1, "Failed webhooks are retried for a day.", "Paraphrase"),
-            _row(P1, "Delivery reports show every message's final status.", "Wrong page"))
+            _row(P1, "Delivery reports show every message's final status.", "Wrong page"), *GOOD[2:])
     code, out = _run("--subject", str(d), "--batch", b)
     assert code == 1 and out["rejected"] == 2, out
     rej = _rejects(d, b)
@@ -179,9 +179,9 @@ def test_a_quote_not_in_the_part_is_rejected_and_listed(window):
 def test_a_quote_found_twice_in_the_part_is_rejected(window):
     d, r = window
     b = r["batch"]
-    _drafts(d, b, GOOD[0], _row(P1, "Every retry is logged.", "Retry log"))
+    _drafts(d, b, GOOD[0], _row(P1, "Every retry is logged.", "Retry log"), *GOOD[2:])
     code, out = _run("--subject", str(d), "--batch", b)
-    assert out["rows"] == 1 and out["rejected"] == 1
+    assert out["rows"] == 2 and out["rejected"] == 1
     assert "found 2 times" in _rejects(d, b)[0]["reason"]
 
 
@@ -218,14 +218,18 @@ def test_a_draft_that_is_not_a_row_is_rejected_with_its_reason(window):
         json.dumps({"page": P1, "no_row": "a page with rows"}),
     ]) + "\n")
     code, out = _run("--subject", str(d), "--batch", b)
-    reasons = [x["reason"] for x in _rejects(d, b)]
-    assert out["rows"] == 1 and len(reasons) == 6, out
+    rej = _rejects(d, b)
+    reasons = [x["reason"] for x in rej]
+    assert out["rows"] == 1 and len(reasons) == 8, out
     assert reasons[0].startswith("not JSON")
     assert "is not a page of the receipt" in reasons[1]
     assert "part 5 is not a part" in reasons[2]
     assert "fields no row carries: invented_field" in reasons[3]
     assert "missing or empty: mechanism" in reasons[4]
     assert "drafted `no_row` but has rows" in reasons[5]
+    # the pages no draft line names: each a reject of its own, by page
+    assert [(x.get("line"), x.get("page")) for x in rej[6:]] == [(None, P2), (None, P3)]
+    assert all(x.startswith("no row and no reason") for x in reasons[6:])
     assert out["stop_lines_to_add"] == []
     assert out["pages_without_row_or_no_row"] == [P2, P3]
 
@@ -233,7 +237,7 @@ def test_a_draft_that_is_not_a_row_is_rejected_with_its_reason(window):
 def test_no_staging_is_written_when_every_draft_is_rejected(window):
     d, r = window
     b = r["batch"]
-    _drafts(d, b, _row(P1, "words that are nowhere", "X"))
+    _drafts(d, b, _row(P1, "words that are nowhere", "X"), *GOOD[3:], {"page": P2, "no_row": "a report"})
     code, out = _run("--subject", str(d), "--batch", b)
     assert code == 1 and out["staging"] is None and out["rejected"] == 1
     assert not (d / f"_collect-{b}-staging.md").exists()
@@ -426,6 +430,8 @@ def test_a_draft_link_resolves_to_the_id_given_that_draft(window):
 def test_a_draft_link_must_name_an_anchor_that_is_staged(window):
     d, r = window
     b = r["batch"]
+    shutil.copy(HERE / "fixtures" / "merge" / "clear" / "_collect-docs-2026-01-31-staging.md",
+                d / "_collect-docs-2026-01-31-staging.md")  # holds the anchor example.docs.inbox
     other = _row(P2, "Delivery reports show", "Report", same_feature_as="example.docs.inbox")
     _drafts(d, b,
             GOOD[0],                                                          # 1 anchor
@@ -448,3 +454,135 @@ def test_a_draft_link_must_name_an_anchor_that_is_staged(window):
     assert "itself another source" in by_line[8]
     assert "holds no draft" in by_line[9]
     assert "draft:<line number>" in by_line[10]
+
+
+# ── every page has a row or a reason (v6.22.0, review S5) ────────────────────
+
+def test_a_page_with_no_row_and_no_reason_blocks_the_staging_file(window):
+    d, r = window
+    b = r["batch"]
+    _drafts(d, b, *GOOD[:3])  # P3 is named by no draft line
+    code, out = _run("--subject", str(d), "--batch", b)
+    assert code == 1 and out["staging"] is None and out["round"] == 1, out
+    [rej] = _rejects(d, b)
+    assert rej["page"] == P3 and "line" not in rej and rej["reason"].startswith("no row and no reason")
+    assert out["rejected_lines"] == [{"page": P3, "reason": rej["reason"]}]
+    assert "drafts each page listed with no row and no reason" in out["next_step"]
+    _drafts(d, b, *GOOD)  # the correction round gives the page its reason
+    code, out = _run("--subject", str(d), "--batch", b)
+    assert code == 0 and out["round"] == 2 and out["staging"], out
+
+
+def test_a_page_left_without_a_reason_is_listed_for_the_operator(window):
+    d, r = window
+    b = r["batch"]
+    _drafts(d, b, *GOOD[:3])
+    assert _run("--subject", str(d), "--batch", b)[0] == 1
+    assert _run("--subject", str(d), "--batch", b)[0] == 1
+    code, out = _run("--subject", str(d), "--batch", b, "--leave-out-rejects")
+    assert code == 0 and out["rows"] == 3, out
+    assert [(x.get("page"), x["reason"][:20]) for x in out["needs_operator"]] == [(P3, "no row and no reason")]
+
+
+# ── stage checks what it can before the check (v6.22.0) ──────────────────────
+
+def test_same_feature_as_must_name_an_anchor_of_the_subject(window):
+    from test_exact_repeats_and_shortlist import _anchor, _staged
+    d, r = window
+    b = r["batch"]
+    _staged(d, _anchor("x.anchor", "Webhooks", "Webhooks"),
+            _anchor("x.a-source", "Hooks", "Hooks", same_feature_as="x.anchor"))
+    _drafts(d, b, *GOOD,
+            _row(P1, "Every retry is logged.", "Log", part=0, same_feature_as="x.nowhere"),
+            _row(P1, "only owners can", "Owners", same_feature_as="x.a-source"),
+            _row(P1, "Failed webhook calls", "Calls", same_feature_as="x.anchor"))
+    code, out = _run("--subject", str(d), "--batch", b)
+    assert code == 1, out
+    by_line = {x["line"]: x["reason"] for x in _rejects(d, b)}
+    assert sorted(by_line) == [5, 6], by_line
+    assert "'x.nowhere' is not an anchor of the subject" in by_line[5] and "names no row" in by_line[5]
+    assert "'x.a-source' is not an anchor" in by_line[6] and "itself another source" in by_line[6]
+
+
+def test_an_enumerated_value_outside_the_profile_is_rejected_in_the_draft_round(window):
+    d, r = window
+    b = r["batch"]
+    _drafts(d, b, GOOD[0], _row(P1, "Admins can't change the limit", "Limit", mechanism="native"),
+            _row(P1, "only owners can", "Owners", confidence="very high", outcome="maybe"),
+            _row(P1, "Failed webhook calls", "Calls", interface_type="REST API", operation="retry"),
+            *GOOD[2:])
+    code, out = _run("--subject", str(d), "--batch", b)
+    assert code == 1, out
+    by_line = {x["line"]: x["reason"] for x in _rejects(d, b)}
+    assert sorted(by_line) == [2, 3, 4], by_line
+    assert "mechanism 'native' is not one of Native | Composed" in by_line[2]
+    assert "confidence 'very high'" in by_line[3] and "outcome 'maybe'" in by_line[3]
+    assert "interface_type 'REST API' is not one of API | SDK" in by_line[4]
+
+
+def test_a_known_grade_respelling_is_written_in_the_schemas_spelling(window):
+    d, r = window
+    b = r["batch"]
+    _drafts(d, b, _row(P1, "Failed webhook calls are retried for up to 24 hours", "Retries", evidence_grade="Help"),
+            _row(P1, "Admins can't change the limit", "Limit", evidence_grade="verify"),
+            _row(P1, "only owners can", "Owners", evidence_grade="rumour"), *GOOD[2:])
+    code, out = _run("--subject", str(d), "--batch", b)
+    assert code == 1 and [x["line"] for x in _rejects(d, b)] == [3], out
+    assert "evidence_grade 'rumour' is not one of" in _rejects(d, b)[0]["reason"]
+    lines = (d / stage.draft_name(b)).read_text().splitlines()
+    (d / stage.draft_name(b)).write_text("\n".join(lines[:2] + lines[3:]) + "\n")
+    code, out = _run("--subject", str(d), "--batch", b)
+    assert code == 0, out
+    assert [x["evidence_grade"] for x in (rp.obj for rp in parse_staging(Path(out["staging"])).rows)] == \
+        ["help", "[verify]", "official-doc"]
+    assert out["respelt_by_code"] == [{"line": 1, "field": "evidence_grade", "before": "Help", "after": "help"},
+                                      {"line": 2, "field": "evidence_grade", "before": "verify",
+                                       "after": "[verify]"}]
+    v, c = g2_conformance.run(["--staging", out["staging"]])
+    assert c == 0 and "evidence_grade_spelling" not in [f.code for f in v.findings], v.to_json()
+
+
+# ── the lists, the role rows refreshed, and a batch with no rows ─────────────
+
+def test_the_lists_are_refused_once_the_batch_is_staged(window):
+    d, r = window
+    b = r["batch"]
+    assert _run("--subject", str(d), "--batch", b, "--lists")[0] == 0
+    features_md = (d / "_raw" / b / stage.FEATURES).read_bytes()
+    _drafts(d, b, *GOOD)
+    assert _run("--subject", str(d), "--batch", b)[0] == 0
+    code, out = _run("--subject", str(d), "--batch", b, "--lists")
+    assert code == 1 and "never after it is staged" in out["refused"], out
+    assert (d / "_raw" / b / stage.FEATURES).read_bytes() == features_md
+
+
+def test_stage_refreshes_the_role_rows_with_the_batchs_own_rows(window):
+    from test_headings_and_roles import _estate
+    d, r = window
+    b = r["batch"]
+    _estate(d.parent)
+    code, out = _run("--subject", str(d), "--batch", b, "--lists")
+    assert code == 0 and "example-co.docs" not in (d / out["role_rows"]).read_text()
+    _drafts(d, b, GOOD[0], _row(P1, "Admins can't change the limit", "Custom roles"), *GOOD[2:])
+    code, out = _run("--subject", str(d), "--batch", b)
+    assert code == 0 and out["role_rows_refreshed"] == f"_raw/{b}/{stage.ROLE_ROWS}", out
+    assert "example-co.docs.retries.custom-roles | Custom roles" in (d / out["role_rows_refreshed"]).read_text()
+
+
+def test_stage_says_why_the_role_rows_are_not_refreshed(window):
+    d, r = window
+    b = r["batch"]
+    _drafts(d, b, *GOOD)
+    code, out = _run("--subject", str(d), "--batch", b)
+    assert code == 0 and out["role_rows_refreshed"] is None
+    assert out["role_rows_note"].startswith("not written: no kbqa-estate.json")
+
+
+def test_a_batch_drafted_no_row_throughout_skips_mapping(window):
+    d, r = window
+    b = r["batch"]
+    _drafts(d, b, *({"page": p["url"], "no_row": "an overview"} for p in r["pages"]))
+    code, out = _run("--subject", str(d), "--batch", b)
+    assert code == 0 and out["staging"] is None and out["rows"] == 0, out
+    assert out["next_step"] == "no rows — skip mapping for this batch"
+    assert len(out["stop_lines_to_add"]) == 3

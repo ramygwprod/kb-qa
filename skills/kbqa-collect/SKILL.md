@@ -134,7 +134,8 @@ what the pages show; recording it is the operator's.
 **Where a surface stands is read from disk, never remembered.** Before a
 surface is collected — in every run — have `kbqa-fetcher` report its status
 (`kbqa capture --status`, its §3 — with `--files` when you need to know which
-denominators, captures, staging and map files exist). If windows are already
+denominators, captures, drafts, staging files, map drafts, map files and
+rejects files exist). If windows are already
 recorded, show the operator: the current denominator, the windows so far, where
 collection stopped (`resume_from`), whether the surface is `exhausted`, the
 failed pages that can be retried, and the pages that need the operator. Continue only on the operator's word; never start a
@@ -154,8 +155,8 @@ selection is `exhausted`, a window is throttled, capture refuses, a host's
 robots.txt is unreachable, a window captures nothing, or 10 windows were
 written in this run; when the surface is `exhausted`, it retries failed pages
 that may still pass, once (a page in at most three runs in all). The fetcher
-returns the run's `end` and `next_step`, every window written, in order, and
-one merged `needs_operator` list (its §6), and adds the run's
+returns the run's `end` and `next_step`, every window written, in order, the
+`unstaged` windows, and one merged `needs_operator` list (its §6), and adds the run's
 `stop_lines_to_add` with `kbqa stop add` (its §4). Read `end` — set by code,
 never by an agent:
 
@@ -169,12 +170,20 @@ never by an agent:
   that will not load is never worked around. The windows are recorded, so a
   later run goes on after them.
 
-Whatever the `end`, every window the run wrote gets its rows next.
+Whatever the `end`, the windows listed under `unstaged` get their rows next.
 
-**Then each window it wrote, in order — one window at a time.** A window whose
-`capture` is none (every page a copy of a page already captured, or nothing
-captured) has nothing for the row-writer: go on to the next. For every other
-window, including a retry run's:
+**Then each `unstaged` window, in the order listed — one window at a time.**
+`unstaged` is every window of the surface with a capture file and no staging
+file, from this run **and every earlier run** (a run that stopped half-way
+leaves its windows there), so those come first; a window whose capture is none
+is never on it. Each carries its `state`:
+
+- `no drafts …` — from step 1 below;
+- `drafts written, no staging file …` — from step 3 (the drafts are on disk;
+  the lists were built for them);
+- `every page drafted no_row …` — nothing to stage or map: go on to the next.
+
+For each, including a retry run's window:
 
 1. `kbqa-fetcher`: `kbqa stage --lists` for the batch (its §3a) — the
    subject's features list, same-feature shortlist and role-row list beside
@@ -191,11 +200,20 @@ window, including a retry run's:
    with no row into a `no feature: …` line, which the fetcher adds with
    `kbqa stop add` (its §4). **A rejected draft blocks the staging file**: the
    fetcher returns the drafts it rejected — a quote not found once in its part,
-   a field no row carries — each with its reason, the rejects file and the
-   `round`.
+   a field no row carries, a `same_feature_as` that is no anchor of the
+   subject, a value outside the profile's (a known grade respelling is not
+   rejected: code writes the schema's spelling) — and every page no draft line
+   names (**no row and no reason**: every page has rows or a `no_row` line),
+   each with its reason, the rejects file and the `round`. When every page was
+   drafted `no_row`, there is no staging file and the result's `next_step` is
+   `no rows — skip mapping for this batch`: skip step 5 for it. After writing
+   the staging file, `kbqa stage` refreshes the batch's `ROLE-ROWS.md`, so the
+   mappers see the batch's own rows.
 4. Only if step 3 rejected drafts — **one correction round, never two**:
    `kbqa-row-writer` again, with the subject folder, the batch name and the
-   rejects file (its §4a); it rewrites only the rejected lines of its drafts.
+   rejects file (its §4a); it rewrites only the rejected lines of its drafts,
+   and adds the rows or the `no_row` line of each page listed with no row and
+   no reason.
    Then `kbqa-fetcher` runs `kbqa stage` again. If drafts are still rejected,
    `kbqa-fetcher` runs `kbqa stage --leave-out-rejects`, as that result's
    `next_step` says: the staging file is written without them, and each is
@@ -309,13 +327,20 @@ Pass those reasons on with the findings, word for word.
 
 1. Delegate to `kbqa-row-writer` in fix mode (its §5): the staging path, the
    capture path, and the findings, word for word.
-2. If rows changed ids or were added or dropped: first `kbqa-fetcher` runs
-   `kbqa mapstage --retire` for pass A and for pass B (its §3b), which moves each
-   pass's map file, draft and rejects files into `_qa/retired-<batch>-<A|B>-<n>/`
-   (nothing deleted; refused while the staging file is unchanged — bring that
-   refusal to the operator). Then both `kbqa-mapper` passes run again for that
-   batch, independently, each followed by `kbqa mapstage` (§4). Otherwise the
-   map files stand.
+2. **Re-map only when the set of anchor ids changed** — the ids of the rows
+   without `same_feature_as`, before and after the fix. Code tells: `kbqa-fetcher`
+   runs `kbqa mapstage --retire` for pass A and for pass B (its §3b). It moves
+   each pass's map file, draft and rejects files into
+   `_qa/retired-<batch>-<A|B>-<n>/` (nothing deleted) only when the anchor set
+   changed, and says so (`anchor_set_changed`, with the ids added and removed).
+   It refuses when the staging file is unchanged, or when its bytes changed but
+   its anchor ids did not: then there is nothing to re-map and the map files
+   stand — go to step 3. When it moved them, both `kbqa-mapper` passes run again
+   for that batch, independently, each followed by `kbqa mapstage` (§4).
+   A refusal for a map file **with no record** (no `.meta.json`: one written
+   before kbqa 6.22.0) goes to the operator; only on the operator's word does
+   the fetcher retire it with `--retire --no-record`, which leaves
+   `RETIRED-WITHOUT-RECORD.txt` in the folder saying so.
 3. Report what changed, and stop. The operator runs `/kbqa-check` again: round 2.
    If it is still BLOCKED, it is PARKED with the operator — there is no third
    round, and you never start one.

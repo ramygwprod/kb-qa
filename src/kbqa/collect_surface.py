@@ -22,13 +22,21 @@ When the surface is exhausted and failed pages may still pass, it runs
 `--retry-failed` once; capture's own limit (a page is retried in at most three
 runs) stays the limit.
 
+It lists, under `unstaged`, every window of this surface — this run's and every
+earlier run's — that has a capture file and no staging file, in batch order,
+each with its state: no drafts yet, drafts not yet staged, or every page drafted
+`no_row` (nothing to stage). The collect skill runs the per-window steps for
+those before anything new, so a window captured in a run that stopped half-way
+is never lost.
+
 It writes nothing itself: every file is capture's. It never stages rows or
 maps: the row-writer and the mappers still run per window, after it, in the
 order the collect skill gives, so the lists `kbqa stage --lists` builds hold
 every row written so far.
 
 It prints one JSON: every window written (batch, `window_end`, pages captured,
-copies, failures, receipt and capture paths), the end state, one merged
+copies, failures, receipt and capture paths), the `unstaged` windows, the end
+state, one merged
 `needs_operator` list (each URL once; a host's surface-wide item once per
 host), the merged `stop_lines_to_add` (each line once) and the next step. It
 exits 0 when a window captured a page or the surface was already exhausted, 1
@@ -119,6 +127,41 @@ def _chain(subject: Path, surface: str, den: Path) -> List[Dict]:
     return capture._chain(capture._windows(subject, surface), den.name)
 
 
+NO_DRAFTS = "no drafts: the per-window steps, from kbqa stage --lists"
+DRAFTED = "drafts written, no staging file: kbqa stage, then the per-window steps after it"
+ALL_NO_ROW = "every page drafted no_row: no rows, nothing to stage or map"
+
+
+def _all_no_row(draft: Path, receipt: Path) -> bool:
+    """The drafts are `no_row` lines only, one for every page of the receipt."""
+    try:
+        pages = {p.get("url") for p in json.loads(receipt.read_text(encoding="utf-8")).get("pages") or []}
+        objs = [json.loads(ln) for ln in draft.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    except (OSError, ValueError, AttributeError):
+        return False
+    return bool(objs) and all(isinstance(o, dict) and set(o) == {"page", "no_row"} for o in objs) \
+        and {o["page"] for o in objs} == pages
+
+
+def unstaged(subject: Path, surface: str) -> List[Dict[str, object]]:
+    """Every window of this surface — this run's and every earlier run's, from
+    any denominator — that has a capture file and no staging file, in batch
+    order: rows not yet written are never lost between runs."""
+    out: List[Dict[str, object]] = []
+    if not subject.is_dir():
+        return out
+    for w in capture._windows(subject, surface):
+        b = str(w.get("batch"))
+        cap = subject / f"_capture-{b}.raw.txt"
+        if not cap.is_file() or (subject / f"_collect-{b}-staging.md").exists():
+            continue
+        draft, receipt = subject / f"_draft-{b}.jsonl", subject / "_raw" / b / capture.RECEIPT
+        state = (NO_DRAFTS if not draft.is_file() else
+                 ALL_NO_ROW if _all_no_row(draft, receipt) else DRAFTED)
+        out.append({"batch": b, "capture": str(cap), "receipt": f"_raw/{b}/{capture.RECEIPT}", "state": state})
+    return out
+
+
 def run(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(prog="kbqa collect-surface")
     ap.add_argument("--out", required=True, help="the subject folder")
@@ -193,8 +236,8 @@ def run(argv: Optional[List[str]] = None) -> int:
     out: Dict[str, object] = {
         "surface": surface, "denominator": den.name, "end": end, "next_step": NEXT_STEP[end],
         "already_exhausted": already_exhausted, "retried_failed": retried,
-        "windows": windows, "needs_operator": needs_operator, "stop_lines_to_add": stop_lines,
-        "permission": permission}
+        "windows": windows, "unstaged": unstaged(subject, surface), "needs_operator": needs_operator,
+        "stop_lines_to_add": stop_lines, "permission": permission}
     if refusal is not None:
         out["refusal"] = refusal
     print(json.dumps(out, ensure_ascii=False, indent=2))

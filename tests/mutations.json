@@ -1493,5 +1493,203 @@
     "tests": [
       "tests/test_collect_surface.py"
     ]
+  },
+  {
+    "label": "collect-surface: a staged window is not unstaged",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        if not cap.is_file() or (subject / f\"_collect-{b}-staging.md\").exists():\n",
+    "new": "        if not cap.is_file():\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: unstaged windows of earlier runs are listed",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    for w in capture._windows(subject, surface):\n",
+    "new": "    for w in capture._windows(subject, surface)[-1:]:\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: a window drafted no_row throughout is told apart",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "                 ALL_NO_ROW if _all_no_row(draft, receipt) else DRAFTED)\n",
+    "new": "                 DRAFTED)\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "mapstage: --no-record only for a map file without a record",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if no_record and (not out_path.exists() or meta_path.exists()):\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a retirement without a record says so in the folder",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if no_record:\n        note = dest / NO_RECORD_NOTE\n",
+    "new": "    if False:\n        note = dest / NO_RECORD_NOTE\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: retire refuses when the anchor ids did not change",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if not changed[\"anchor_set_changed\"]:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: the anchor set compared is the staging file's anchors",
+    "file": "src/kbqa/mapstage.py",
+    "old": "            changed = {\"anchor_set_changed\": mapped != anchors_now,\n",
+    "new": "            changed = {\"anchor_set_changed\": True,\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "autofix: run again on its own bytes, already applied",
+    "file": "src/kbqa/autofix.py",
+    "old": "    applied = _applied(qa, batch, sha_before) if report.get(\"staging_sha256\") != sha_before else None\n",
+    "new": "    applied = None\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a report on its own bytes is round 2, not already applied",
+    "file": "src/kbqa/autofix.py",
+    "old": "    applied = _applied(qa, batch, sha_before) if report.get(\"staging_sha256\") != sha_before else None\n",
+    "new": "    applied = _applied(qa, batch, sha_before)\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: already applied only for the bytes a run wrote",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if isinstance(record, dict) and record.get(\"staging_sha256_after\") == sha:\n",
+    "new": "        if isinstance(record, dict):\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "stage: a page with no row and no reason is rejected",
+    "file": "src/kbqa/stage.py",
+    "old": "                    for u in pages if u not in drafted_pages]\n",
+    "new": "                    for u in pages if False]\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: same_feature_as must name a row of the subject",
+    "file": "src/kbqa/stage.py",
+    "old": "            if anchor is None or not features.is_anchor(anchor):\n",
+    "new": "            if anchor is not None and not features.is_anchor(anchor):\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: same_feature_as must name an anchor, not another source",
+    "file": "src/kbqa/stage.py",
+    "old": "            if anchor is None or not features.is_anchor(anchor):\n",
+    "new": "            if anchor is None:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: an enumerated value outside the profile is rejected",
+    "file": "src/kbqa/stage.py",
+    "old": "            if value in allowed:\n                continue\n",
+    "new": "            if True:\n                continue\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a known grade respelling is written in the schema's spelling",
+    "file": "src/kbqa/stage.py",
+    "old": "            if new is not None and new in allowed:\n",
+    "new": "            if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: the lists are refused once the batch is staged",
+    "file": "src/kbqa/stage.py",
+    "old": "    if staged.exists():\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: ROLE-ROWS.md is refreshed after the staging file",
+    "file": "src/kbqa/stage.py",
+    "old": "        _write_atomic(subject / \"_raw\" / batch / ROLE_ROWS, listed_roles.encode(\"utf-8\"))\n",
+    "new": "        pass\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: every page no_row says skip mapping",
+    "file": "src/kbqa/stage.py",
+    "old": "        if not listed:  # every page was drafted no_row\n",
+    "new": "        if False:  # every page was drafted no_row\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "capture: --files tells rejects files from drafts",
+    "file": "src/kbqa/capture.py",
+    "old": "    return REJECTS_RE.search(p.name) is not None\n",
+    "new": "    return False\n",
+    "tests": [
+      "tests/test_fallbacks_and_stops.py"
+    ]
+  },
+  {
+    "label": "capture: --files lists the drafts",
+    "file": "src/kbqa/capture.py",
+    "old": "        \"drafts\": [entry(p) for p in names if p.name.startswith(f\"_draft-{surface}-\") and not _rejects(p)],\n",
+    "new": "        \"drafts\": [],\n",
+    "tests": [
+      "tests/test_fallbacks_and_stops.py"
+    ]
+  },
+  {
+    "label": "mapcheck: an element on one row never dominates",
+    "file": "src/kbqa/gates/mapcheck.py",
+    "old": "DOMINANCE_MIN_ROWS = 2\n",
+    "new": "DOMINANCE_MIN_ROWS = 1\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapcheck: two of three rows on one element still dominate",
+    "file": "src/kbqa/gates/mapcheck.py",
+    "old": "DOMINANCE_MIN_ROWS = 2\n",
+    "new": "DOMINANCE_MIN_ROWS = 3\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
   }
 ]

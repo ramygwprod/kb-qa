@@ -245,6 +245,11 @@ capture` did, before v6.22.0), and, since v6.22.0, the same-feature shortlist
   Candidates only: the row-writer judges sameness. When the capture cannot be
   read (none written, or no longer the receipt's), the shortlist is not
   written and `same_feature_note` says why; the other lists are still written.
+- **Once staged, never rebuilt.** `kbqa stage --lists` refuses once the batch's
+  staging file exists: the lists are what the drafts were written from. `kbqa
+  stage` itself writes `ROLE-ROWS.md` again right after it writes the staging
+  file, so the mappers see the batch's own rows (`role_rows_refreshed` in its
+  result, or `role_rows_note` saying why not).
 
 ## `_draft-<batch>.jsonl` and `kbqa stage` (since v6.22.0)
 
@@ -311,6 +316,24 @@ One JSON object per line, in `<subject folder>/_draft-<batch>.jsonl`:
   anchor (`draft:<line>`), since linking it would leave them pointing at a
   row that is not an anchor. A draft that already names the same anchor is
   left as it is and not listed.
+- **What stage checks before the check.** A `same_feature_as` that is not
+  `draft:<line>` must name an anchor of the subject — a row of the feature tree
+  or of a staging file that carries no `same_feature_as` itself — else the
+  draft is rejected. An enumerated field — `evidence_grade`, `confidence`,
+  `mechanism`, `outcome`, and `interface_type` when given — must hold one of the
+  profile's values (`Profile.enumerated`: for this profile the schema's grades
+  `official-doc`, `help`, `marketing`, `verified`, `[verify]`; `high`,
+  `medium`, `low`; the `mechanism` and `outcome` values of the row table; `API`,
+  `SDK`, `webhook`, `CLI`, `user interface`), else the draft is rejected. A
+  grade written another known way — another case or spaces, or bare `verify` —
+  is the one exception: it is the respelling `kbqa autofix` would fix, so stage
+  writes the schema's spelling directly and lists it under `respelt_by_code`
+  (`line`, `field`, `before`, `after`).
+- **Every page has a row or a reason.** A page of the receipt that no draft
+  line names — neither a row nor a `no_row` line — is a reject of its own, by
+  `page` (no `line`), reason `no row and no reason: …`; it blocks the staging
+  file like any reject, and the correction round gives the page its rows or
+  its `no_row` line.
 - **Rejected drafts block the staging file.** Also rejected: a page or part the
   receipt does not have, a field no row carries, a missing judgement field, a
   line that is not a JSON object, and a page drafted `no_row` that also has
@@ -330,10 +353,11 @@ One JSON object per line, in `<subject folder>/_draft-<batch>.jsonl`:
   round.
 - **No row.** Each page drafted `no_row` comes back as a suggested stop line,
   `- <url> | no feature: <words>`, under `stop_lines_to_add`, for the fetcher to
-  add with `kbqa stop add`; pages with neither a row nor a `no_row` line are
-  listed under `pages_without_row_or_no_row`.
+  add with `kbqa stop add`; the pages that end with neither a staged row nor a
+  `no_row` line are listed under `pages_without_row_or_no_row`.
 - It never overwrites a staging file. When no draft became a row it writes no
-  staging file. The result is printed as JSON: the round, counts, the staging
+  staging file; when that is because every page was drafted `no_row`, its
+  `next_step` is `no rows — skip mapping for this batch`. The result is printed as JSON: the round, counts, the staging
   and rejects paths, the rejected lines and reasons, `linked_by_code`,
   `link_conflicts`, and the `next_step`.
 
@@ -365,6 +389,12 @@ atomically; `n` counts the batch's runs, and no earlier file is overwritten.
 Everything else — and each of these findings the evidence does not settle,
 with `why_not_by_code` — is printed under `left_findings` for the row-writer's
 fix round; structural and planner findings under `not_for_row_writer`.
+
+Run again while the staging file is the bytes an earlier run wrote — an
+`_qa/<batch>.autofix-<n>.json` whose `staging_sha256_after` is the staging
+file's sha256, and a report that is not on those bytes — autofix exits 0 with
+`already applied`: it writes nothing and prints that record (`already_applied`),
+its `left_findings`, and the next step, the row-writer's fix round.
 
 ## `_mapdraft-<batch>-<A|B>.jsonl` and `kbqa mapstage` (since v6.22.0)
 
@@ -428,7 +458,7 @@ exactly these keys:
   `batch`, `pass`, `map`, `map_sha256`, `staging`, `staging_sha256` — the
   staging bytes the map file was written from (also `staging_sha256` in the
   result). `mapcheck` never reads it.
-- **Classifying again** (the fix round, when the row-writer changed rows):
+- **Classifying again** (the fix round, when the set of anchor ids changed):
   `kbqa mapstage --subject <d> --batch <b> --pass <A|B> --retire` moves this
   pass's map file, sidecar, draft and every rejects file into a new
   `_qa/retired-<batch>-<A|B>-<n>/` (`n` from 1, one past every earlier folder of
@@ -436,7 +466,15 @@ exactly these keys:
   and the next step — the mapper writes a fresh draft for this pass, whose
   rounds start again at 1. It refuses while the staging file still hashes to
   the sidecar's `staging_sha256` (unchanged rows are not classified twice), and
-  for a map file with no sidecar. It touches only the given pass.
+  when the bytes changed but the anchor ids did not — the ids of the rows
+  without `same_feature_as` now, against the ids the map file has lines for:
+  nothing to re-map, the map file stands. Its result says `anchor_set_changed`
+  with `anchors_added` and `anchors_removed`. A map file with no sidecar (one
+  written before sidecars existed) is refused, unless
+  `--retire --no-record` is given — on the operator's word only: it is retired
+  like any other and `RETIRED-WITHOUT-RECORD.txt` in the folder says it was
+  retired without a record, on the operator's word, with the staging sha256 at
+  that moment. It touches only the given pass.
 
 A left-out line whose draft gave no role source, actor or theme — an anchor
 that had no line, say — carries none: `mapcheck` fails it

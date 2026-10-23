@@ -406,3 +406,42 @@ def test_the_cli_dispatches_autofix(window, capsys):
 def test_the_known_respellings(value, expected):
     from kbqa.profiles.vendor_catalogue import schema_evidence_grade
     assert schema_evidence_grade(value) == expected
+
+
+# ── autofix twice is not a dead end (v6.22.0, review S3) ─────────────────────
+
+def test_autofix_run_again_on_its_own_bytes_says_already_applied(window):
+    d, b, stg = _staged(window)
+    _edit(stg, (0, _set(evidence_grade="verify")), (1, _set(evidence_grade="rumour")))
+    _check(d, b)
+    code, first = _fix(d, b)
+    assert code == 0 and first["fixed"] == {"evidence_grade_spelling": 1}
+    after, files = stg.read_bytes(), _qa_files(d, b)
+    code, again = _fix(d, b)
+    assert code == 0, again
+    assert again["already_applied"] == f"_qa/{b}.autofix-1.json" and "already applied" in again["note"]
+    assert again["left_findings"] == first["left_findings"] and again["left_findings"]
+    assert again["next_step"].startswith("the row-writer's fix round")
+    assert stg.read_bytes() == after and _qa_files(d, b) == files and again["files_written"] == []
+
+
+def test_a_staging_file_changed_after_autofix_is_still_refused(window):
+    d, b, stg = _staged(window)
+    _edit(stg, (0, _set(evidence_grade="verify")))
+    _check(d, b)
+    assert _fix(d, b)[0] == 0
+    _edit(stg, (1, _set(evidence_grade="verify")))  # bytes autofix never wrote
+    code, out = _fix(d, b)
+    assert code == 1 and "is not the report of these rows" in out["refused"]
+
+
+def test_a_check_of_autofixs_own_bytes_is_round_two_never_already_applied(window):
+    """Once the report is on the bytes autofix wrote, that check was round 2:
+    the batch is the operator's, not a second pass of autofix."""
+    d, b, stg = _staged(window)
+    _edit(stg, (0, _set(evidence_grade="verify")), (1, _set(evidence_grade="rumour")))
+    _check_logged(d, b)
+    assert _fix(d, b)[0] == 0
+    assert _check_logged(d, b)["round"] == 2
+    code, out = _fix(d, b)
+    assert code == 1 and "round 2" in out["refused"] and "already_applied" not in out

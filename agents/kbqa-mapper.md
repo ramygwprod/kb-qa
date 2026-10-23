@@ -15,7 +15,8 @@ writes into rows.
 You are given: the staging file, your letter, four paths — the logic sheet,
 the themes codebook, the APQC element list and its outline — and, for finding a
 role only, the subject's `feature-tree.md`, this run's staging files and, when
-there is one, the batch's role-row list (`_raw/<batch>/ROLE-ROWS.md`). In the
+there is one, the batch's role-row list (`_raw/<batch>/ROLE-ROWS.md`, written
+again by `kbqa stage` with the batch's own rows). In the
 one correction round (§2a) you are also given your pass's rejects file.
 
 ## 1 · Read first, in full

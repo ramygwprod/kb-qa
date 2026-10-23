@@ -29,7 +29,22 @@ batch's receipt, so nothing a code can copy is typed by an agent:
   `<subject>.<surface>.<breadcrumb's last item>.<vendor_term>`, each a slug,
   made unique with `-2`, `-3`… against every id the subject already has (the
   feature tree and every staging file) — the same drafts give the same ids;
-- a page drafted `no_row` becomes a suggested `no feature: …` stop line.
+- a page drafted `no_row` becomes a suggested `no feature: …` stop line; when
+  every page is drafted `no_row` there are no rows, no staging file, and the
+  next step is `no rows — skip mapping for this batch`;
+- after the staging file is written, `_raw/<batch>/ROLE-ROWS.md` is written
+  again, so the mappers see the batch's own rows (`role_rows_refreshed`).
+
+**It checks what it can before the check.** Rejected in the draft round, as a
+quote not found is: a page of the receipt that no draft line names — no row
+and no `no_row` line (no row and no reason, listed by its page); a
+`same_feature_as` id that is not an anchor of the subject (no row of the
+feature tree or of any staging file, or a row that is itself another source);
+an enumerated field (`evidence_grade`, `confidence`, `mechanism`, `outcome`,
+`interface_type`) whose value is not one of the profile's (`Profile.enumerated`).
+A grade written another known way — the respelling `kbqa autofix` would fix —
+is not rejected: it is written in the schema's spelling and listed under
+`respelt_by_code` (line, field, before, after).
 
 `same_feature_as` names an anchor's id, or another draft of this batch as
 `draft:<line>` (1-based line of the draft file), which code resolves to the id
@@ -63,7 +78,8 @@ the estate names patterns), and `_raw/<batch>/SAME-FEATURE.md`, the
 same-feature shortlist per page of the window (`kbqa.shortlist`; not written,
 with the reason under `same_feature_note`, when the window has no capture to
 read). Built when they are needed, they hold every row staged so far — the
-windows before this one included.
+windows before this one included. They are refused once the batch's staging
+file exists: they are what the drafts were written from.
 
 Both print one JSON result. Exit 0 when the files were written, 1 when refused.
 """
@@ -81,7 +97,7 @@ from urllib.parse import urlparse
 
 from . import features, roles, shortlist, stops
 from .parsing import _QUOTE_MAP, normalise_for_match, parse_capture
-from .profile import conventions
+from .profile import active, conventions
 
 BATCH_RE = re.compile(r"^(product|docs|help)-\d{4}-\d{2}-\d{2}-w\d{2}$")
 RECEIPT = "RECEIPT.json"
@@ -102,6 +118,7 @@ DRAFT_REF = "draft:"  # same_feature_as naming another draft of this batch by it
 CORRECTION_ROUNDS = 1  # the row-writer corrects rejected drafts once; there is no second round
 LEAVE_OUT = "--leave-out-rejects"
 OPERATOR_RULES = "the operator rules on the row: corrected in the fix round, or left out"
+NO_ROWS_STEP = "no rows — skip mapping for this batch"
 
 
 def draft_name(batch: str) -> str:
@@ -260,6 +277,14 @@ def lists(subject: Path, batch: str) -> Dict[str, object]:
     """Write the subject's features list, role-row list and same-feature
     shortlist beside the receipt."""
     receipt = _receipt(subject, batch)
+    staged = subject / conventions().staging_for(batch)
+    if staged.exists():
+        # The lists are what the row-writer reads before it drafts: once the
+        # batch is staged, rebuilding them would describe rows the drafts never saw.
+        raise Refused(f"{staged.name} exists: the lists are built before the row-writer drafts this batch, "
+                      "never after it is staged",
+                      next_step="nothing to rebuild: kbqa stage refreshed ROLE-ROWS.md when it wrote the staging "
+                                "file; the batch goes on to mapping")
     raw = subject / "_raw" / batch
     same: Optional[str] = None
     try:
@@ -352,6 +377,8 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
     existing = features.subject_rows(subject)
     taken = set(existing)
     id_re = re.compile(conv.id_pattern)
+    profile = active()
+    respelt: List[dict] = []  # a known respelling, written in the schema's spelling (what autofix would do)
 
     rejects: Dict[int, dict] = {}
     candidates: Dict[int, dict] = {}  # draft line -> what is needed to make its row
@@ -391,6 +418,32 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
         if missing:
             reject(n, obj, f"missing or empty: {', '.join(missing)}")
             continue
+        sfa = obj.get("same_feature_as")
+        if "same_feature_as" in obj and not (isinstance(sfa, str) and sfa.startswith(DRAFT_REF)):
+            anchor = existing.get(sfa) if isinstance(sfa, str) else None
+            if anchor is None or not features.is_anchor(anchor):
+                reject(n, obj, f"same_feature_as {sfa!r} is not an anchor of the subject: "
+                               + ("it names no row of the feature tree or of any staging file" if anchor is None
+                                  else f"that row is itself another source (of {anchor.get('same_feature_as')!r}); "
+                                       "name that anchor instead"))
+                continue
+        bad_values, fixed_values = [], {}
+        for field, allowed in profile.enumerated.items():
+            if field not in obj or (field not in JUDGEMENT and obj[field] is None):
+                continue
+            value = obj[field]
+            if value in allowed:
+                continue
+            respell = profile.respellings.get(field)
+            new = respell(value) if respell is not None else None
+            if new is not None and new in allowed:
+                fixed_values[field] = new
+                continue
+            bad_values.append(f"{field} {value!r} is not one of {' | '.join(allowed)}")
+        if bad_values:
+            reject(n, obj, "; ".join(bad_values))
+            continue
+        respelt.extend({"line": n, "field": f, "before": obj[f], "after": v} for f, v in fixed_values.items())
         page = pages[url]
         part_no = obj.get("part")
         if isinstance(part_no, bool) or not isinstance(part_no, int) or not 0 <= part_no < len(page["parts"]):
@@ -424,7 +477,7 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
         if normalise_for_match(exact) != nq or nq not in normalise_for_match(blocks[url]):
             reject(n, obj, "the capture's text for this quote does not fold back to it", words_at)
             continue
-        candidates[n] = {"obj": obj, "url": url, "part": part, "exact": exact}
+        candidates[n] = {"obj": {**obj, **fixed_values}, "url": url, "part": part, "exact": exact}
 
     # A link to another draft of this batch: `draft:<line>`, resolved to the id
     # that draft is given. One step only: the target is an anchor, never itself
@@ -565,6 +618,13 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
     linked = [e for e in linked if e["line"] not in rejects]
 
     with_rows = {r["source_url"] for r in rows}
+    # Every page of the receipt has a row or a reason: a page no draft line names
+    # at all — no row, no `no_row` — blocks the staging file like any reject.
+    drafted_pages = {obj.get("page") for _, obj, _ in _read_drafts(drafts_path) if obj is not None}
+    page_rejects = [{"page": u, "reason": f"no row and no reason: no draft line names the page {u}",
+                     "next_step": "the row-writer drafts the page's rows, or one no_row line saying what the "
+                                  "page is, in its correction round"}
+                    for u in pages if u not in drafted_pages]
     for url, words in no_row.items():
         if url in with_rows:
             reject(no_row_lines[url], {"page": url, "no_row": words},
@@ -576,18 +636,19 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
         else:
             stop_lines.append(line)
 
-    listed = [rejects[n] for n in sorted(rejects)]
+    listed = [rejects[n] for n in sorted(rejects)] + page_rejects
     result: Dict[str, object] = {"batch": batch, "round": round_no, "drafts": str(drafts_path),
                                  "rows": len(rows), "rejected": len(listed), "staging": None, "rejects": None}
     if listed:
         rp = subject / rejects_name(batch, round_no)
         _write_new(rp, "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in listed).encode("utf-8"))
         result["rejects"] = str(rp)
-        result["rejected_lines"] = [{"line": r["line"], "reason": r["reason"]} for r in listed]
+        result["rejected_lines"] = [{k: r[k] for k in ("line", "page", "reason") if k in r} for r in listed]
     accounted = with_rows | set(no_row)
     result["pages_without_row_or_no_row"] = [u for u in pages if u not in accounted]
     result["stop_lines_to_add"] = stop_lines
     result["linked_by_code"] = linked
+    result["respelt_by_code"] = [e for e in respelt if e["line"] in ids and e["line"] not in rejects]
     result["link_conflicts"] = conflicts
     if stop_lines_refused:
         result["stop_lines_refused"] = stop_lines_refused
@@ -596,23 +657,34 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
         # once, or the operator rules on each — never left out unseen.
         if round_no <= CORRECTION_ROUNDS:
             result["next_step"] = (f"the row-writer's one correction round: it rewrites only the rejected lines "
-                                   f"of {drafts_path.name}, then {_command(subject, batch)}")
+                                   f"of {drafts_path.name}" + (" and drafts each page listed with no row and no "
+                                                               "reason" if page_rejects else "")
+                                   + f", then {_command(subject, batch)}")
         else:
             result["next_step"] = (f"{_command(subject, batch, LEAVE_OUT)} — the correction round is used; the "
                                    "staging file is written without these drafts, each listed for the operator")
         result["note"] = "drafts were rejected, so no staging file was written"
         return 1, result
     if listed:
-        result["needs_operator"] = [{"line": r["line"], "reason": r["reason"], "next_step": r["next_step"],
-                                     **({"draft": r["draft"]} if "draft" in r else {"raw": r["raw"]})}
-                                    for r in listed]
+        result["needs_operator"] = [{k: r[k] for k in ("line", "page", "reason", "next_step", "draft", "raw")
+                                     if k in r} for r in listed]
     if not rows:
         result["note"] = "no draft became a row, so no staging file was written"
+        if not listed:  # every page was drafted no_row
+            result["next_step"] = NO_ROWS_STEP
         return (1 if listed else 0), result
     body = frontmatter(receipt) + "\n```json\n" + "".join(
         json.dumps(r, ensure_ascii=False) + "\n" for r in rows) + "```\n"
     _write_new(staging, body.encode("utf-8"))
     result["staging"] = str(staging)
+    # The mappers read ROLE-ROWS.md: refreshed now, it holds this batch's own rows.
+    listed_roles, why = roles.role_rows_list(subject)
+    if listed_roles is not None:
+        _write_atomic(subject / "_raw" / batch / ROLE_ROWS, listed_roles.encode("utf-8"))
+        result["role_rows_refreshed"] = f"_raw/{batch}/{ROLE_ROWS}"
+    else:
+        result["role_rows_refreshed"] = None
+        result["role_rows_note"] = f"not written: {why}"
     return 0, result
 
 

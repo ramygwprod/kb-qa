@@ -68,7 +68,9 @@ cycle:
                                                (a grade's spelling, parent_path and depth
                                                from the receipt, id first), on the report
                                                of its current bytes; every change recorded
-                                               in _qa/<b>.autofix-<n>.json, the old bytes kept
+                                               in _qa/<b>.autofix-<n>.json, the old bytes kept;
+                                               run again on the bytes it wrote: "already
+                                               applied", with what it left
 
 collection (the fetcher runs these; permission from today's g0 record, g0 run first when missing):
   index --out <d> --surface <s> --rung <n> --url <u> [--html] [--path-prefix <p>] [--supersede]
@@ -88,17 +90,23 @@ collection (the fetcher runs these; permission from today's g0 record, g0 run fi
                                                refused, robots unreachable, a window that
                                                captured nothing, or --max-windows (10);
                                                then --retry-failed once when exhausted.
-                                               One JSON: the windows, the end state, one
-                                               merged needs_operator and stop-line list
+                                               One JSON: the windows, every window with a
+                                               capture and no staging file (unstaged, from
+                                               earlier runs too), the end state, one merged
+                                               needs_operator and stop-line list
   stage --subject <d> --batch <b> --lists      before the row-writer: the subject's features
-                                               and role-row lists beside the receipt
+                                               and role-row lists beside the receipt;
+                                               refused once the batch is staged
   stage --subject <d> --batch <b> [--leave-out-rejects]
                                                after it: the staging file from the
                                                row-writer's _draft-<batch>.jsonl — quotes
                                                copied from the capture, ids and the
-                                               frontmatter by code; a rejected draft
+                                               frontmatter by code; a rejected draft (or
+                                               a page with no row and no reason, a link
+                                               to no anchor, a value outside the profile)
                                                blocks it (one correction round, then
-                                               --leave-out-rejects lists each left out)
+                                               --leave-out-rejects lists each left out);
+                                               ROLE-ROWS.md refreshed after it is written
   mapstage --subject <d> --batch <b> --pass <A|B> --elements <list> [--leave-out-rejects]
                                                after each mapping pass: _map-<b>-<A|B>.jsonl
                                                from the mapper's _mapdraft-<b>-<A|B>.jsonl —
@@ -107,11 +115,13 @@ collection (the fetcher runs these; permission from today's g0 record, g0 run fi
                                                (one correction round, then
                                                --leave-out-rejects writes each anchor whose
                                                line is still rejected as needs-human)
-  mapstage --subject <d> --batch <b> --pass <A|B> --retire
-                                               fix round, after rows changed: move this
-                                               pass's map, sidecar, draft and rejects
-                                               into _qa/retired-<b>-<A|B>-<n>/; refused
-                                               while the staging is unchanged
+  mapstage --subject <d> --batch <b> --pass <A|B> --retire [--no-record]
+                                               fix round, after the anchor ids changed:
+                                               move this pass's map, sidecar, draft and
+                                               rejects into _qa/retired-<b>-<A|B>-<n>/;
+                                               refused while the staging is unchanged or
+                                               its anchor ids are; --no-record (operator's
+                                               word only) retires a map with no sidecar
   stop add <subject dir> "- <url> | <reason>"  append one stop line, atomically, if its
                                                reason is in the vocabulary
   stop reasons                                 print the stop-reason vocabulary

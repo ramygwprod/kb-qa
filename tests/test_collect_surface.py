@@ -244,3 +244,32 @@ def test_max_windows_below_one_is_refused_through_the_cli(subject, capsys):
                      "--max-windows", "0"])
     assert code == 1 and "--max-windows" in json.loads(capsys.readouterr().out)["refused"]
     assert not (subject / "_raw").exists()
+
+
+# ── unstaged windows are never lost (v6.22.0, review S1) ─────────────────────
+
+def test_every_window_with_a_capture_and_no_staging_is_listed_from_every_run(subject, seqweb):
+    den = _den(subject, n=5)
+    seqweb({_url(i): ok_page(i) for i in range(1, 6)})
+    code, r = _collect(subject, den, "--max-pages", "2")
+    assert code == 0 and [(u["batch"], u["state"]) for u in r["unstaged"]] == [
+        (_batch(n), collect_surface.NO_DRAFTS) for n in (1, 2, 3)]
+    assert r["unstaged"][0]["capture"] == str(subject / f"_capture-{_batch(1)}.raw.txt")
+    assert r["unstaged"][0]["receipt"] == f"_raw/{_batch(1)}/RECEIPT.json"
+    (subject / f"_collect-{_batch(1)}-staging.md").write_text("staged\n")
+    (subject / f"_draft-{_batch(2)}.jsonl").write_text(json.dumps({"page": _url(3), "no_row": "x"}) + "\n")
+    rec = json.loads((subject / "_raw" / _batch(3) / "RECEIPT.json").read_text())
+    (subject / f"_draft-{_batch(3)}.jsonl").write_text(
+        "".join(json.dumps({"page": p["url"], "no_row": "an overview"}) + "\n" for p in rec["pages"]))
+    code, r = _collect(subject, den)  # a later run: the surface is exhausted, nothing new is captured
+    assert code == 0 and r["already_exhausted"] and r["windows"] == []
+    assert [(u["batch"], u["state"]) for u in r["unstaged"]] == [
+        (_batch(2), collect_surface.DRAFTED), (_batch(3), collect_surface.ALL_NO_ROW)]
+
+
+def test_a_window_with_no_capture_file_is_not_unstaged(subject, seqweb):
+    den = _den(subject, n=1)
+    seqweb({_url(1): (404, b"", "text/html")})
+    code, r = _collect(subject, den)
+    assert r["windows"] and r["windows"][0]["capture"] is None, r
+    assert r["unstaged"] == []

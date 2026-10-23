@@ -73,6 +73,15 @@ class Profile:
     #: re-collection list (`sweep --recollect`), not in a verdict.
     strict_row_check: Optional[Callable[[dict], List[Tuple[str, str]]]] = None
 
+    #: The values each enumerated judgement field of a new row may take, one
+    #: spelling each: `kbqa stage` rejects a draft outside them before the check.
+    enumerated: Dict[str, Tuple[str, ...]] = field(default_factory=dict)
+
+    #: Per enumerated field, the function giving the one right spelling of a
+    #: value written another known way (else None). `kbqa stage` writes that
+    #: spelling directly — the fix `kbqa autofix` would make — and lists it.
+    respellings: Dict[str, Callable[[object], Optional[str]]] = field(default_factory=dict)
+
     def is_registered(self, field_name: str) -> bool:
         return field_name in self.extensions
 

@@ -1,6 +1,6 @@
 ---
 name: kbqa-check
-description: Run the kbqa validation gates over a collected batch or a whole estate, read the verdict, and route failures. Use when a capture and staging file exist and need checking, when a gate has failed and the next step is unclear, when a mapping file needs checking, or when asked whether a batch is grounded. Read-only with respect to the validator — it never modifies kbqa, never installs it, never merges, and never edits rows to make a gate pass.
+description: Run the kbqa validation gates over a collected batch or a whole estate, read the verdict, and route failures. Use when a capture and staging file exist and need checking, when a gate has failed and the next step is unclear, when a mapping file needs checking, or when asked whether a batch is grounded. Read-only with respect to the validator — it never modifies kbqa, never installs it, never merges, and never edits rows itself: only `kbqa autofix`, which it runs in round 1, rewrites a staging file, with the fixes code computes exactly from the evidence, each recorded.
 allowed-tools: Bash, Read
 ---
 
@@ -168,7 +168,9 @@ wrote, `_map-<batch>-<A|B>.jsonl`:
   that list's hierarchy id and name
 - `role_source` filled; `needs-human` rows listed and never counted as mapped
 - A/B agreement on **ALL** rows — a missing or needs-human row is a disagreement
-- `element_dominates`: one element on more than 30 % of the batch
+- `element_dominates`: one element on more than 30 % of the batch's rows and on
+  at least two of them (on a tiny batch one row is a large share by arithmetic
+  alone, and measures nothing)
 - `story_role_mismatch`: the story's "As <role>, I want" names another role than
   the line's `role` — singular or plural as printed, "a"/"an" optional — or an
   APQC-closest role lacks the "(APQC-closest)" tag after it, or another role carries it
@@ -195,7 +197,7 @@ staging hashes in `<subject>/_qa-log.jsonl`:
 | report says | what happens |
 |---|---|
 | round 1, BLOCKED | first `kbqa autofix` (below); then the `fixable` findings it leaves go to the row-writer — the specific findings, not the gate name |
-| round 2, CLEAR | done; the batch is ready for mapping, then merge |
+| round 2, CLEAR | done; the batch is ready for merge (its map files were written during collection, and made again in the fix round when its anchor ids changed) |
 | round 2+, **PARKED** | stop. The batch and its finding list go to the operator. Nothing goes back to the row-writer without the operator |
 
 **Code fixes first.** For each batch BLOCKED in round 1 with `fixable`
@@ -223,6 +225,11 @@ check of them would leave the row-writer none. When it left nothing for the
 row-writer, the operator runs `/kbqa-check` again: round 2. G1 still requires
 the capture to be older than the staging file — it is, since autofix writes the
 staging file anew.
+
+Run on the bytes it wrote itself — a second run before the fix round — autofix
+is no dead end: it writes nothing, says `already applied`, and gives that run's
+`left_findings` again, with the next step, the row-writer's fix round. Report
+it as that, not as a refusal.
 
 Re-running on unchanged bytes is the same round. **Never hand a failure back as
 "try again"** — that retry loop is where gaming begins. `structural` and

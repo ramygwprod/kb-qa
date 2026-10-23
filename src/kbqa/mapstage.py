@@ -48,15 +48,21 @@ file's name and sha256 it was written from (also in the result as
 
 **Classifying again, after the rows changed** (the fix round):
 
-    python3 -m kbqa mapstage --subject <d> --batch <b> --pass <A|B> --retire
+    python3 -m kbqa mapstage --subject <d> --batch <b> --pass <A|B> --retire [--no-record]
 
 moves this pass's map file, its sidecar, its draft and every one of its rejects
 files into a new `_qa/retired-<batch>-<A|B>-<n>/` (`n` from 1, one past every
 earlier folder of this batch and pass; nothing deleted, nothing overwritten)
 and prints what it moved and the next step: the mapper writes a fresh draft for
 this pass. It refuses when the staging file still hashes to the sha256 the
-sidecar recorded — classifying unchanged rows again is wasted work — and when a
-map file has no sidecar to tell. It touches only the given pass.
+sidecar recorded — classifying unchanged rows again is wasted work — and when
+the bytes changed but the anchor ids did not: the ids of the rows without
+`same_feature_as` now, against the ids the map file has lines for. Its result
+says `anchor_set_changed`, with the ids added and removed. A map file with no
+sidecar is refused too, unless `--no-record` is given — on the operator's word
+only, for a map file written before sidecars existed: it is retired and
+`RETIRED-WITHOUT-RECORD.txt` in the folder says so. It touches only the given
+pass.
 
 Prints one JSON result. Exit 0 when the file was written (or there is nothing
 to classify) or the files were retired, 1 when refused or lines were rejected.
@@ -89,6 +95,8 @@ LEFT_OUT_PATTERN = "[no rule]"
 CORRECTION_ROUNDS = 1  # the mapper corrects rejected lines once; there is no second round
 LEAVE_OUT = "--leave-out-rejects"
 RETIRE = "--retire"
+NO_RECORD = "--no-record"
+NO_RECORD_NOTE = "RETIRED-WITHOUT-RECORD.txt"
 BATCH_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 ANCHOR_NEXT = ("the mapper corrects this line in its one correction round; still rejected, the anchor is "
                "written needs-human for the operator")
@@ -396,11 +404,30 @@ def mapstage(subject: Path, batch: str, letter: str, elements_path: Path,
     return 0, result
 
 
-def retire(subject: Path, batch: str, letter: str) -> Dict[str, object]:
+def _map_ids(path: Path) -> Optional[set]:
+    """The ids a map file has lines for — the anchors it was written for — or
+    None when a line cannot be read."""
+    ids = set()
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        if not raw.strip():
+            continue
+        try:
+            obj = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(obj, dict) or not isinstance(obj.get("id"), str):
+            return None
+        ids.add(obj["id"])
+    return ids
+
+
+def retire(subject: Path, batch: str, letter: str, no_record: bool = False) -> Dict[str, object]:
     """Move this pass's map file, its sidecar, its draft and its rejects files
     into a new `_qa/retired-<batch>-<pass>-<n>/` — only when the staging file
-    changed since the map file was written. Nothing is deleted or overwritten;
-    the other pass is never touched."""
+    changed since the map file was written and its anchor ids changed with it.
+    With `no_record` (on the operator's word), a map file written before
+    sidecars existed is retired, and the folder says so. Nothing is deleted or
+    overwritten; the other pass is never touched."""
     if not subject.is_dir():
         raise Refused(f"no subject folder {subject}")
     if not BATCH_NAME_RE.match(batch):
@@ -415,10 +442,25 @@ def retire(subject: Path, batch: str, letter: str) -> Dict[str, object]:
     files += _rounds(subject, batch, letter)
     if not files:
         raise Refused(f"pass {letter} of {batch} has no map file, draft or rejects file to retire")
+    if no_record and (not out_path.exists() or meta_path.exists()):
+        raise Refused(f"{NO_RECORD} retires only a map file that has no {meta_path.name}: "
+                      + (f"{meta_path.name} is there, so retire without {NO_RECORD}" if meta_path.exists()
+                         else f"there is no {out_path.name}"),
+                      next_step=f'python3 -m kbqa mapstage --subject "{subject}" --batch {batch} --pass {letter} '
+                                f"{RETIRE}" if meta_path.exists() else "operator")
+    anchors_now = set(_anchors(staging)[0])
+    changed: Optional[dict] = None
     if out_path.exists():
+        mapped = _map_ids(out_path)
+        if mapped is not None:
+            changed = {"anchor_set_changed": mapped != anchors_now,
+                       "anchors_added": sorted(anchors_now - mapped), "anchors_removed": sorted(mapped - anchors_now)}
+    if out_path.exists() and not no_record:
         if not meta_path.is_file():
             raise Refused(f"{out_path.name} has no {meta_path.name}, so whether the staging file changed since it "
-                          "was written cannot be told: the operator decides")
+                          "was written cannot be told: the operator decides",
+                          next_step=f'only on the operator\'s word: python3 -m kbqa mapstage --subject "{subject}" '
+                                    f"--batch {batch} --pass {letter} {RETIRE} {NO_RECORD}")
         try:
             recorded = json.loads(meta_path.read_text(encoding="utf-8")).get("staging_sha256")
         except (OSError, json.JSONDecodeError, AttributeError) as exc:
@@ -426,6 +468,14 @@ def retire(subject: Path, batch: str, letter: str) -> Dict[str, object]:
         if recorded == _sha256(staging):
             raise Refused(f"{staging.name} is unchanged since {out_path.name} was written (staging sha256 "
                           f"{recorded}): classifying the same rows again is wasted work, so nothing was moved")
+        if changed is None:
+            raise Refused(f"{out_path.name} has a line that is not a JSON object with an id, so which anchors it "
+                          "classified cannot be told: the operator decides")
+        if not changed["anchor_set_changed"]:
+            raise Refused(f"{staging.name} changed since {out_path.name} was written, but its anchor ids (rows "
+                          "without same_feature_as) did not: there is nothing to re-map, so nothing was moved",
+                          next_step=f"keep {out_path.name}: the classification stands for the same anchors; "
+                                    "/kbqa-check the batch again")
     qa = subject / "_qa"
     qa.mkdir(exist_ok=True)
     pat = retired_dir_re(batch, letter)
@@ -440,9 +490,21 @@ def retire(subject: Path, batch: str, letter: str) -> Dict[str, object]:
             raise Refused(f"{target} exists: nothing is overwritten")
         p.rename(target)
         moved.append({"from": str(p), "to": str(target)})
-    return {"batch": batch, "pass": letter, "retired_to": str(dest), "moved": moved,
-            "next_step": f"the mapper writes a fresh draft for pass {letter} ({draft_name(batch, letter)}), "
-                         f"then kbqa mapstage --pass {letter}; the other pass runs on its own"}
+    out: Dict[str, object] = {"batch": batch, "pass": letter, "retired_to": str(dest), "moved": moved}
+    if no_record:
+        note = dest / NO_RECORD_NOTE
+        _write_new(note, (
+            f"{out_path.name} was retired without a record: it had no {meta_path.name}, so whether "
+            f"{staging.name} changed since it was written could not be told by code. It was retired on the "
+            f"operator's word ({RETIRE} {NO_RECORD}). {staging.name} hashed to {_sha256(staging)} when it was "
+            "retired.\n").encode("utf-8"))
+        out["without_record"] = str(note)
+    out["anchor_set_changed"] = changed["anchor_set_changed"] if changed is not None else None
+    if changed is not None:
+        out.update(anchors_added=changed["anchors_added"], anchors_removed=changed["anchors_removed"])
+    out["next_step"] = (f"the mapper writes a fresh draft for pass {letter} ({draft_name(batch, letter)}), "
+                        f"then kbqa mapstage --pass {letter}; the other pass runs on its own")
+    return out
 
 
 def run(argv: Optional[List[str]] = None) -> int:
@@ -455,14 +517,19 @@ def run(argv: Optional[List[str]] = None) -> int:
                     help="after the one correction round: write the mapping file, each anchor whose line is "
                          "still rejected marked needs-human, each reject listed under needs_operator")
     ap.add_argument(RETIRE, action="store_true", dest="retire",
-                    help="when the staging file changed since the map file was written: move this pass's map, "
-                         "draft and rejects files into _qa/retired-<batch>-<pass>-<n>/")
+                    help="when the staging file and its anchor ids changed since the map file was written: move "
+                         "this pass's map, draft and rejects files into _qa/retired-<batch>-<pass>-<n>/")
+    ap.add_argument(NO_RECORD, action="store_true", dest="no_record",
+                    help="with --retire, on the operator's word only: retire a map file that has no .meta.json "
+                         "(written before kbqa 6.22.0)")
     args = ap.parse_args(argv)
     try:
+        if args.no_record and not args.retire:
+            raise Refused(f"{NO_RECORD} is given with {RETIRE} only")
         if args.retire:
             if args.leave_out or args.elements:
                 raise Refused(f"{RETIRE} is a run of its own: no --elements, no {LEAVE_OUT}")
-            code, out = 0, retire(Path(args.subject), args.batch, args.letter)
+            code, out = 0, retire(Path(args.subject), args.batch, args.letter, args.no_record)
         elif not args.elements:
             raise Refused("--elements is needed: the element list the ids are copied from")
         else:

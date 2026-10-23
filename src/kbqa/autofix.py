@@ -37,9 +37,14 @@ row id, line, field, before, after — and the staging sha256 before and after),
 then the staging file, atomically. `n` is one past every earlier run's. When no
 fix applies it writes nothing.
 
+Run again while the staging file is the bytes an earlier run wrote (that run's
+`staging_sha256_after`; the report on disk is still the one before it), it is
+no dead end: it writes nothing and prints `already applied`, that run's
+`left_findings` and the next step — the row-writer's fix round.
+
 It prints one JSON result: what was fixed (per code), what is left for the
 row-writer (per code, and each finding word for word), the files written and
-the next step. Exit 0 when it ran, 1 when refused.
+the next step. Exit 0 when it ran (or was already applied), 1 when refused.
 """
 
 import argparse
@@ -67,11 +72,33 @@ BEFORE = "{batch}.staging-before-autofix-{n}.md"
 SPELLING, PARENT, DEPTH, ID_FIRST = ("evidence_grade_spelling", "parent_path_empty",
                                      "depth_unknown_with_breadcrumb", "id_not_first_key")
 FIXES = (SPELLING, PARENT, DEPTH, ID_FIRST)
+ROW_WRITER_STEP = ("the row-writer's fix round, with left_findings word for word (/kbqa-collect <Subject> fix "
+                   "{batch}); then /kbqa-check {subject} again — the batch's next round")
 Refused = stage.Refused
 
 
 def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def _applied(qa: Path, batch: str, sha: str) -> Optional[Tuple[Path, dict]]:
+    """The latest earlier autofix record of this batch whose staging sha256
+    after is `sha` — these bytes are that run's own — or None."""
+    pat = re.compile(re.escape(batch) + r"\.autofix-(\d+)\.json")
+    found = []
+    if qa.is_dir():
+        for p in qa.iterdir():
+            m = pat.fullmatch(p.name)
+            if m:
+                found.append((int(m.group(1)), p))
+    for _, p in sorted(found, reverse=True):
+        try:
+            record = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(record, dict) and record.get("staging_sha256_after") == sha:
+            return p, record
+    return None
 
 
 def _runs(qa: Path, batch: str) -> int:
@@ -193,6 +220,18 @@ def autofix(subject: Path, batch: str) -> Dict[str, object]:
         raise Refused(f"_qa/{report_path.name} is not a check report of {batch}", next_step=f"/kbqa-check {subject}")
     data = staging.read_bytes()
     sha_before = _sha(data)
+    applied = _applied(qa, batch, sha_before) if report.get("staging_sha256") != sha_before else None
+    if applied is not None:
+        # Autofix ran already and these are the bytes it wrote: running it again
+        # is no dead end — what it left is the row-writer's, word for word.
+        path, record = applied
+        left = record.get("left_findings") or []
+        return {"batch": batch, "already_applied": f"_qa/{path.name}", "staging": str(staging),
+                "note": f"already applied: {staging.name} is the bytes _qa/{path.name} wrote; nothing was written",
+                "left_findings": left, "files_written": [],
+                "next_step": ROW_WRITER_STEP.format(batch=batch, subject=subject) if left else
+                             f"/kbqa-check {subject} again — the staging file changed, so the report on disk no "
+                             "longer describes it"}
     if report.get("staging_sha256") != sha_before:
         raise Refused(f"the report was made on staging bytes {report.get('staging_sha256')!r}, the file now "
                       f"hashes to {sha_before}: it is not the report of these rows",
@@ -317,11 +356,9 @@ def autofix(subject: Path, batch: str) -> Dict[str, object]:
         result["files_written"] = [str(before_path), str(record_path), str(staging)]
         result["staging_sha256_before"], result["staging_sha256_after"] = sha_before, _sha(new)
     if still:
-        result["next_step"] = (f"the row-writer's fix round, with left_findings word for word "
-                               f"(/kbqa-collect <Subject> fix {batch}); then /kbqa-check {subject} again — the "
-                               "batch's next round" + (". Not /kbqa-check before the fix round: a check of "
-                                                       "the new bytes is that next round, and leaves the "
-                                                       "row-writer none" if changes else ""))
+        result["next_step"] = (ROW_WRITER_STEP.format(batch=batch, subject=subject)
+                               + (". Not /kbqa-check before the fix round: a check of the new bytes is that "
+                                  "next round, and leaves the row-writer none" if changes else ""))
     elif changes:
         result["next_step"] = (f"/kbqa-check {subject} again — the staging file changed, so the report on disk "
                                "no longer describes it")

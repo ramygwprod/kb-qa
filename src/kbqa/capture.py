@@ -48,6 +48,11 @@ Batch dates follow the access date: a surface collected across midnight goes
 on in batches of the new date (`…-10-17-w07` → `…-10-18-w01`); its windows
 still chain, because the chain is read from the windows' state, not their names.
 
+`--status --files` lists the surface's files on disk with their sizes:
+denominators, captures, receipts, the row-writer's drafts, staging files, the
+mappers' drafts, map files, the rejects files of `kbqa stage` and `kbqa
+mapstage`, robots records and the subject's stop conditions.
+
 It never overwrites: an existing capture or raw folder stops it. It exits 0 if
 at least one page was captured, 1 otherwise. A 429 or 503 ends the window there
 (`stopped: throttled`).
@@ -342,6 +347,14 @@ def _retry_state(subject: Path, windows: List[Dict]):
 SUBJECT_FILES = ("_stop-conditions.md",)
 
 
+REJECTS_RE = re.compile(r"\.rejects-\d+\.jsonl$")
+
+
+def _rejects(p: Path) -> bool:
+    """A rejects file of `kbqa stage` or `kbqa mapstage`: `<draft>.rejects-<n>.jsonl`."""
+    return REJECTS_RE.search(p.name) is not None
+
+
 def _files(subject: Path, surface: str) -> Dict[str, List[Dict[str, object]]]:
     """A read-only inventory of what is on disk for a surface, with sizes."""
     def entry(p: Path) -> Dict[str, object]:
@@ -352,6 +365,10 @@ def _files(subject: Path, surface: str) -> Dict[str, List[Dict[str, object]]]:
         "captures": [entry(p) for p in names if p.name.startswith(f"_capture-{surface}-")],
         "staging": [entry(p) for p in names if p.name.startswith(f"_collect-{surface}-")],
         "maps": [entry(p) for p in names if p.name.startswith(f"_map-{surface}-")],
+        "drafts": [entry(p) for p in names if p.name.startswith(f"_draft-{surface}-") and not _rejects(p)],
+        "map_drafts": [entry(p) for p in names if p.name.startswith(f"_mapdraft-{surface}-") and not _rejects(p)],
+        "rejects": [entry(p) for p in names if p.name.startswith((f"_draft-{surface}-", f"_mapdraft-{surface}-"))
+                    and _rejects(p)],
         "robots_records": [entry(p) for p in names if p.name.startswith("_robots-")],
         "subject": [entry(subject / n) for n in SUBJECT_FILES if (subject / n).is_file()],
         "receipts": [],

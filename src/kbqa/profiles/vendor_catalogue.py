@@ -16,7 +16,7 @@ than different.
 """
 
 from enum import Enum
-from typing import Dict, List, Literal, Optional, Tuple, Union
+from typing import Dict, List, Literal, Optional, Tuple, Union, get_args
 
 from pydantic import Field, field_validator
 
@@ -356,4 +356,14 @@ PROFILE = register(Profile(
         "vendor_term", "parent_path",
     ),
     strict_row_check=strict_row_check,
+    # What `kbqa stage` holds a draft's judgement to before the check: the
+    # schema's spelling of each value (one spelling per value, K1).
+    enumerated={
+        "evidence_grade": SCHEMA_EVIDENCE_GRADES,
+        "confidence": get_args(Row.model_fields["confidence"].annotation),
+        "mechanism": tuple(m.value for m in Mechanism),
+        "outcome": tuple(o.value for o in Outcome),
+        "interface_type": INTERFACE_TYPES,
+    },
+    respellings={"evidence_grade": schema_evidence_grade},
 ))
