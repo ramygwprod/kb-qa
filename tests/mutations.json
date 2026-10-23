@@ -380,10 +380,11 @@
   {
     "label": "stage: the depth is the breadcrumb's levels counted",
     "file": "src/kbqa/stage.py",
-    "old": "\"depth_level\": str(len(levels)) if levels else UNKNOWN,",
-    "new": "\"depth_level\": UNKNOWN,",
+    "old": "    return (str(crumb), str(len(levels))) if levels else (UNKNOWN, UNKNOWN)\n",
+    "new": "    return (str(crumb), UNKNOWN) if levels else (UNKNOWN, UNKNOWN)\n",
     "tests": [
-      "tests/test_stage.py"
+      "tests/test_stage.py",
+      "tests/test_autofix.py"
     ]
   },
   {
@@ -717,6 +718,267 @@
     "new": "    scored.sort(key=lambda x: x[0])\n",
     "tests": [
       "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "autofix: refused unless the report is on the staging file's current bytes",
+    "file": "src/kbqa/autofix.py",
+    "old": "    if report.get(\"staging_sha256\") != sha_before:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: refused without a check report",
+    "file": "src/kbqa/autofix.py",
+    "old": "    if not report_path.is_file():\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a legacy batch is never edited",
+    "file": "src/kbqa/autofix.py",
+    "old": "    if not stage.BATCH_RE.match(batch):\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a staging file changed while it runs is not overwritten",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if _sha(staging.read_bytes()) != sha_before:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: structural and planner findings never go to the row-writer",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if f.get(\"kind\") != FIXABLE:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: only the four codes are fixed by code",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if code not in FIXES:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a finding naming no row changes nothing",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if rp is None or rp.obj is None:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: only a line written as stage writes it is rewritten",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if content != json.dumps(rp.obj, ensure_ascii=False):\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: nothing is written when no fix applies",
+    "file": "src/kbqa/autofix.py",
+    "old": "    if not changes:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: the old bytes are kept",
+    "file": "src/kbqa/autofix.py",
+    "old": "        stage._write_new(before_path, data)\n",
+    "new": "        stage._write_new(before_path, new)\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: each run is numbered, never over an earlier one",
+    "file": "src/kbqa/autofix.py",
+    "old": "        run_no = _runs(qa, batch) + 1\n",
+    "new": "        run_no = 1\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a grade already spelled right is not changed",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if new == row.get(\"evidence_grade\"):\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: id is moved first",
+    "file": "src/kbqa/autofix.py",
+    "old": "                row = {\"id\": row[\"id\"], **{k: v for k, v in row.items() if k != \"id\"}}\n",
+    "new": "                row = dict(row)\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: an id already first is not moved",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if next(iter(row)) == \"id\":\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a row without an id is not reordered",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if \"id\" not in row:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a parent_path that is not empty is not replaced",
+    "file": "src/kbqa/autofix.py",
+    "old": "    if code == PARENT and isinstance(pp, str) and pp.strip():\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a depth that is not unknown is not replaced",
+    "file": "src/kbqa/autofix.py",
+    "old": "    if code == DEPTH and str(row.get(\"depth_level\", \"\")).strip() != DEPTH_UNKNOWN:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a depth only when parent_path is its part's breadcrumb",
+    "file": "src/kbqa/autofix.py",
+    "old": "    if pp != parent_path:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a filled parent_path brings its depth only from unknown to a number",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if str(row.get(\"depth_level\", \"\")).strip() == DEPTH_UNKNOWN and depth_level != DEPTH_UNKNOWN:\n",
+    "new": "        if True:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: the receipt must name the staging file's capture",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if staging_capture_sha != receipt.get(\"sha256\"):\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: the row's page must be a page of the receipt",
+    "file": "src/kbqa/autofix.py",
+    "old": "        page = self.pages.get(row.get(\"source_url\"))\n",
+    "new": "        page = self.pages.get(row.get(\"source_url\"), next(iter(self.pages.values())))\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: parts giving different breadcrumbs are left",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if len(found) != 1:\n",
+    "new": "        if len(found) == 0:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: parts must carry a breadcrumb",
+    "file": "src/kbqa/autofix.py",
+    "old": "            if \"breadcrumb\" not in part:\n",
+    "new": "            if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a schema finding is resolved only when its field no longer fails",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if f.get(\"code\") == \"schema_violation\" and n in errors and field not in errors[n]:\n",
+    "new": "        if f.get(\"code\") == \"schema_violation\" and n in errors:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "respelling: only a known respelling, never the nearest grade",
+    "file": "src/kbqa/profiles/vendor_catalogue.py",
+    "old": "    return known.get(key)\n",
+    "new": "    return known.get(key, SCHEMA_EVIDENCE_GRADES[0])\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "respelling: case and spaces are folded",
+    "file": "src/kbqa/profiles/vendor_catalogue.py",
+    "old": "    key = \"\".join(value.split()).lower()\n",
+    "new": "    key = value\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "respelling: the bare verify is [verify]",
+    "file": "src/kbqa/profiles/vendor_catalogue.py",
+    "old": "BARE_EVIDENCE_GRADES = {\"verify\": \"[verify]\"}\n",
+    "new": "BARE_EVIDENCE_GRADES = {}\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a report of round 2 or later is refused: the batch is the operator's",
+    "file": "src/kbqa/autofix.py",
+    "old": "    if isinstance(round_no, int) and round_no >= 2:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a report naming no round takes its round from the subject's log",
+    "file": "src/kbqa/autofix.py",
+    "old": "    if round_no is None and log.is_file():\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
     ]
   }
 ]

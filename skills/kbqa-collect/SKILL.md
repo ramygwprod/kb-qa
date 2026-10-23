@@ -258,6 +258,13 @@ Run only when the operator brings the `fixable` findings of a batch that
 `/kbqa-check` reported BLOCKED in round 1. The operator pastes them; you never
 open `_qa/` to find them.
 
+Code has already fixed what it can fix exactly: `/kbqa-check` runs
+`kbqa autofix` before this round (a grade's known respelling, the breadcrumb and
+its depth from the receipt, `id` first — each recorded, the old bytes kept). The
+findings the operator brings are the ones it left, its `left_findings` — each
+of its own codes with `why_not_by_code`, the reason code could not settle it.
+Pass those reasons on with the findings, word for word.
+
 1. Delegate to `kbqa-row-writer` in fix mode (its §5): the staging path, the
    capture path, and the findings, word for word.
 2. If rows changed ids or were added or dropped, re-run both `kbqa-mapper` passes

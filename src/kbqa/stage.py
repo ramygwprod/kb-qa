@@ -203,6 +203,14 @@ def _crumb_levels(crumb: Optional[str]) -> List[str]:
     return [s.strip() for s in (crumb or "").split(CRUMB_SEP) if s.strip()]
 
 
+def position(crumb: Optional[str]) -> Tuple[str, str]:
+    """A row's `parent_path` and `depth_level` from its part's breadcrumb: the
+    breadcrumb as the capture wrote it and its levels counted, else `unknown`
+    for both. `kbqa autofix` re-derives them with this same function."""
+    levels = _crumb_levels(crumb)
+    return (str(crumb), str(len(levels))) if levels else (UNKNOWN, UNKNOWN)
+
+
 class Refused(Exception):
     def __init__(self, message: str, next_step: str = "operator"):
         super().__init__(message)
@@ -532,13 +540,14 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
             continue
         taken.add(rid)
         ids[n] = rid
+        parent_path, depth_level = position(part.get("breadcrumb"))
         row = {"id": rid, "source_url": c["url"], "source_quote": c["exact"],
                "access_date": receipt["access_date"],
                "vendor_term": obj["vendor_term"], "what_it_does": obj["what_it_does"],
-               "parent_path": part["breadcrumb"] if levels else UNKNOWN,
+               "parent_path": parent_path,
                "evidence_grade": obj["evidence_grade"], "confidence": obj["confidence"],
                "mechanism": obj["mechanism"], "outcome": obj["outcome"],
-               "depth_level": str(len(levels)) if levels else UNKNOWN, "canonical": "NOVEL"}
+               "depth_level": depth_level, "canonical": "NOVEL"}
         row.update({k2: obj[k2] for k2 in OPTIONAL if k2 in obj})
         row["_line"] = n
         rows.append(row)

@@ -261,6 +261,21 @@ INTERFACE_DETAIL = "operation parameter".split()
 # above still accepts both spellings of "verify", because legacy rows use the
 # bare form and are never edited. A NEW batch writes the schema's spelling.
 SCHEMA_EVIDENCE_GRADES = ("official-doc", "help", "marketing", "verified", "[verify]")
+# The bare spelling of a grade whose schema spelling is bracketed.
+BARE_EVIDENCE_GRADES = {"verify": "[verify]"}
+
+
+def schema_evidence_grade(value: object) -> Optional[str]:
+    """The schema's spelling of a grade written another known way — in another
+    case, with spaces, or bare (`verify` for `[verify]`) — else None. A value
+    that is no known respelling of one grade is never mapped to the nearest
+    one: which grade was meant is the row-writer's judgement, not code's."""
+    if not isinstance(value, str):
+        return None
+    key = "".join(value.split()).lower()
+    known = {g.lower(): g for g in SCHEMA_EVIDENCE_GRADES}
+    known.update(BARE_EVIDENCE_GRADES)
+    return known.get(key)
 
 
 def strict_row_check(obj: dict) -> List[Tuple[str, str]]:

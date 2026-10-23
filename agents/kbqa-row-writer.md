@@ -226,9 +226,15 @@ You are given a staging file, its capture, and the operator's `fixable`
 findings from `/kbqa-check`, word for word. This is the only time you write over
 an existing staging file.
 
+Code has fixed what it could fix exactly before you (`kbqa autofix`: a grade's
+known respelling, the breadcrumb and its depth from the receipt, `id` first), so
+you receive only what it left — for those four findings with the reason code
+could not settle them. The staging file's line numbers are unchanged by it.
+
 - Fix **what the findings name, in the rows they name**, from the capture — a
   quote corrected to the page's exact words, a `parent_path` filled from the
-  breadcrumb, an `evidence_grade` respelled, a row moved to the page it is about.
+  breadcrumb, an `evidence_grade` the schema spells, a row moved to the page it
+  is about.
 - A row the capture cannot support is removed, not stretched to pass.
 - Change nothing else: not the frontmatter's receipt values, not rows no finding
   names, not the order of the rows that stay.

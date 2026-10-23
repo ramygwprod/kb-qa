@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from . import __version__, capture, elements, freeze, index, mappings, probe, profile, report, stage, stops, sweep
+from . import __version__, autofix, capture, elements, freeze, index, mappings, probe, profile, report, stage, stops, sweep
 from .gates import g0_permission, g1_capture, g2_conformance
 from .gates import g3_grounding, g4_completeness, g5_bundles, g6_integrity
 from .gates import mapcheck, surfaces
@@ -63,6 +63,12 @@ cycle:
                                                audit the whole estate: which
                                                batches can be checked at all;
                                                --recollect writes the re-collection list
+  autofix --subject <d> --batch <b>            before the row-writer's fix round: fix in the
+                                               staging file only what code can fix exactly
+                                               (a grade's spelling, parent_path and depth
+                                               from the receipt, id first), on the report
+                                               of its current bytes; every change recorded
+                                               in _qa/<b>.autofix-<n>.json, the old bytes kept
 
 collection (the fetcher runs these; permission from today's g0 record, g0 run first when missing):
   index --out <d> --surface <s> --rung <n> --url <u> [--html] [--path-prefix <p>] [--supersede]
@@ -196,6 +202,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     # Runs several gates and renders their findings as remediation guidance.
     if argv[0] == "report":
         return report.run(argv[1:])
+
+    # The fixes code can compute exactly from a report and the receipt, made
+    # before the row-writer's fix round. Never a verdict.
+    if argv[0] == "autofix":
+        return autofix.run(argv[1:])
 
     # Estate-wide audit. Records what can be checked; does not gate.
     if argv[0] == "sweep":

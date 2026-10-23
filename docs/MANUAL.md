@@ -347,6 +347,15 @@ establishes the list ever ended.
 row-writer, and with the finding, never the gate name. Handing a maker *"G3
 failed, 14 rows"* produces fourteen edited quotes.
 
+**Code fixes first.** For a batch BLOCKED in round 1, `/kbqa-check` runs
+`python3 -m kbqa autofix --subject <d> --batch <b>` (§6, Fix round): a grade's
+known respelling, the breadcrumb and its depth from the receipt, `id` first —
+each from the evidence, recorded in `_qa/<b>.autofix-<n>.json`, the old bytes
+kept. The row-writer's one fix round (`/kbqa-collect <Subject> fix <batch>`)
+then receives only its `left_findings`. Check again after that round, not
+before it: the staging file's new bytes are the batch's round 2 (G1 still holds:
+the capture is older than the rewritten staging file).
+
 ### 5.2 · Operator — a mapping round
 
 Mapping is the one round with no gate behind it. What guards it is that the
@@ -774,10 +783,12 @@ file.
 ## 6 · All available actions
 
 Thirteen checking actions. **Ten are read-only by default; three write, and
-only ever to `_qa/`, the log, or a robots artifact.** No action mutates
-collected data — if something in a pipeline appears to "fix" a row, it is not
-kbqa doing it. Two more actions collect (§6, Collection): they create a
-denominator or a capture, and never overwrite one.
+only ever to `_qa/`, the log, or a robots artifact.** No checking action
+mutates collected data. One action does, and only in the fix round:
+`autofix` (§6, Fix round) rewrites a staging file for the findings code can fix
+exactly, records every change and keeps the old bytes — anything else that
+appears to "fix" a row is not kbqa doing it. Two more actions collect (§6,
+Collection): they create a denominator or a capture, and never overwrite one.
 
 ### Gates — check one thing, emit a verdict
 
@@ -886,6 +897,15 @@ detect — the fetcher records `gated: login` from what it sees.
 |---|---|---|
 | `report --vendor-dir <d> --batch <b> [--denominator <f>] [--stops <f>] [--log <f>]` | staging, capture, denominator, stops | `_qa/<b>.report.md`, `_qa/<b>.report.json`, one verdict per gate, one log line |
 | `sweep --root <c> [--field-values] [--exclude <glob>] [--vendor-depth N] [--out <f>] [--recollect <f.jsonl>]` | every staging and capture under root | `_qa-estate-audit.md` and `.json` at the root; with `--recollect`, the re-collection list at that path |
+
+### Fix round — what code can fix exactly, before the row-writer
+
+| action | reads | writes | exit |
+|---|---|---|---|
+| `autofix --subject <d> --batch <b>` | `_qa/<b>.report.json` — refused unless its `staging_sha256` is the staging file's current sha256 — the staging file, and for a breadcrumb the receipt and its capture (sha256 and pages checked, as `stage` checks them) | only when a fix applies, never over an existing file: `_qa/<b>.staging-before-autofix-<n>.md` (the old bytes), `_qa/<b>.autofix-<n>.json` (each change: finding code, row id, line, field, before, after; the staging sha256 before and after), then the staging file, atomically; `n` is one past every earlier run. Fixes `evidence_grade_spelling` (a known respelling only: another case or spaces, or bare `verify` → `[verify]`), `parent_path_empty` and `depth_unknown_with_breadcrumb` (re-derived as `stage` derives them, from the parts of the row's page in the receipt that hold its quote — only when they give one breadcrumb and the staging file names the receipt's capture; a depth only when the row's `parent_path` is that breadcrumb), `id_not_first_key` (`id` moved first, no value changed). Only rows whose line reads as `stage` writes it; every other line keeps its bytes and place. Prints `fixed` and `left_for_row_writer` per code, `left_findings` word for word with `why_not_by_code`, `resolved_by_a_fix` (schema findings on a fixed field that no longer fails), `not_for_row_writer` (structural and planner), `files_written`, `next_step` | 0 ran (fixes or none) · 1 refused: no report, a report of other bytes, a report of round 2 or later (the round from `_qa-log.jsonl` when the report names none; `next_step`: the batch is PARKED for the operator — autofix is part of the one fix round, never a second), a legacy batch name (never edited), the staging file changing while it ran |
+
+The new bytes are the batch's next round: run `autofix` on a round-1 report,
+give what it leaves to the row-writer, then check again (§5.1).
 
 ### Diagnostics, interpretation guards and metadata — never write rows
 

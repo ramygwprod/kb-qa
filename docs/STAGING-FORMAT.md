@@ -337,6 +337,35 @@ One JSON object per line, in `<subject folder>/_draft-<batch>.jsonl`:
   and rejects paths, the rejected lines and reasons, `linked_by_code`,
   `link_conflicts`, and the `next_step`.
 
+### `kbqa autofix` — the fix round's mechanical part (since v6.22.0)
+
+Before the row-writer's one fix round, `kbqa autofix --subject <d> --batch <b>`
+fixes in the staging file the findings that have one right answer computed from
+the evidence. It reads `_qa/<batch>.report.json` and refuses unless that report
+was made on the staging file's current bytes (`staging_sha256`), refuses a
+report of round 2 or later (the round from `_qa-log.jsonl` when the report
+names none: autofix is part of the one fix round, and a round-2 batch is the
+operator's), and it never edits a batch whose name is not
+`<surface>-<YYYY-MM-DD>-wNN`.
+
+| finding | fixed when | to |
+|---|---|---|
+| `evidence_grade_spelling` | the value is a known respelling of one schema grade: another case or spaces, or bare `verify` | the schema's spelling (`official-doc`, `help`, `marketing`, `verified`, `[verify]`) |
+| `parent_path_empty` | the row's `source_url` is a page of the receipt, the parts of it whose own lines hold the row's `source_quote` give one breadcrumb, the receipt and capture agree, and the staging file names that capture's sha256 | that breadcrumb, else `unknown` — as `kbqa stage` writes it; and its levels counted as `depth_level` when that was `unknown` |
+| `depth_unknown_with_breadcrumb` | as above, and the row's `parent_path` is exactly that breadcrumb | the breadcrumb's levels counted |
+| `id_not_first_key` | the row has an `id` | the same row with `id` first; no value changes |
+
+Only a row whose line reads exactly as `kbqa stage` writes it is rewritten, so
+nothing but the fixed fields changes; every other line keeps its bytes and its
+place, and the line numbers in the report stay true. When a fix applies it
+writes `_qa/<batch>.staging-before-autofix-<n>.md` (the old bytes) and
+`_qa/<batch>.autofix-<n>.json` (each change: `code`, `id`, `line`, `field`,
+`before`, `after`; the staging sha256 before and after), then the staging file
+atomically; `n` counts the batch's runs, and no earlier file is overwritten.
+Everything else — and each of these findings the evidence does not settle,
+with `why_not_by_code` — is printed under `left_findings` for the row-writer's
+fix round; structural and planner findings under `not_for_row_writer`.
+
 ## `_capture-<batch>.raw.txt` (BRONZE, immutable)
 
 ```
