@@ -42,7 +42,7 @@ All three skills and the three agents, from one tag, by the operator in their
 own terminal (PIPELINE-SPEC §5):
 
 ```bash
-bash skills/install.sh v6.20.0
+bash skills/install.sh v6.21.0
 ```
 
 It clones the tag, copies each skill to `~/.claude/skills/<skill>/` and the

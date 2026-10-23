@@ -49,9 +49,10 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
-from . import fetch, stops
+from . import fetch, language, stops
 from .capture import DENOMINATOR_RE, _write_atomic, denominator_items, denominators, site_copy_url
 
+LANGUAGE_COPIES = "LANGUAGE-COPIES.tsv"
 MD_LINK_RE = re.compile(r"\[[^\]]+\]\([^)\s]+\)")
 H2_RE = re.compile(r"^##\s+(.+?)\s*#*\s*$")
 SURFACES = ("product", "docs", "help")
@@ -146,13 +147,20 @@ def _strip_fragment(url: str) -> str:
     return urlunsplit((p.scheme, p.netloc, p.path, p.query, ""))
 
 
-def _xml_locs(body: bytes) -> Tuple[str, List[str]]:
+def _xml_locs(body: bytes) -> Tuple[str, List[str], Dict[str, str]]:
+    """(root tag, every <loc>, {page: its English alternate} from hreflang links)."""
     if body[:2] == b"\x1f\x8b":
         body = gzip.decompress(body)
     root = ET.fromstring(body)
     tag = root.tag.split("}")[-1]
     locs = [el.text.strip() for el in root.iter() if el.tag.split("}")[-1] == "loc" and el.text]
-    return tag, locs
+    urls = [el for el in root.iter() if el.tag.split("}")[-1] == "url"]
+    return tag, locs, language.english_alternates(urls)
+
+
+def _item_url(line: str) -> str:
+    m = re.search(r"\((https?://[^)\s]+)\)", line) or re.search(r"(https?://\S+)", line)
+    return m.group(1) if m else ""
 
 
 def _probe(subject: Path, day: str, den: Path, pacer: "fetch.Pacer",
@@ -204,6 +212,8 @@ def run(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--path-prefix", default=None)
     ap.add_argument("--supersede", action="store_true",
                     help="correct today's denominator: write <date>b.md (then c, …), naming what it supersedes")
+    ap.add_argument("--all-languages", action="store_true",
+                    help="keep every language copy (default: when English exists, it is enough)")
     ap.add_argument("--date", default=None)
     args = ap.parse_args(argv)
 
@@ -283,6 +293,7 @@ def run(argv: Optional[List[str]] = None) -> int:
     sources: List[Tuple[str, bytes, str]] = []  # (served url, bytes, content type)
     items: List[str] = []
     heads: Optional[Tuple[List[str], List[bool]]] = None  # llms.txt lines, and which are items
+    hreflang: Dict[str, str] = {}  # page -> its English alternate, as the sitemap states
     try:
         r, stop = get(url)
         if r is None:
@@ -302,7 +313,8 @@ def run(argv: Optional[List[str]] = None) -> int:
                 seen.add(href)
                 items.append(f"- [{label or href}]({href})")
         elif ctype.endswith("xml") or r.body.lstrip()[:5] in (b"<?xml", b"<urls", b"<site") or r.body[:2] == b"\x1f\x8b":
-            tag, locs = _xml_locs(r.body)
+            tag, locs, alt = _xml_locs(r.body)
+            hreflang.update(alt)
             if tag == "sitemapindex":
                 children = [c for c in locs if fetch.host_of(c) == host][:MAX_SITEMAPS]
                 locs = []
@@ -311,7 +323,9 @@ def run(argv: Optional[List[str]] = None) -> int:
                     if cr is None:
                         return refuse(f"a sitemap of the index may not be fetched: {child}", cstop)
                     sources.append((cr.url, cr.body, cr.content_type))
-                    locs += _xml_locs(cr.body)[1]
+                    _, child_locs, alt = _xml_locs(cr.body)
+                    locs += child_locs
+                    hreflang.update(alt)
             items = [loc for loc in dict.fromkeys(locs)]
         else:
             text = fetch.decode(r.body, r.content_type)
@@ -329,15 +343,26 @@ def run(argv: Optional[List[str]] = None) -> int:
         return refuse(f"the index could not be read: {exc}")
 
     note = ""
-    keep = [True] * len(items)
+    all_items = items  # `keep` stays aligned with these, for the llms.txt sections
+    keep = [True] * len(all_items)
     if args.path_prefix:
-        before = len(items)
         def path_ok(line: str) -> bool:
-            m = re.search(r"\((https?://[^)\s]+)\)", line) or re.search(r"(https?://\S+)", line)
-            return bool(m) and urlsplit(m.group(1)).path.startswith(args.path_prefix)
-        keep = [path_ok(ln) for ln in items]
-        items = [ln for ln, k in zip(items, keep) if k]
-        note = f" · items whose path starts with {args.path_prefix} ({len(items)} of {before}; scope approved by the operator)"
+            u = _item_url(line)
+            return bool(u) and urlsplit(u).path.startswith(args.path_prefix)
+        keep = [path_ok(ln) for ln in all_items]
+        note = (f" · items whose path starts with {args.path_prefix} ({sum(keep)} of {len(all_items)}; "
+                "scope approved by the operator)")
+    # English is enough (the operator, 2026-10-22): a language copy of a page the
+    # index also lists in English is left out, and listed with that page.
+    lang_copies: Dict[str, str] = {}
+    if not args.all_languages:
+        lang_copies = language.copies((_item_url(ln) for ln, k in zip(all_items, keep) if k), hreflang)
+        if lang_copies:
+            before = sum(keep)
+            keep = [k and _item_url(ln) not in lang_copies for ln, k in zip(all_items, keep)]
+            note += (f" · {before - sum(keep)} language copies left out, each with its English page in "
+                     f"_raw/index-{name}/{LANGUAGE_COPIES} (English is enough: operator 2026-10-22)")
+    items = [ln for ln, k in zip(all_items, keep) if k]
     if not items:
         return refuse(f"the index at {url} holds no items" + (" under the path prefix" if note else ""))
     if supersedes is not None:
@@ -350,6 +375,9 @@ def run(argv: Optional[List[str]] = None) -> int:
         _write_atomic(raw_dir / name_, body)
         manifest.append(f"{name_}\t{hashlib.sha256(body).hexdigest()}\t{len(body)}\t{ctype}\t{served}")
     _write_atomic(raw_dir / "MANIFEST.tsv", ("\n".join(manifest) + "\n").encode("utf-8"))
+    if lang_copies:
+        tsv = ["language_copy\tenglish_page"] + [f"{c}\t{e}" for c, e in sorted(lang_copies.items())]
+        _write_atomic(raw_dir / LANGUAGE_COPIES, ("\n".join(tsv) + "\n").encode("utf-8"))
     header = f"Index: {s}, rung {args.rung} — {sources[0][0]}{note}"
     data = (header + "\n" + "\n".join(items) + "\n").encode("utf-8")
     _write_atomic(den, data)
@@ -372,6 +400,8 @@ def run(argv: Optional[List[str]] = None) -> int:
               "probe": _probe(subject, day, den, pacer, {host: rb}), "permission": permission}
     if supersedes is not None:
         result["supersedes"] = supersedes.name
+    if lang_copies:
+        result["language_copies"] = {"left_out": len(lang_copies), "file": f"_raw/{raw_dir.name}/{LANGUAGE_COPIES}"}
     return finish(result, 0)
 
 

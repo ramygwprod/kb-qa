@@ -14,9 +14,14 @@ like boilerplate. What it does, and nothing more:
   "breadcrumb" — is written as ONE line, its items joined by ` > `, because a
   row's `parent_path` is copied from that line and a breadcrumb's separators
   are usually drawn by CSS, not written in the page;
-- character references are decoded.
+- character references are decoded;
+- an image's own description — its `alt` text, when it has one and is not
+  marked decorative — is written where the image stands, as `[image: <alt>]`
+  (in its cell, for a table), because a
+  diagram's description is often the only text the page gives about it (since
+  v6.21.0). The image itself is not captured.
 
-Links, images and attributes are not text and are not rendered.
+Links and other attributes are not text and are not rendered.
 """
 
 import re
@@ -127,6 +132,9 @@ class _Renderer(HTMLParser):
             else:
                 self._flush()
             return
+        if tag == "img":
+            self._image(dict(attrs))
+            return
         if tag in VOID:
             return
         if tag == "tr":
@@ -185,6 +193,14 @@ class _Renderer(HTMLParser):
             self._flush()
             if tag in HEADINGS and len(self.lines) > before:
                 self.headings.append((len(self.lines) - 1, HEADINGS[tag], self.lines[-1]))
+
+    def _image(self, attrs) -> None:
+        alt = re.sub(r"\s+", " ", attrs.get("alt") or "").strip()
+        if not alt or attrs.get("aria-hidden") == "true" or attrs.get("role") in ("presentation", "none"):
+            return  # no description, or one the page marks as decoration
+        # In place, like the words around it: a sentence is not split, and an
+        # icon in a table cell ("Included") stays in its cell.
+        self._text(f" [image: {alt}] ")
 
     def _end_breadcrumb(self) -> None:
         items = [c[1:] for c in self.crumbs if c.startswith("\x00")]
