@@ -443,28 +443,73 @@ each `bad_*` fails for exactly one known reason.
 1. Branch. `main` requires a PR — direct pushes are rejected with `GH013`
 2. Update `CHANGELOG.md` (Keep a Changelog), and `docs/DECISIONS.md` for any
    contract change, with evidence and a reversal condition
-3. Bump `pyproject.toml` **and** `src/kbqa/__init__.py` together
-4. `pytest tests/ -q` green; fixtures regenerate byte-identically
-5. Re-pin with a pattern that matches the **whole** hex token —
-   `manifest_sha256 [0-9a-f]+`, never `[0-9a-f]{64}`. A fixed count silently
-   repairs 64 characters of a malformed 65-character pin and leaves the rest,
-   which is how one hand-typed placeholder survived six releases with a green
-   test. Update pins in `ci/estate-qa.yml`, `ci/estate-pre-push`, **and**
-   `skills/kbqa-check/SKILL.md` — the skill pins the version *and* the
-   `manifest_sha256`, and `tests/test_skill_pin.py` fails the release if either
-   is stale. A stale pin fires the skill's tamper check on a legitimate
-   upgrade, and an agent that learns to ignore that check has lost the only
-   signal that a validator was swapped
+3. Run `scripts/release.py <version>` (see *Releasing* below): it bumps
+   every current-version line — `pyproject.toml`, `src/kbqa/__init__.py`, the
+   pins in `ci/`, the skills and `install.sh`, the manual's install lines, the
+   links in `llms.txt` — and re-pins `EXPECTED_MANIFEST`
+4. `pytest tests/ -q` green and every mutation caught (the script runs both);
+   fixtures regenerate byte-identically
+5. The re-pin matches the **whole** hex token — `[0-9a-f]+`, never
+   `[0-9a-f]{64}`. A fixed count silently repairs 64 characters of a malformed
+   65-character pin and leaves the rest, which is how one hand-typed
+   placeholder survived six releases with a green test. The pre-flight pins the
+   version *and* the manifest, and `tests/test_skill_pin.py` fails the release
+   if either is stale. A stale pin fires the skill's tamper check on a
+   legitimate upgrade, and an agent that learns to ignore that check has lost
+   the only signal that a validator was swapped
 6. **Put `Co-Authored-By` in the PR *body*** — squash merges use the body, not
    the commit message. A trailer only in the commit is lost on merge
 7. Merge, wait for the **Merged** badge, *then* resync locally. Resetting before
    the merge lands silently leaves you on the old commit, and everything after
    operates on the wrong one
-8. Rewrite the links in `llms.txt` to the tag being cut — they must never say
-   `main`. A file whose argument is that pinning should be mechanical cannot
-   ask its reader to substitute by hand
+8. The links in `llms.txt` point at the tag being cut (step 3 rewrites them) —
+   they must never say `main`. A file whose argument is that pinning should be
+   mechanical cannot ask its reader to substitute by hand
 9. Tag `vMAJOR.MINOR.PATCH`, push the tag
 10. Confirm CI is green **on the tag** — that is what corpora pin, not `main`
+11. Install from the tag (`skills/install.sh`, then the printed `pip` command)
+    and run `scripts/audit.sh <tag>`
+
+### Releasing
+
+Three scripts in `scripts/` do what used to be done by hand. Each is tested on
+temporary copies (`tests/test_release_tooling.py`); none is part of the package.
+
+- **`scripts/mutate.py`** — the mutation check. `tests/mutations.json` lists,
+  per guard, `{"label", "file", "old", "new", "tests"}`: the exact text of the
+  guard, a broken version of it, and the test files that must catch the break.
+  One at a time, the file is changed in place, only those tests run, and the
+  original bytes and timestamps are put back (its sha256 is checked; a mismatch
+  stops everything). Prints `CAUGHT` / `MISSED` / `NOT FOUND` (the `old` text
+  is absent, or present more than once) / `ERROR` (the tests could not run)
+  per label; exits 1 unless every one is caught. The named tests must pass
+  unmutated first. **Every new guard gets an entry**, and the run is reported
+  with the release. A mutation's tests must not include
+  `tests/test_mutation_registry.py`: it checks the registry's `old` texts,
+  which a running mutation has removed, so it would catch every mutation.
+- **`scripts/release.py <version> [--check]`** — refuses when the working tree
+  has uncommitted changes (untracked files included) outside the files it
+  edits, or when the version is not above `__version__`. Rewrites the version
+  only in the lines its `VERSION_LINES` registry names (file, pattern); every
+  other line holding the current version — a history note such as "since v…" —
+  is listed, unchanged. A registered pattern that matches nothing, or a matched
+  line holding another version, is refused: add the pattern for a new
+  version-bearing line there. Then re-pins `EXPECTED_MANIFEST` with the
+  package's own `manifest.py`, runs the suite and `mutate.py`, and prints the
+  brand scan and the push for the operator: the private
+  `Requirements/brand_scan.py` over every changed file when it exists and
+  `--estate <folder>` (or `KBQA_ESTATE`) is given — the agreed flow — else a
+  `git grep` over the published files for a list of names kept outside the
+  repository (`--names <file>`); then the tag and audit commands. `--check` writes nothing and prints the
+  same plan.
+- **`scripts/audit.sh <tag>`** — run by the operator once the tag is
+  installed. Clones the tag afresh and prints seven `OK`/`DIFF` lines: the
+  three installed skills, the installed agents, the install records (tag and
+  commit), the package version, and the package code (the installed manifest
+  equals the tag's source and the tag's pin). Ends `AUDIT PASS` (exit 0) or
+  `AUDIT FAIL` (exit 1); `AUDIT REFUSED` (exit 2) when the tag cannot be
+  cloned or `kbqa` cannot be imported. `KBQA_REPO`, `KBQA_SKILLS_HOME` and
+  `KBQA_AGENTS_HOME` override the defaults, for tests only.
 
 ### Pinning
 

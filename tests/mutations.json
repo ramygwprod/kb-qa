@@ -1,0 +1,263 @@
+[
+  {
+    "label": "chrome: never past the breadcrumb",
+    "file": "src/kbqa/chrome.py",
+    "old": "    return len(page[\"_lines\"]) if crumb is None else crumb\n",
+    "new": "    return len(page[\"_lines\"])\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "chrome: never the whole page",
+    "file": "src/kbqa/chrome.py",
+    "old": "                    if fits and len(lines) - take[\"header\"] - k > 0:\n",
+    "new": "                    if fits:\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "chrome: too few pages leave the text whole",
+    "file": "src/kbqa/chrome.py",
+    "old": "CHROME_MIN_PAGES = 3\n",
+    "new": "CHROME_MIN_PAGES = 2\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "chrome: a later window uses the chrome already kept",
+    "file": "src/kbqa/chrome.py",
+    "old": "\"header\": [c for c in [_detect(heads, False)] if c] + _known(subject, host, \"header\"),",
+    "new": "\"header\": [c for c in [_detect(heads, False)] if c],",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "chrome: header + block + footer is the full rendering",
+    "file": "src/kbqa/chrome.py",
+    "old": "                p[\"_lines\"] = lines[h:len(lines) - f]\n",
+    "new": "                p[\"_lines\"] = lines[h + 1:len(lines) - f]\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "language: a lone language-like path is kept (three pairs needed)",
+    "file": "src/kbqa/language.py",
+    "old": "LANGUAGE_MIN = 3\n",
+    "new": "LANGUAGE_MIN = 1\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "language: an English page is never a copy",
+    "file": "src/kbqa/language.py",
+    "old": "        if lang is None or lang == \"en\":\n            continue\n",
+    "new": "        if lang is None:\n            continue\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "language: a page with no English version stays in",
+    "file": "src/kbqa/language.py",
+    "old": "        if english and english != u:\n",
+    "new": "        if english != u:\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "language: the sitemap's own hreflang names the English page",
+    "file": "src/kbqa/index.py",
+    "old": "    return tag, locs, language.english_alternates(urls)\n",
+    "new": "    return tag, locs, {}\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "language: --all-languages keeps every copy",
+    "file": "src/kbqa/index.py",
+    "old": "    if not args.all_languages:\n",
+    "new": "    if True:\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "language: each copy left out is listed with its English page",
+    "file": "src/kbqa/index.py",
+    "old": "        _write_atomic(raw_dir / LANGUAGE_COPIES, (\"\\n\".join(tsv) + \"\\n\").encode(\"utf-8\"))\n",
+    "new": "        pass\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "duplicates: the same text under a second URL is a copy",
+    "file": "src/kbqa/capture.py",
+    "old": "        if first is not None and first != key:\n",
+    "new": "        if first is not None and first == key:\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "duplicates: a copy of a page from an earlier window is found",
+    "file": "src/kbqa/capture.py",
+    "old": "    seen_text: Dict[str, str] = _captured_texts(subject)",
+    "new": "    seen_text: Dict[str, str] = {}",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "duplicates: a copy gets its stop line to approve",
+    "file": "src/kbqa/capture.py",
+    "old": "                stop_lines.append(line)\n            return True\n",
+    "new": "                pass\n            return True\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "image: an image's alt text is kept in place",
+    "file": "src/kbqa/htmltext.py",
+    "old": "        if tag == \"img\":\n            self._image(dict(attrs))\n            return\n",
+    "new": "        if tag == \"img\":\n            return\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "image: a decorative image is not rendered",
+    "file": "src/kbqa/htmltext.py",
+    "old": "        if not alt or attrs.get(\"aria-hidden\") == \"true\" or attrs.get(\"role\") in (\"presentation\", \"none\"):\n",
+    "new": "        if not alt:\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "mutate: a test run that cannot run is never counted as caught",
+    "file": "scripts/mutate.py",
+    "old": "    if code == 1:\n        return \"CAUGHT\", tail\n",
+    "new": "    if code != 0:\n        return \"CAUGHT\", tail\n",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "mutate: old text must occur exactly once",
+    "file": "scripts/mutate.py",
+    "old": "    if n != 1:\n",
+    "new": "    if n == 0:\n",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "mutate: the original bytes are put back",
+    "file": "scripts/mutate.py",
+    "old": "        path.write_bytes(original)\n        os.utime(",
+    "new": "        os.utime(",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "mutate: a failing baseline applies no mutation",
+    "file": "scripts/mutate.py",
+    "old": "    if broken:\n        print(\"No mutation was applied",
+    "new": "    if False:\n        print(\"No mutation was applied",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "release: refuses uncommitted changes outside its files",
+    "file": "scripts/release.py",
+    "old": "    if dirty:\n        refusals.append(",
+    "new": "    if False:\n        refusals.append(",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "release: --check writes nothing",
+    "file": "scripts/release.py",
+    "old": "    if args.check:\n        print(\"--check: nothing was changed.\")\n        return 0\n",
+    "new": "    if args.check:\n        print(\"--check: nothing was changed.\")\n",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "release: refuses a version not above the current one",
+    "file": "scripts/release.py",
+    "old": "        if new_t <= parse_version(current):\n",
+    "new": "        if new_t < parse_version(current):\n",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "release: a history note is never a version line",
+    "file": "scripts/release.py",
+    "old": "    (\"docs/MANUAL.md\", rf\"kbqa --version +# must print {V}$\"),\n",
+    "new": "    (\"docs/MANUAL.md\", rf\"{V}\"),\n",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "release: a registered line holding another version is refused",
+    "file": "scripts/release.py",
+    "old": "            if not token.search(line):\n",
+    "new": "            if False:\n",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "release: the manifest pin is replaced as a whole token",
+    "file": "scripts/release.py",
+    "old": ":-)([0-9a-f]+)(\\}\")$",
+    "new": ":-)([0-9a-f]{64})(\\}\")$",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "audit: a ref that is not a tag is refused",
+    "file": "scripts/audit.sh",
+    "old": "git ls-remote --exit-code --tags \"${REPO}\" \"refs/tags/${TAG}\" >/dev/null 2>&1 \\\n",
+    "new": "true \\\n",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "audit: an installed skill that differs is a DIFF",
+    "file": "scripts/audit.sh",
+    "old": "    if [ \"${want}\" = \"${have}\" ]; then\n",
+    "new": "    if true; then\n",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "audit: the tag's pin must be the tag's code",
+    "file": "scripts/audit.sh",
+    "old": "[ \"${PIN}\" = \"${TAG_MANIFEST}\" ]",
+    "new": "true",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  }
+]
