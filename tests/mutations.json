@@ -277,5 +277,230 @@
     "tests": [
       "tests/test_chrome_language_duplicates.py"
     ]
+  },
+  {
+    "label": "stage: a quote is looked for in its part's own lines only",
+    "file": "src/kbqa/stage.py",
+    "old": "        hits = find_quote(own, quote)\n",
+    "new": "        hits = find_quote(blocks[url], quote)\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a quote found more than once in the part is rejected",
+    "file": "src/kbqa/stage.py",
+    "old": "        if len(hits) > 1:\n",
+    "new": "        if len(hits) > 2:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: source_quote is the capture's exact text, never the draft's",
+    "file": "src/kbqa/stage.py",
+    "old": "\"source_quote\": c[\"exact\"],",
+    "new": "\"source_quote\": obj[\"quote\"],",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: an id the subject already has is never reused",
+    "file": "src/kbqa/stage.py",
+    "old": "    taken = set(features.subject_rows(subject))\n",
+    "new": "    taken = set()\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: ids are unique within the batch",
+    "file": "src/kbqa/stage.py",
+    "old": "        taken.add(rid)\n",
+    "new": "        pass\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a staging file is never overwritten",
+    "file": "src/kbqa/stage.py",
+    "old": "    if staging.exists():\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a capture that no longer hashes to its receipt is refused",
+    "file": "src/kbqa/stage.py",
+    "old": "    if hashlib.sha256(data).hexdigest() != receipt.get(\"sha256\"):\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: the frontmatter declares every page of the receipt",
+    "file": "src/kbqa/stage.py",
+    "old": "    out += [f\"  - {p['url']}\" for p in receipt[\"pages\"]]\n",
+    "new": "    out += [f\"  - {p['url']}\" for p in receipt[\"pages\"][:-1]]\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: the frontmatter carries the receipt's window fields",
+    "file": "src/kbqa/stage.py",
+    "old": "WINDOW_FIELDS = (\"window_offset\", \"window_requested\", \"window_returned\", \"window_end\")\n",
+    "new": "WINDOW_FIELDS = (\"window_offset\", \"window_end\")\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a field no row carries is rejected",
+    "file": "src/kbqa/stage.py",
+    "old": "        if unknown:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a missing judgement field is rejected",
+    "file": "src/kbqa/stage.py",
+    "old": "        if missing:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: the depth is the breadcrumb's levels counted",
+    "file": "src/kbqa/stage.py",
+    "old": "\"depth_level\": str(len(levels)) if levels else UNKNOWN,",
+    "new": "\"depth_level\": UNKNOWN,",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a page drafted no_row becomes its stop line",
+    "file": "src/kbqa/stage.py",
+    "old": "            stop_lines.append(line)\n",
+    "new": "            pass\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage --lists: the features list is the subject's",
+    "file": "src/kbqa/stage.py",
+    "old": "    _write_atomic(raw / FEATURES, features.features_list(subject).encode(\"utf-8\"))\n",
+    "new": "    _write_atomic(raw / FEATURES, b\"\")\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage --lists: role rows are written when the estate names patterns",
+    "file": "src/kbqa/stage.py",
+    "old": "    if listed is not None:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a rejected draft blocks the staging file",
+    "file": "src/kbqa/stage.py",
+    "old": "    if listed and not leave_out:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: there is one correction round, then the flag",
+    "file": "src/kbqa/stage.py",
+    "old": "    if len(earlier) >= CORRECTION_ROUNDS + 1 and not leave_out:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: --leave-out-rejects only after the correction round",
+    "file": "src/kbqa/stage.py",
+    "old": "    if leave_out and len(earlier) < CORRECTION_ROUNDS + 1:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: every left-out draft is listed under needs_operator",
+    "file": "src/kbqa/stage.py",
+    "old": "        result[\"needs_operator\"] = [",
+    "new": "        result[\"left_out\"] = [",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: each round's rejects file is kept, never overwritten",
+    "file": "src/kbqa/stage.py",
+    "old": "    round_no = max([int(p.name.rsplit(\"-\", 1)[1].split(\".\")[0]) for p in earlier] or [0]) + 1\n",
+    "new": "    round_no = 1\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: draft:<line> resolves to the id given that draft",
+    "file": "src/kbqa/stage.py",
+    "old": "            row[\"same_feature_as\"] = ids[t]\n",
+    "new": "            pass\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a draft link to a rejected draft is rejected with its reason",
+    "file": "src/kbqa/stage.py",
+    "old": "        elif t in rejects:\n",
+    "new": "        elif False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a draft link to another source is rejected",
+    "file": "src/kbqa/stage.py",
+    "old": "        elif \"same_feature_as\" in candidates[t][\"obj\"]:\n",
+    "new": "        elif False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a draft link to itself is rejected",
+    "file": "src/kbqa/stage.py",
+    "old": "        elif t == n:\n",
+    "new": "        elif False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a draft link to a no_row line is rejected",
+    "file": "src/kbqa/stage.py",
+    "old": "        elif t in no_row_at:\n",
+    "new": "        elif False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
   }
 ]

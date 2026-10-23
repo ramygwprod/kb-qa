@@ -20,8 +20,8 @@ You orchestrate. Every step is a delegation:
 
 | subagent | holds | does |
 |---|---|---|
-| `kbqa-fetcher` | `WebFetch`, `Read`, `Bash` | permission, indexes, captures, stop-conditions (by `kbqa stop add`), receipts |
-| `kbqa-row-writer` | `Read`, `Write` | rows, from the capture on disk alone |
+| `kbqa-fetcher` | `WebFetch`, `Read`, `Bash` | permission, indexes, captures, staging by code (`kbqa stage`), stop-conditions (by `kbqa stop add`), receipts |
+| `kbqa-row-writer` | `Read`, `Write` | drafts of rows, from the capture on disk alone |
 | `kbqa-mapper` | `Read`, `Write` | one classification pass of one batch |
 
 **You do not fetch, write or run commands yourself, even if this session lets
@@ -63,8 +63,9 @@ Three more rules for running the session:
    `apqc_elements`. If the file or any key is missing, or a named file does not
    exist, stop and name exactly what is missing. Never guess a path. An optional
    key, `role_rows`, holds the estate's patterns for rows that name roles and
-   permissions; `kbqa capture` reads it itself and lists the candidates for the
-   mappers. Without it the receipt says the list was not written.
+   permissions; `kbqa stage --lists` reads it itself and lists the candidates
+   for the mappers. Without it the list is not written, and the fetcher's
+   `--lists` result says why.
    The element list must have its outline beside it, `<list>.outline.md` (the
    list's name with `.outline.md` for `.jsonl`). If it is missing, stop and give
    the operator the command, run at the estate root:
@@ -150,20 +151,39 @@ Per window:
    approved selection (the surface's first window) or `--resume` (every later
    window, in this run or a later one). `kbqa capture` names the batch, slices and
    sizes the window, and records it; the fetcher returns its receipt (its §6).
-2. `kbqa-row-writer`: the subject folder and the **batch name — nothing else**.
+2. `kbqa-fetcher`: `kbqa stage --lists` for the batch (its §3a) — the
+   subject's features list and role-row list beside the receipt, built now so
+   they hold every row staged so far, earlier windows included. Keep the
+   `role_rows` path or note it returns, for §4.
+3. `kbqa-row-writer`: the subject folder and the **batch name — nothing else**.
    It reads the receipt from disk (`_raw/<batch>/RECEIPT.json`), so no window
    field, page table or part list passes through you, and none is retyped. It
-   returns the staging path and the **pages that produced no row**.
-3. `kbqa-fetcher` again, only if step 2 named pages with no row: it records
-   `no feature: <what the page is>` for each with `kbqa stop add` (its §4).
-4. Read `window_end` — set by `kbqa capture`, never by an agent: `exhausted` —
+   writes `_draft-<batch>.jsonl` — its judgement of each row, and the pages
+   with no row — and returns the drafts path.
+4. `kbqa-fetcher`: `kbqa stage` for the batch (its §3a). Code writes the
+   staging file from the drafts and the receipt, and turns each page drafted
+   with no row into a `no feature: …` line, which the fetcher adds with
+   `kbqa stop add` (its §4). **A rejected draft blocks the staging file**: the
+   fetcher returns the drafts it rejected — a quote not found once in its part,
+   a field no row carries — each with its reason, the rejects file and the
+   `round`.
+5. Only if step 4 rejected drafts — **one correction round, never two**:
+   `kbqa-row-writer` again, with the subject folder, the batch name and the
+   rejects file (its §4a); it rewrites only the rejected lines of its drafts.
+   Then `kbqa-fetcher` runs `kbqa stage` again. If drafts are still rejected,
+   `kbqa-fetcher` runs `kbqa stage --leave-out-rejects`, as that result's
+   `next_step` says: the staging file is written without them, and each is
+   listed under `needs_operator` with its reason and a suggested next step —
+   bring every one to the operator with the batch. Never a second correction
+   round.
+6. Read `window_end` — set by `kbqa capture`, never by an agent: `exhausted` —
    no selected item remains, the surface is done; `budget` — next window, with
    `--resume`; `error` — nothing in this window could be captured: stop this
    surface and bring the receipt's failures to the operator. The window is
    recorded, so the next run continues after it.
    A host that will not load is never worked around: stop that surface and ask
    the operator.
-5. Bring every `needs_operator` item to the operator — a page no attempt can fix
+7. Bring every `needs_operator` item to the operator — a page no attempt can fix
    (a 404, a TLS failure, a host refusing our fetcher, a page failing in three
    runs), with its suggested stop line and options. One may close a whole
    surface on one host (`scope: surface`): a host that refused every page of the
@@ -193,8 +213,8 @@ once with pass `A`, once with pass `B`. Give each the staging file path, its
 letter, the configured paths (`logic_sheet`, `themes_codebook`,
 `apqc_elements`) and the element list's outline, and — for finding a role only — the subject's
 `feature-tree.md` path, the path of every staging file this run wrote, and the
-batch receipt's `role_rows` path (`_raw/<batch>/ROLE-ROWS.md`) when the receipt
-has one.
+batch's `role_rows` path (`_raw/<batch>/ROLE-ROWS.md`) when `kbqa stage --lists`
+wrote one (step 2 of §2).
 
 The passes are independent: never give one pass the other's file or output,
 never summarise one to the other, and never start B with anything A said.
@@ -217,8 +237,10 @@ Return:
   which offset
 - capture paths and sha256 values; fetch failures; redirects; every
   stop-condition added
-- per batch: the staging path; **evidence not captured** and **role stated
-  elsewhere**, as the row-writer listed them
+- per batch: the staging path; the drafts `kbqa stage` rejected, with the
+  row-writer's correction of each, and every draft left out with its reason;
+  **evidence not captured** and **role stated elsewhere**, as the row-writer
+  listed them
 - per batch: map files written, and each pass's `needs-human` ids with their notes
 - **no counts of rows, terms or mapped lines.** Nobody in this run counts by
   hand: `/kbqa-check` counts rows, distinct terms and each pass's `mapped` and

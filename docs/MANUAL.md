@@ -823,6 +823,15 @@ a part read alone loses nothing. Rows come only from a part's own lines.
 
 | action | reads | writes | exit |
 |---|---|---|---|
+| `stage --subject <d> --batch <b> --lists` | the receipt, the feature tree, every staging file, the estate's `role_rows` patterns | `_raw/<batch>/FEATURES.md` (the subject's anchors) and `_raw/<batch>/ROLE-ROWS.md` (rows that may name a role; only when the estate names patterns, else `role_rows_note` says why). Run **before** the row-writer, so they hold every row staged so far, earlier windows included | 0 written · 1 refused |
+| `stage --subject <d> --batch <b> [--leave-out-rejects]` | the receipt, its capture (sha256 and pages checked against the receipt), `_draft-<batch>.jsonl`, every id the subject has | `_collect-<batch>-staging.md`: the frontmatter copied from the receipt; per draft, `source_quote` = the capture's exact text of the quote found once in its part's own lines (whitespace, quotes and dashes folded, nothing else), `source_url`, `access_date`, `parent_path` (the part's breadcrumb, else `unknown`), `depth_level` (its levels counted, else `unknown`), `canonical: NOVEL`, and an `id` `<subject>.<surface>.<breadcrumb's last item>.<vendor_term>` (slugs; `-2`, `-3`… past any id the subject already has); `same_feature_as: "draft:<line>"` becomes the id given to that draft (an anchor of this batch, not rejected). **A rejected draft blocks the staging file**: the run writes only `_draft-<batch>.rejects-<n>.jsonl` — its quote not in the part's own lines, or there more than once, a page or part the receipt does not have, a field no row carries, a link to a draft that is no anchor — each with its line, reason and next step, one file per round, never overwritten. The row-writer corrects the rejected lines once; drafts still rejected are left out only with `--leave-out-rejects`, which writes the staging file and lists each under `needs_operator`. Pages drafted `no_row` come back as `stop_lines_to_add` (`no feature: …`) | 0 written (or no draft and nothing rejected) · 1 refused, or drafts rejected; a third run without `--leave-out-rejects`, or the flag before the correction round, is refused with its `next_step`; never overwrites a staging file |
+
+Since v6.22.0 the row-writer writes drafts and code writes the staging file;
+`capture` no longer writes `FEATURES.md` or `ROLE-ROWS.md`. The draft format is
+in `docs/STAGING-FORMAT.md`.
+
+| action | reads | writes | exit |
+|---|---|---|---|
 | `elements --outline <elements.jsonl>` | the APQC element list | `<list>.outline.md` beside it: the top two levels, each with its group's line ranges, and the list's sha256 | 0 / 1 |
 
 The mapping pass reads that outline, then only the groups it needs — never the

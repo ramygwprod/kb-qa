@@ -10,7 +10,7 @@ Which words mark a roles-and-permissions row is the estate's vocabulary, not
 this tool's: the patterns come from the estate's `kbqa-estate.json`, key
 `role_rows`, a list of `{"pattern": <regex>, "fields": [<row fields>]}`,
 matched without case, any pattern on any of its fields (the union). With no
-such key the list is not written, and the receipt says so: nothing is guessed.
+such key the list is not written, and `kbqa stage --lists` says so: nothing is guessed.
 A candidate is never a role source by itself — the mapper decides.
 """
 
@@ -76,7 +76,7 @@ def role_rows_list(subject: Path) -> Tuple[Optional[str], Optional[str]]:
     rows = candidates(subject, pats)
     head = [f"# Role-row candidates of this subject — {len(rows)} rows",
             "",
-            f"Written by `kbqa capture` from the feature tree and every staging file, matched by the "
+            f"Written by `kbqa stage --lists` from the feature tree and every staging file, matched by the "
             f"`{KEY}` patterns of {CONFIG}. One line per row: `id | vendor_term | parent_path | "
             "matched words (field)`. A candidate is a role source only for **the same feature**, and "
             "only when its own words name the role — you decide; the list only finds them.",

@@ -29,12 +29,10 @@ page's line range in the capture, so the row-writer reads one page at a time.
 **The receipt is a file**, `_raw/<batch>/RECEIPT.json`, beside the window's
 state (`WINDOW.json`), and the same JSON is printed. The row-writer reads it
 from disk, so no agent retypes window fields between the capture and the rows.
-Beside it, `_raw/<batch>/FEATURES.md` lists the subject's features as they
-stand before this batch (`kbqa.features`): the row-writer reads it to tell a
-new feature from another source of one it already has (`same_feature_as`).
-And `_raw/<batch>/ROLE-ROWS.md` lists the subject's rows that may name a role,
-by the patterns in the estate's `kbqa-estate.json` (`kbqa.roles`) — for the
-mapper; with no patterns it is not written and the receipt says why.
+The lists read beside it — `FEATURES.md` for the row-writer, `ROLE-ROWS.md`
+for the mapper — are written by `kbqa stage --lists` just before the row-writer
+runs, so they hold every row staged by then, earlier windows included (since
+kbqa 6.22.0; capture wrote them before).
 
 **Every failure carries its next step**, decided here, never by an agent:
 `retry` (a later run, `--resume` or `--retry-failed`), `operator` (with a
@@ -66,7 +64,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlsplit
 
-from . import __version__, fetch, features, roles, stops
+from . import __version__, fetch, stops
 from .chrome import strip_chrome
 from .htmltext import render, visible_chars
 
@@ -207,8 +205,6 @@ def parse_select(spec: str) -> List[int]:
 
 STATE = "WINDOW.json"
 RECEIPT = "RECEIPT.json"
-FEATURES = "FEATURES.md"  # the subject's anchors, for the row-writer's same_feature_as
-ROLE_ROWS = "ROLE-ROWS.md"  # rows that may name a role, for the mapper (estate patterns)
 RETRY_RUNS = 3  # a page that keeps failing is retried in at most this many runs
 
 
@@ -782,17 +778,6 @@ def run(argv: Optional[List[str]] = None) -> int:
     _write_atomic(raw_dir / STATE, (json.dumps(state, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
 
     def finish(code: int) -> int:
-        # The subject's features as they stand before this batch's rows: what the
-        # row-writer reads to tell a new feature from another source of one.
-        _write_atomic(raw_dir / FEATURES, features.features_list(subject).encode("utf-8"))
-        receipt["features"] = f"_raw/{b}/{FEATURES}"
-        listed, why = roles.role_rows_list(subject)
-        if listed is not None:
-            _write_atomic(raw_dir / ROLE_ROWS, listed.encode("utf-8"))
-            receipt["role_rows"] = f"_raw/{b}/{ROLE_ROWS}"
-        else:
-            receipt["role_rows"] = None
-            receipt["role_rows_note"] = f"not written: {why}"
         text = json.dumps(receipt, ensure_ascii=False, indent=2)
         _write_atomic(raw_dir / RECEIPT, (text + "\n").encode("utf-8"))
         print(text)

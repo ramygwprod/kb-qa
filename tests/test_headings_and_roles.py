@@ -154,24 +154,7 @@ def test_a_bad_pattern_is_refused_never_half_applied(captured):
     assert text is None and "entry 1" in why
 
 
-def test_capture_writes_the_list_or_says_why_not(tmp_path, monkeypatch):
-    for with_patterns in (True, False):
-        root = tmp_path / str(with_patterns)
-        d = root / "Subjects" / "Example-Co"
-        d.mkdir(parents=True)
-        if with_patterns:
-            _estate(root)
-        _tree(d)
-        (d / f"_robots-{HOST}-{DAY}.txt").write_text("User-agent: *\nAllow: /\n")
-        monkeypatch.setattr(fetch, "_sleep", lambda s: None)
-        monkeypatch.setattr(fetch, "_open", SeqWeb({f"https://{HOST}/p1": (200, DOC.encode(), "text/html")}))
-        code, r = _cap(d, "--surface", "docs", "--denominator", str(_den(d, n=1)))
-        assert code == 0
-        if with_patterns:
-            assert r["role_rows"] == f"_raw/{r['batch']}/ROLE-ROWS.md"
-            assert "example.docs.roles" in (d / r["role_rows"]).read_text()
-        else:
-            assert r["role_rows"] is None and r["role_rows_note"].startswith("not written: no kbqa-estate.json")
+# Writing the list moved to `kbqa stage --lists` in v6.22.0: tests/test_stage.py.
 
 
 def test_patterns_match_without_case(captured):

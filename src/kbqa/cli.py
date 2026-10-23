@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from . import __version__, capture, elements, freeze, index, mappings, probe, profile, report, stops, sweep
+from . import __version__, capture, elements, freeze, index, mappings, probe, profile, report, stage, stops, sweep
 from .gates import g0_permission, g1_capture, g2_conformance
 from .gates import g3_grounding, g4_completeness, g5_bundles, g6_integrity
 from .gates import mapcheck, surfaces
@@ -75,6 +75,15 @@ collection (the fetcher runs these; permission from today's g0 record, g0 run fi
                                                capture one window verbatim: raw
                                                bytes kept, text by a fixed rendering,
                                                the receipt in _raw/<batch>/RECEIPT.json
+  stage --subject <d> --batch <b> --lists      before the row-writer: the subject's features
+                                               and role-row lists beside the receipt
+  stage --subject <d> --batch <b> [--leave-out-rejects]
+                                               after it: the staging file from the
+                                               row-writer's _draft-<batch>.jsonl — quotes
+                                               copied from the capture, ids and the
+                                               frontmatter by code; a rejected draft
+                                               blocks it (one correction round, then
+                                               --leave-out-rejects lists each left out)
   stop add <subject dir> "- <url> | <reason>"  append one stop line, atomically, if its
                                                reason is in the vocabulary
   stop reasons                                 print the stop-reason vocabulary
@@ -203,6 +212,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         return index.run(argv[1:])
     if argv[0] == "capture":
         return capture.run(argv[1:])
+    # The staging file written by code from the row-writer's drafts, and the
+    # lists it reads. Never a verdict.
+    if argv[0] == "stage":
+        return stage.run(argv[1:])
     # The stop-condition vocabulary, and the one atomic way to add a line.
     if argv[0] == "stop":
         return stops.run(argv[1:])
