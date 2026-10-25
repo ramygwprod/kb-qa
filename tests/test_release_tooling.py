@@ -187,6 +187,7 @@ def rtree(tmp_path):
     (root / "tests" / "mutations.json").write_text(json.dumps([
         {"label": "guard", "file": "guard.py", "old": "return True", "new": "return False",
          "tests": ["tests/test_guard.py"]}]))
+    shutil.copy2(REPO_ROOT / ".gitignore", root / ".gitignore")  # as a real checkout ignores caches
     _git("init", "-q", cwd=root)
     _commit_all(root)
     return root
@@ -463,3 +464,18 @@ def test_audit_refuses_when_the_package_cannot_be_found(aworld):
         pytest.skip("/usr/bin/python3 has kbqa installed here")
     r = audit(aworld, path="/usr/bin:/bin")
     assert r.returncode == 2 and r.stdout.startswith("AUDIT REFUSED: kbqa cannot be imported")
+
+
+def test_loading_the_manifest_writes_no_bytecode(tmp_path):
+    # CI's interpreter writes bytecode next to the source (a macOS framework
+    # Python writes it to a cache folder instead, so a filesystem test passes
+    # there either way). A release tool that leaves __pycache__ in the tree it
+    # then checks for uncommitted changes refuses its own run — so loading the
+    # manifest must happen with bytecode writing off, on every interpreter.
+    src = tmp_path / "src" / "kbqa"
+    src.mkdir(parents=True)
+    (src / "manifest.py").write_text("import sys\nWRITING_OFF = sys.dont_write_bytecode\nMANIFEST_SHA256 = 'x'\n")
+    before = sys.dont_write_bytecode
+    mod = release._load_manifest_module(tmp_path)
+    assert mod.WRITING_OFF is True
+    assert sys.dont_write_bytecode == before, "the interpreter's own setting is restored"

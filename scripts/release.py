@@ -143,7 +143,14 @@ def _load_manifest_module(root: Path):
     if spec is None or spec.loader is None:
         raise Refused(f"cannot load {path}")
     mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    # Loading the module must leave the tree as it was: no __pycache__ written
+    # into the repository this script then checks for uncommitted changes.
+    was = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    finally:
+        sys.dont_write_bytecode = was
     return mod
 
 

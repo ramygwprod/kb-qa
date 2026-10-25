@@ -1691,5 +1691,14 @@
     "tests": [
       "tests/test_mapstage.py"
     ]
+  },
+  {
+    "label": "release: loading the manifest writes no bytecode into the tree",
+    "file": "scripts/release.py",
+    "old": "    sys.dont_write_bytecode = True\n",
+    "new": "    sys.dont_write_bytecode = False\n",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
   }
 ]
