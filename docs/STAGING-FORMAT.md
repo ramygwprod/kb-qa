@@ -259,7 +259,11 @@ module's anchors, and under each anchor its other sources and its ways in by
   pages' `unchanged_since` marks), or the stop line that names it, or
   `nothing recorded` (then the page is drafted like any other) — and lists the
   same under `unchanged_pages`; with none, the file is not written and
-  `unchanged_note` says so.
+  `unchanged_note` says so. A page **not** marked unchanged — it changed since
+  its earlier capture — is drafted whole: every feature still on it, not only
+  the new ones. A feature left undrafted on a changed page is not called
+  removed by `kbqa compare` while its quote is still there ("quote still on the
+  page; no row records it"): it stays `unknown`.
 - **Once staged, never rebuilt.** `kbqa stage --lists` refuses once the batch's
   staging file exists: the lists are what the drafts were written from. `kbqa
   stage` itself writes `ROLE-ROWS.md` again right after it writes the staging
@@ -376,9 +380,13 @@ One JSON object per line, in `<subject folder>/_draft-<batch>.jsonl`:
   the staging file — the rows recorded earlier stand, and nothing earlier is
   edited — and is listed under `unchanged_pages` (`page`, `unchanged_since`,
   `rows_in` and `ids` where its rows are recorded, or `stop_line`), with a
-  suggested `- <url> | no feature: unchanged since <batch>` under
+  suggested `- <url> | unchanged since <earlier batch>, in <this batch>` under
   `stop_lines_to_add`, so `g4` counts the page as accounted for once the
-  fetcher adds it. The line is rejected, never taken on its word, unless the
+  fetcher adds it — **in this window and its collection only**: g4's window
+  mode counts the line for `<this batch>`'s staging file alone, and g4's
+  denominator mode, `kbqa status` and `kbqa compare` only when `<this batch>`
+  is a window of the collection they measure. In a later collection, where the
+  page may have changed, the line accounts for nothing. The line is rejected, never taken on its word, unless the
   page is unchanged **by text hash**: the named batch's receipt lists the URL
   with the same `text_sha256`, that batch is the page's latest earlier capture
   (this receipt's `unchanged_since`), and a staged row or a stop line (not an
@@ -387,7 +395,14 @@ One JSON object per line, in `<subject folder>/_draft-<batch>.jsonl`:
 - It never overwrites a staging file. When no draft became a row it writes no
   staging file; when that is because every page was drafted `no_row` (or
   `unchanged`), its
-  `next_step` is `no rows — skip mapping for this batch`. The result is printed as JSON: the round, counts, the staging
+  `next_step` is `no rows — skip mapping for this batch`. When it is because
+  `--leave-out-rejects` left out every draft that could be a row, the window
+  ends on `_draft-<batch>.closed.json` — written once, never overwritten: the
+  batch, the round, every left-out draft with its reason and next step, the
+  stop lines to add — `closed` names it, the `next_step` is `no rows — skip
+  mapping; the left-out pages are the operator's`, and stage refuses the batch
+  from then on (`kbqa collect-surface` lists the window under `closed`, never
+  as unstaged). The result is printed as JSON: the round, counts, the staging
   and rejects paths, the rejected lines and reasons, `linked_by_code`,
   `link_conflicts`, and the `next_step`.
 

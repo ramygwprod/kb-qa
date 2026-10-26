@@ -24,10 +24,14 @@ runs) stays the limit.
 
 It lists, under `unstaged`, every window of this surface — this run's and every
 earlier run's — that has a capture file and no staging file, in batch order,
-each with its state: no drafts yet, drafts not yet staged, or every page drafted
-`no_row` or `unchanged` (nothing to stage). The collect skill runs the per-window steps for
-those before anything new, so a window captured in a run that stopped half-way
-is never lost.
+each with its state: no drafts yet; drafts written and `kbqa stage` not run (or
+its stop lines not yet added); or every page drafted `no_row` or `unchanged`
+and every stop line those drafts imply already in `_stop-conditions.md`
+(nothing to stage). The collect skill runs the per-window steps for those before
+anything new, so a window captured in a run that stopped half-way is never lost.
+A window whose drafts were all left out (`kbqa stage --leave-out-rejects`
+wrote `_draft-<batch>.closed.json`) has ended: it is listed under `closed`,
+never as unstaged.
 
 It writes nothing itself: every file is capture's. It never stages rows or
 maps: the row-writer and the mappers still run per window, after it, in the
@@ -36,7 +40,7 @@ every row written so far.
 
 It prints one JSON: every window written (batch, `window_end`, pages captured,
 copies, pages unchanged since an earlier capture, failures, receipt and capture
-paths), the `unstaged` windows, the end
+paths), the `unstaged` and `closed` windows, the end
 state, one merged
 `needs_operator` list (each URL once; a host's surface-wide item once per
 host), the merged `stop_lines_to_add` (each line once) and the next step. It
@@ -51,7 +55,7 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from . import capture
+from . import capture, stage, stops
 
 MAX_WINDOWS = 10
 
@@ -131,7 +135,10 @@ def _chain(subject: Path, surface: str, den: Path) -> List[Dict]:
 
 NO_DRAFTS = "no drafts: the per-window steps, from kbqa stage --lists"
 DRAFTED = "drafts written, no staging file: kbqa stage, then the per-window steps after it"
+STAGE_NOT_RUN = ("drafts written, stage not run: kbqa stage, then add each line of its stop_lines_to_add "
+                 "(kbqa stop add)")
 ALL_NO_ROW = "every page drafted no_row or unchanged: no rows, nothing to stage or map"
+CLOSED = "closed: every draft that could be a row was left out; no rows — the left-out pages are the operator's"
 NOTHING_NEW = ({"page", "no_row"}, {"page", "unchanged"})  # draft lines that make no row
 
 
@@ -147,6 +154,61 @@ def _all_no_row(draft: Path, receipt: Path) -> bool:
         and {o["page"] for o in objs} == pages
 
 
+def implied_stop_lines(draft: Path, batch: str) -> Optional[List[str]]:
+    """The stop lines `kbqa stage` makes of drafts that are `no_row` and
+    `unchanged` lines only — or None when one cannot be made (stage would list
+    it for the operator)."""
+    out: List[str] = []
+    try:
+        objs = [json.loads(ln) for ln in draft.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    except (OSError, ValueError):
+        return None
+    for o in objs:
+        words = o.get("no_row") if "no_row" in o else None
+        reason = (f"no feature: {words.strip()}" if isinstance(words, str) else
+                  stops.unchanged_reason(o["unchanged"].strip(), batch)
+                  if isinstance(o.get("unchanged"), str) else None)
+        line = stops.try_line(str(o.get("page")), reason)[0] if reason else None
+        if line is None:
+            return None
+        out.append(line)
+    return out
+
+
+def _recorded_lines(subject: Path) -> set:
+    f = subject / stops.STOPS_NAME
+    try:
+        return {ln.strip() for ln in f.read_text(encoding="utf-8").splitlines()} if f.is_file() else set()
+    except (OSError, UnicodeDecodeError):
+        return set()
+
+
+def _nothing_left(subject: Path, draft: Path, batch: str) -> bool:
+    """Every stop line the drafts imply is already in the stop-conditions: the
+    window is accounted for without a staging file. Until then, `kbqa stage`
+    has not run (or its lines were not added)."""
+    lines = implied_stop_lines(draft, batch)
+    return lines is not None and set(lines) <= _recorded_lines(subject)
+
+
+def closed(subject: Path, surface: str) -> List[Dict[str, object]]:
+    """Every window of this surface whose drafts were all left out: it ended on
+    its `_draft-<batch>.closed.json`, in batch order."""
+    out: List[Dict[str, object]] = []
+    if not subject.is_dir():
+        return out
+    for w in capture._windows(subject, surface):
+        b = str(w.get("batch"))
+        rec = subject / stage.closed_name(b)
+        if rec.is_file() and not (subject / f"_collect-{b}-staging.md").exists():
+            try:
+                left = len(json.loads(rec.read_text(encoding="utf-8")).get("left_out") or [])
+            except (OSError, ValueError, AttributeError):
+                left = None
+            out.append({"batch": b, "record": rec.name, "left_out": left, "state": CLOSED})
+    return out
+
+
 def unstaged(subject: Path, surface: str) -> List[Dict[str, object]]:
     """Every window of this surface — this run's and every earlier run's, from
     any denominator — that has a capture file and no staging file, in batch
@@ -159,9 +221,12 @@ def unstaged(subject: Path, surface: str) -> List[Dict[str, object]]:
         cap = subject / f"_capture-{b}.raw.txt"
         if not cap.is_file() or (subject / f"_collect-{b}-staging.md").exists():
             continue
+        if (subject / stage.closed_name(b)).is_file():
+            continue  # it ended: listed by `closed`
         draft, receipt = subject / f"_draft-{b}.jsonl", subject / "_raw" / b / capture.RECEIPT
         state = (NO_DRAFTS if not draft.is_file() else
-                 ALL_NO_ROW if _all_no_row(draft, receipt) else DRAFTED)
+                 DRAFTED if not _all_no_row(draft, receipt) else
+                 ALL_NO_ROW if _nothing_left(subject, draft, b) else STAGE_NOT_RUN)
         out.append({"batch": b, "capture": str(cap), "receipt": f"_raw/{b}/{capture.RECEIPT}", "state": state})
     return out
 
@@ -240,7 +305,8 @@ def run(argv: Optional[List[str]] = None) -> int:
     out: Dict[str, object] = {
         "surface": surface, "denominator": den.name, "end": end, "next_step": NEXT_STEP[end],
         "already_exhausted": already_exhausted, "retried_failed": retried,
-        "windows": windows, "unstaged": unstaged(subject, surface), "needs_operator": needs_operator,
+        "windows": windows, "unstaged": unstaged(subject, surface), "closed": closed(subject, surface),
+        "needs_operator": needs_operator,
         "stop_lines_to_add": stop_lines, "permission": permission}
     if refusal is not None:
         out["refusal"] = refusal

@@ -38,8 +38,10 @@ batch's receipt, so nothing a code can copy is typed by an agent:
 - a page drafted `unchanged` adds nothing to the staging file: it is listed
   under `unchanged_pages` — the earlier batch, and the batch and row ids where
   its rows are recorded (back along the pages' `unchanged_since` marks), or the
-  stop line that names it — and becomes a suggested `no feature: unchanged
-  since <batch>` stop line, so the page is accounted for in this window. The
+  stop line that names it — and becomes a suggested `unchanged since <that
+  batch>, in <this batch>` stop line, so the page is accounted for in this
+  window — and only in it, and in its collection (`stops.scoped_to`): in a later
+  window where the page changed, the line accounts for nothing. The
   line is **rejected** unless the page is unchanged by text hash: its
   `text_sha256` equals the one the named batch's receipt records for the URL,
   that batch is the page's latest earlier capture (the receipt's
@@ -82,7 +84,13 @@ row-writer has one correction round — it rewrites only the rejected lines —
 and stage runs again. Drafts still rejected after it are not dropped unseen:
 `--leave-out-rejects` writes the staging file without them and prints each
 under `needs_operator`; a third run without it is refused. The result says
-which round it is. The staging file is never overwritten.
+which round it is. The staging file is never overwritten. When the drafts left
+out were the only ones that could be rows, there is no staging file: the
+window ends on a record of its own, `_draft-<batch>.closed.json` (never
+overwritten; `stage` refuses the batch once it exists), listing every draft
+left out with its reason, and the next step is `no rows — skip mapping; the
+left-out pages are the operator's` (`kbqa collect-surface` reports the window
+`closed`, not unstaged).
 
 `--lists` writes, before the row-writer runs, the lists it and the mapper read:
 `_raw/<batch>/FEATURES.md` (the subject's anchors, `kbqa.features`) and
@@ -130,7 +138,10 @@ LOCATION = ("page", "part", "quote")
 NO_ROW_KEYS = {"page", "no_row"}
 UNCHANGED_KEYS = {"page", "unchanged"}  # a page unchanged since an earlier capture: its rows stand
 UNCHANGED = "UNCHANGED.md"              # the window's unchanged pages, for the row-writer
-UNCHANGED_REASON = "no feature: unchanged since "
+# The form kbqa 6.23.0's first builds suggested; like the scoped reason, it never
+# vouches for a page (`recorded`).
+OLD_UNCHANGED_REASON = "no feature: unchanged since "
+CLOSED_STEP = "no rows — skip mapping; the left-out pages are the operator's"
 WINDOW_FIELDS = ("window_offset", "window_requested", "window_returned", "window_end")
 UNKNOWN = "unknown"
 CRUMB_SEP = " > "  # how the capture writes a breadcrumb's items on one line
@@ -147,6 +158,11 @@ def draft_name(batch: str) -> str:
 
 def rejects_name(batch: str, round_no: int) -> str:
     return f"_draft-{batch}.rejects-{round_no}.jsonl"
+
+
+def closed_name(batch: str) -> str:
+    """The record of a window whose drafts were all left out: it ends there."""
+    return f"_draft-{batch}.closed.json"
 
 
 def slug(text: object) -> str:
@@ -344,7 +360,8 @@ def recorded(subject: Path, url: str, since: str) -> Dict[str, object]:
             break
         via.append(b)
         b = nxt
-    reasons = [r for r in _stop_reasons(subject).get(url, []) if not r.startswith(UNCHANGED_REASON)]
+    reasons = [r for r in _stop_reasons(subject).get(url, [])
+               if stops.scoped_to(r) is None and not r.startswith(OLD_UNCHANGED_REASON)]
     out: Dict[str, object] = {"rows_in": None, "ids": [], "anchors": [], "via": via}
     if reasons:
         out["stop_line"] = reasons[0]
@@ -502,6 +519,10 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
     staging = subject / conv.staging_for(batch)
     if staging.exists():
         raise Refused(f"{staging.name} already exists — a staging file is never overwritten")
+    closed = subject / closed_name(batch)
+    if closed.exists():
+        raise Refused(f"{closed.name} exists: every draft of this window was left out and the window ended there",
+                      next_step=CLOSED_STEP)
     drafts_path = subject / draft_name(batch)
     if not drafts_path.is_file():
         raise Refused(f"no drafts {drafts_path.name}: the row-writer writes them first")
@@ -819,9 +840,9 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
         rec = recorded(subject, url, since)
         unchanged_pages.append({"page": url, "unchanged_since": since,
                                 **{k: rec[k] for k in ("rows_in", "ids", "stop_line") if k in rec}})
-        line, why = stops.try_line(url, UNCHANGED_REASON + since)
+        line, why = stops.try_line(url, stops.unchanged_reason(since, batch))
         if line is not None:
-            stop_lines.append(line)  # g4 counts the page once the fetcher adds it
+            stop_lines.append(line)  # g4 counts the page, in this window only, once the fetcher adds it
         else:
             stop_lines_refused.append({"page": url, "unchanged": since, "reason": why})
 
@@ -862,7 +883,18 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
         result["note"] = "no draft became a row, so no staging file was written"
         if not listed:  # every page was drafted no_row
             result["next_step"] = NO_ROWS_STEP
-        return (1 if listed else 0), result
+            return 0, result
+        # Every draft that could be a row was left out: the window ends here, on
+        # a record of its own (never overwritten) listing each with its reason.
+        record = {"batch": batch, "round": round_no, "closed_by": f"kbqa stage {LEAVE_OUT}", "rows": 0,
+                  "drafts": drafts_path.name,
+                  "drafts_sha256": hashlib.sha256(drafts_path.read_bytes()).hexdigest(),
+                  "left_out": result["needs_operator"], "stop_lines_to_add": stop_lines,
+                  "next_step": CLOSED_STEP}
+        _write_new(closed, (json.dumps(record, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+        result["closed"] = str(closed)
+        result["next_step"] = CLOSED_STEP
+        return 0, result
     body = frontmatter(receipt) + "\n```json\n" + "".join(
         json.dumps(r, ensure_ascii=False) + "\n" for r in rows) + "```\n"
     _write_new(staging, body.encode("utf-8"))

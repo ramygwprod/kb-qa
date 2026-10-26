@@ -36,6 +36,12 @@ nothing**, is never typed by hand and is never merged into the tree.
 The tree is read first, so a row merged and still staged is read as merged
 (as `features.subject_rows` reads them).
 
+**Where each row stands.** Every feature and other source carries its
+`access_date` and its `state`: `merged` (read from the tree); `staged`, with
+its batch's last check (`check`: status and round, from `_qa/<batch>.report.json`
+made on the staging file's current bytes — `kbqa status`'s own `check_of`); or
+`unchecked` (no report, or one made on other bytes). `row_states` counts them.
+
 Prints a markdown nested list, or with `--json` the whole structure. Exit 0;
 1 only when it refuses: no subject folder.
 """
@@ -46,7 +52,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from . import __version__, features
+from . import __version__, features, ledger
 from .parsing import parse_staging
 from .profile import conventions
 
@@ -54,9 +60,10 @@ SEP = " > "  # how a breadcrumb's items are written on one line (`stage.CRUMB_SE
 UNKNOWN = "unknown"
 READ_ERRORS = (OSError, UnicodeDecodeError, ValueError)
 FEATURE_FIELDS = ("id", "vendor_term", "what_it_does", "mechanism", "outcome", "evidence_grade",
-                  "depth_level", "source_url")
+                  "depth_level", "source_url", "access_date")
 SOURCE_FIELDS = ("id", "vendor_term", "what_it_does", "evidence_grade", "source_url", "parent_path",
-                 "interface_type", "operation", "parameter")
+                 "interface_type", "operation", "parameter", "access_date")
+MERGED, STAGED, UNCHECKED = "merged", "staged", "unchecked"
 INTERFACE_FIELDS = ("interface_type", "operation", "parameter")
 COUNT_KEYS = ("features", "other_sources", "interfaces", "interface_rows")
 
@@ -163,12 +170,36 @@ def _zero() -> Dict[str, int]:
     return {k: 0 for k in COUNT_KEYS}
 
 
-def _feature(rid: str, entry: dict, others: List[Tuple[str, dict]]) -> Dict[str, object]:
+def standing(subject: Path, file: str, cache: Dict[str, Dict[str, object]]) -> Dict[str, object]:
+    """Where the rows read from `file` stand: merged (the tree), staged with
+    their batch's last check on the staging file's current bytes, or unchecked."""
+    if file not in cache:
+        if file == features.TREE:
+            cache[file] = {"state": MERGED}
+        else:
+            conv = conventions()
+            batch = conv.batch_of(file)
+            path = subject / file
+            try:
+                sha = ledger._sha(path)
+            except OSError:
+                sha = None
+            check = ledger.check_of(subject / "_qa", batch, sha)
+            state = UNCHECKED if check["status"] in (ledger.NOT_CHECKED, ledger.STALE) else STAGED
+            cache[file] = {"state": state, "batch": batch,
+                           "check": {"status": check["status"], "round": check.get("round")}}
+    return cache[file]
+
+
+def _feature(rid: str, entry: dict, others: List[Tuple[str, dict]],
+             stand=lambda f: {}) -> Dict[str, object]:
     row = entry["row"]
     out: Dict[str, object] = {k: row.get(k) for k in FEATURE_FIELDS}
     out["id"] = rid
     out["file"] = entry["file"]
-    out["other_sources"] = [{**{k: o["row"].get(k) for k in SOURCE_FIELDS}, "id": oid, "file": o["file"]}
+    out.update(stand(entry["file"]))
+    out["other_sources"] = [{**{k: o["row"].get(k) for k in SOURCE_FIELDS}, "id": oid, "file": o["file"],
+                             **stand(o["file"])}
                             for oid, o in others]
     out["ways_in"] = ways_in([(rid, row)] + [(oid, o["row"]) for oid, o in others])
     out["counts"] = {"features": 1, "other_sources": len(others), "interfaces": len(out["ways_in"]),
@@ -210,11 +241,16 @@ def build(subject: Path, merged_only: bool = False) -> Dict[str, object]:
                 node(path[:-1])
         return nodes[path]
 
+    cache: Dict[str, Dict[str, object]] = {}
+
+    def stand(file: str) -> Dict[str, object]:
+        return standing(subject, file, cache)
+
     unknown_features: List[Dict[str, object]] = []
     depth_unknown: List[str] = []
     for rid in sorted(anchors):
         e = rows[rid]
-        f = _feature(rid, e, linked.get(rid, []))
+        f = _feature(rid, e, linked.get(rid, []), stand)
         path = position(e["row"].get("parent_path"))
         if path is None:
             f["parent_path"] = e["row"].get("parent_path")
@@ -260,10 +296,15 @@ def build(subject: Path, merged_only: bool = False) -> Dict[str, object]:
                   unreadable_rows=len(read["unreadable_rows"]), rows_without_id=len(read["rows_without_id"]), ids_read_again=len(read["ids_read_again"]))
     complete = not (read["unreadable_files"] or read["unreadable_rows"] or read["rows_without_id"]
                     or read["ids_read_again"])
+    for b in broken:
+        b.update(stand(str(b["file"])))
+    row_states = {MERGED: 0, STAGED: 0, UNCHECKED: 0}
+    for e in rows.values():
+        row_states[str(stand(e["file"])["state"])] += 1
     return {"subject": str(subject),
             "read_from": "the feature tree" if merged_only else "the feature tree and every staging file",
             "merged_only": merged_only, "tree": read["tree"], "files": read["files"],
-            "complete": complete, "totals": totals, "modules": top,
+            "complete": complete, "totals": totals, "row_states": row_states, "modules": top,
             "position_unknown": {"features": unknown_features, "counts": unknown_counts,
                                  "other_sources_listed_under_their_feature": elsewhere},
             "depth_unknown": depth_unknown, "links_to_no_anchor": broken,
@@ -292,13 +333,24 @@ def _ids(ids: List[str]) -> str:
     return ", ".join(f"`{i}`" for i in ids)
 
 
+def _stands(x: Dict[str, object]) -> str:
+    """`accessed <date> · merged | staged (<check>, round <n>) | unchecked`."""
+    state = x.get("state")
+    if state == STAGED:
+        c = x.get("check") or {}
+        state = f"staged in {x.get('batch')} ({c.get('status')}, round {_t(c.get('round'))})"
+    elif state == UNCHECKED:
+        state = f"unchecked, in {x.get('batch')}"
+    return f"accessed {_t(x.get('access_date'))} · {_t(state)}"
+
+
 def _feature_md(f: Dict[str, object], pad: str, a) -> None:
     a(f"{pad}- feature `{f['id']}` **{_t(f['vendor_term'])}** — {_t(f['what_it_does'])} · "
       f"{_t(f['mechanism'])} / {_t(f['outcome'])} · {_t(f['evidence_grade'])} · depth {_t(f['depth_level'])} · "
-      f"{_t(f['source_url'])}")
+      f"{_t(f['source_url'])} · {_stands(f)}")
     for o in f["other_sources"]:
         a(f"{pad}  - other source `{o['id']}` **{_t(o['vendor_term'])}** — {_t(o['what_it_does'])} · "
-          f"{_t(o['evidence_grade'])} · {_t(o['source_url'])} · at `{_t(o['parent_path'])}`")
+          f"{_t(o['evidence_grade'])} · {_t(o['source_url'])} · at `{_t(o['parent_path'])}` · {_stands(o)}")
     for w in f["ways_in"]:
         typ = _t(w["interface_type"]) if w["interface_type"] is not None else "(no interface type)"
         op = f"`{_t(w['operation'])}`" if w["operation"] is not None else "(no operation named)"
@@ -338,6 +390,9 @@ def markdown(out: Dict[str, object]) -> str:
     a(f"Totals: {_n(t['rows'], 'row', 'rows')} · {_n(t['modules'], 'module', 'modules')} · {_counts(t)} "
       f"({_n(t['interface_rows'], 'interface row', 'interface rows')}) · "
       f"{t['position_unknown']} at an unknown position · {t['links_to_no_anchor']} linking to no anchor")
+    a("")
+    rs = out["row_states"]
+    a(f"Where the rows stand: {rs[MERGED]} merged · {rs[STAGED]} staged and checked · {rs[UNCHECKED]} unchecked")
     a("")
     a("## Modules")
     a("")

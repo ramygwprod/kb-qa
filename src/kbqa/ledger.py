@@ -8,17 +8,25 @@ agent. **It writes nothing**: every number is read from what is on disk, by the
 same code that wrote or checks it.
 
 **Per surface** (`product`, `docs`, `help`): its state as `kbqa surfaces` reads
-it; the current denominator and its items; the items captured (a page of a
-window's record or of a capture file); the items staged (a page of a batch
-that has a staging file — the staging file's own `pages:`, else its receipt's);
-the rows, as features (anchors: rows without `same_feature_as`) and other
-sources; the items a stop line covers or a surface line closes; and the **open
-items** — index items with neither a row nor a stop line — counted by `g4`'s own
-code over the surface's batches, exactly as `/kbqa-check` runs it. Then its
-windows: recorded, cut from the current denominator, `exhausted` or parked
-(where the next window resumes), ended in error, `unstaged` (a capture and no
-staging file, as `kbqa collect-surface` lists them); and the pages still to
-retry and those given up on (`capture`'s own retry state).
+it; the current denominator and its items; then, over the current
+denominator's **collection** — the windows cut from it and the retry runs after
+them (`compare.batches_of`) — the items captured (a page of a window's record or
+of a capture file), the items staged (a page of a batch that has a staging file
+— the staging file's own `pages:`, else its receipt's), the items a stop line
+covers or a surface line closes, and the **open items** — index items with
+neither a row of that collection nor a stop line — counted by `g4`'s own code
+(`g4_completeness.coverage`). A subject collected again is measured on its new
+collection: an earlier collection's captures and rows never make an item of
+the new one captured, staged or covered. The same counts over every batch of the
+surface are shown apart, under `all_collections`. A subject with no window
+records cannot say which batches the collection holds: its counts are over
+every batch, and `collection.batches` says `unknown`. The rows, as features
+(anchors: rows without `same_feature_as`) and other sources, are over every
+staged batch. Then its windows: recorded, cut from the current denominator,
+`exhausted` or parked (where the next window resumes), ended in error,
+`unstaged` (a capture and no staging file, as `kbqa collect-surface` lists
+them), `closed` (every draft left out: `_draft-<batch>.closed.json`); and the
+pages still to retry and those given up on (`capture`'s own retry state).
 
 **Per batch**: rows; the last check's status and round, from
 `_qa/<batch>.report.json` when that report was made on the staging file's
@@ -40,7 +48,9 @@ estate's `subjects_dir` (`kbqa-estate.json`).
 `needs-human` note names that pattern — subject, batch, id, pass — the rows to
 re-map, and per batch and pass the `mapstage --reopen "<pattern>"` command that
 sends only those rows back to the mapper, then the re-map step — and, when
-`--reopen` would refuse that pass (a map file with no sidecar), why.
+`--reopen` would refuse that pass (a map file with no sidecar, a map made from
+other anchors, a `[no rule]` line that must be reopened first), why and the way
+out (`reopen_next_step`).
 
 What the files cannot tell — a subject left by kbqa 6.21: a staging file
 written by an agent, no window records, no drafts, no sidecars — is `unknown`,
@@ -59,7 +69,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from . import __version__, capture, collect_surface, features, mapstage, roles, stage
+from . import __version__, capture, collect_surface, compare, features, mapstage, roles, stage
 from .gates import g4_completeness, mapcheck
 from .gates import surfaces as surfaces_gate
 from .parsing import parse_capture, parse_staging
@@ -318,39 +328,71 @@ def surface_ledger(subject: Path, surface: str, batches: List[Dict[str, object]]
             item_urls = None
     out["items"] = len(item_urls) if item_urls is not None else (None if den is None else UNKNOWN)
 
-    captured: Optional[Set[str]] = set()
-    for w in windows or []:
-        captured |= {str(u) for u in w.get("pages") or []}
-    for cap in captures:
-        try:
-            captured |= set(parse_capture(cap).blocks)
-        except READ_ERRORS:
-            captured = None
-            break
-    staged_urls: Optional[Set[str]] = set()
-    staged_unknown: List[str] = []
-    for b in staged:
-        _, _, pages, _ = _staging_rows(subject / conv.staging_for(str(b["batch"])))
-        rpages = _receipt_pages(subject, str(b["batch"]))
-        listed = set(pages) or ({p["url"] for p in rpages} if rpages else set())
-        if not listed:
-            staged_unknown.append(str(b["batch"]))
-            continue
-        staged_urls |= listed
-        # a page captured under the URL it was redirected to was asked for by the item's URL
-        staged_urls |= {str(p.get("requested")) for p in rpages or [] if p.get("url") in listed and p.get("requested")}
+    # The current denominator's collection: the windows cut from it and the
+    # retry runs after them. Without window records it cannot be told.
+    coll: Optional[Set[str]] = None
+    if den is not None and windows:
+        coll = set(compare.batches_of(subject, surface, den))
+    out["collection"] = {"denominator": den.name if den else None,
+                         "batches": sorted(coll) if coll is not None else (None if den is None else UNKNOWN)}
+    if den is not None and coll is None:
+        out["collection"]["why"] = ("no window records: which batches the current denominator's collection holds "
+                                    "cannot be told, so every count is over every batch of the surface")
 
     def of_items(urls: Optional[Set[str]]) -> object:
         if item_urls is None:
             return None if den is None else UNKNOWN
         return UNKNOWN if urls is None else len(item_urls & urls)
-    out["items_captured"] = of_items(captured)
-    out["items_staged"] = of_items(None if staged_unknown else staged_urls)
-    if staged_unknown:
-        out["staged_pages_unknown_in"] = staged_unknown
 
-    # Open items: g4's own count, over the batches /kbqa-check gives it.
+    def counted(scope: Optional[Set[str]]) -> Dict[str, object]:
+        """Captured, staged and open items over the batches `scope` (None: every batch)."""
+        res: Dict[str, object] = {}
+        captured: Optional[Set[str]] = set()
+        for w in windows or []:
+            if scope is None or str(w.get("batch")) in scope:
+                captured |= {str(u) for u in w.get("pages") or []}
+        for cap in captures:
+            if scope is not None and CAPTURE_RE.match(cap.name).group("batch") not in scope:
+                continue
+            try:
+                captured |= set(parse_capture(cap).blocks)
+            except READ_ERRORS:
+                captured = None
+                break
+        staged_urls: Optional[Set[str]] = set()
+        staged_unknown: List[str] = []
+        these = [b for b in staged if scope is None or str(b["batch"]) in scope]
+        for b in these:
+            _, _, pages, _ = _staging_rows(subject / conv.staging_for(str(b["batch"])))
+            rpages = _receipt_pages(subject, str(b["batch"]))
+            listed = set(pages) or ({p["url"] for p in rpages} if rpages else set())
+            if not listed:
+                staged_unknown.append(str(b["batch"]))
+                continue
+            staged_urls |= listed
+            # a page captured under the URL it was redirected to was asked for by the item's URL
+            staged_urls |= {str(p.get("requested")) for p in rpages or []
+                            if p.get("url") in listed and p.get("requested")}
+        res["batches"] = len([b for b in mine if scope is None or str(b["batch"]) in scope])
+        res["items_captured"] = of_items(captured)
+        res["items_staged"] = of_items(None if staged_unknown else staged_urls)
+        if staged_unknown:
+            res["staged_pages_unknown_in"] = staged_unknown
+        if den is not None:
+            # Open items: g4's own count, over these batches' staging files.
+            rows_files = [str(subject / conv.staging_for(str(b["batch"]))) for b in these]
+            verdict, _ = g4_completeness.coverage(den, rows_files, stops if stops.is_file() else None)
+            res["_verdict"] = verdict
+        return res
+
     stops = subject / conv.stops_name
+    here = counted(coll)
+    everything = counted(None) if coll is not None else here
+    out["items_captured"] = here["items_captured"]
+    out["items_staged"] = here["items_staged"]
+    if "staged_pages_unknown_in" in here:
+        out["staged_pages_unknown_in"] = here["staged_pages_unknown_in"]
+
     if den is None:
         out["open_items"] = None if out["state"] == "stop-condition" else UNKNOWN
         out["open_item_urls"] = []
@@ -358,8 +400,7 @@ def surface_ledger(subject: Path, surface: str, batches: List[Dict[str, object]]
         out["open_items_why"] = ("the surface is closed by a stop line: it has no items" if out["state"] == "stop-condition"
                                  else "no denominator: the surface's items are not known")
     else:
-        rows_files = [str(subject / conv.staging_for(str(b["batch"]))) for b in staged]
-        verdict, _ = g4_completeness.coverage(den, rows_files, stops if stops.is_file() else None)
+        verdict = here["_verdict"]
         c = verdict.counts
         out["open_items"] = c.get("without_row", UNKNOWN)
         out["open_item_urls"] = [f.where for f in verdict.findings if f.code == "index_item_without_row"]
@@ -370,6 +411,13 @@ def surface_ledger(subject: Path, surface: str, batches: List[Dict[str, object]]
         other = sorted({f.code for f in verdict.findings if f.code != "index_item_without_row"})
         if other:
             out["coverage_findings"] = other
+    # Every batch of the surface, every collection: shown apart, never as the collection's.
+    allc: Dict[str, object] = {k: v for k, v in everything.items() if k != "_verdict"}
+    if den is not None:
+        v = everything["_verdict"]
+        allc["open_items"] = v.counts.get("without_row", UNKNOWN)
+        allc["open_item_urls"] = [f.where for f in v.findings if f.code == "index_item_without_row"]
+    out["all_collections"] = allc
 
     # Windows: exhausted, or parked with where it resumes.
     w_out: Dict[str, object] = {}
@@ -401,6 +449,11 @@ def surface_ledger(subject: Path, surface: str, batches: List[Dict[str, object]]
         w_out["unstaged"] = [{"batch": u["batch"], "state": u["state"]} for u in collect_surface.unstaged(subject, surface)]
     except READ_ERRORS:
         w_out["unstaged"] = UNKNOWN
+    try:
+        w_out["closed"] = [{"batch": u["batch"], "record": u["record"], "left_out": u["left_out"]}
+                           for u in collect_surface.closed(subject, surface)]
+    except READ_ERRORS:
+        w_out["closed"] = UNKNOWN
     out["windows"] = w_out
 
     if windows is None or legacy_only:
@@ -464,13 +517,13 @@ def _wanted(name: str) -> str:
     return mapcheck.pattern_key(name)
 
 
-def reopen_now(subject: Path, batch: str, letter: str, name: str) -> Optional[str]:
+def reopen_now(subject: Path, batch: str, letter: str, name: str) -> Optional[Tuple[str, str]]:
     """None when `mapstage --reopen` would run on this pass now, else why it
-    would refuse — by mapstage's own plan; nothing is moved."""
+    would refuse and its way out — by mapstage's own plan; nothing is moved."""
     try:
         mapstage.reopen_plan(subject, batch, letter, name)
     except mapstage.Refused as exc:
-        return str(exc)
+        return str(exc), exc.next_step
     return None
 
 
@@ -506,7 +559,7 @@ def pattern_rows(subjects: List[Tuple[Optional[str], Path]], name: str) -> Dict[
                                  f'{cmd} --elements "{_elements(subject)}"'}
                 why = reopen_now(subject, batch, letter, name)
                 if why is not None:
-                    entry["reopen_refused"] = why
+                    entry["reopen_refused"], entry["reopen_next_step"] = why
                 passes.append(entry)
     return {"pattern": _named(name), "rows": rows, "passes": passes}
 
@@ -602,8 +655,8 @@ def markdown(out: Dict[str, object]) -> str:
             for p in out["passes"]:
                 a(f"**{p.get('subject', '') + ' / ' if 'subject' in p else ''}{p['batch']} pass {p['pass']}** "
                   f"({len(p['ids'])} row(s))")
-                a(f"- reopen: `{p['reopen']}`" + (f" — refused now: {p['reopen_refused']}"
-                                                   if "reopen_refused" in p else ""))
+                a(f"- reopen: `{p['reopen']}`" + (f" — refused now: {p['reopen_refused']} (next: "
+                                                   f"{p['reopen_next_step']})" if "reopen_refused" in p else ""))
                 a(f"- then: {p['then']}")
         a("")
         return "\n".join(lines) + "\n"
@@ -644,6 +697,15 @@ def markdown(out: Dict[str, object]) -> str:
             uns = s["windows"].get("unstaged")
             if isinstance(uns, list):
                 notes += [f"- {s['surface']} unstaged: {u['batch']} — {u['state']}" for u in uns]
+            shut = s["windows"].get("closed")
+            if isinstance(shut, list):
+                notes += [f"- {s['surface']} closed: {u['batch']} — every draft left out ({u['record']})" for u in shut]
+            allc = s.get("all_collections") or {}
+            if s.get("denominator") and isinstance(s.get("collection", {}).get("batches"), list):
+                notes.append(f"- {s['surface']} all collections ({_v(allc.get('batches'))} batch(es)): captured "
+                             f"{_v(allc.get('items_captured'))}, staged {_v(allc.get('items_staged'))}, open "
+                             f"{_v(allc.get('open_items'))} — the table counts the current denominator's collection "
+                             f"({len(s['collection']['batches'])} batch(es))")
         if notes:
             lines.extend(notes + [""])
         a("## Batches")

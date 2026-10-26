@@ -81,7 +81,11 @@ builds it, kept only when building it again gives the same story and only one
 reading does; element ids from `pcf_ids` — and for each reopened id the
 placeholder `{"id": <id>, "reopened": <pattern>}`. A line that cannot be carried
 over exactly (a map file of another era) refuses the whole reopen, naming the
-line; nothing is moved. A draft line still holding `reopened` is rejected —
+line; nothing is moved. A `[no rule]` line (written by `--leave-out-rejects`)
+has no reading to carry over: the refusal names the way out — `--reopen "no
+rule"` first. A map file made from other anchors — the staging file changed
+since the sidecar's sha256 and its anchor ids with it, the check `--retire`
+makes — is refused too, with `--retire` as the next step. A draft line still holding `reopened` is rejected —
 "not yet re-mapped after the ruling" — so no map file is written until the
 mapper has replaced every placeholder; the rounds are the usual ones (one
 correction round, then `--leave-out-rejects`).
@@ -544,9 +548,24 @@ def reopen_plan(subject: Path, batch: str, letter: str, pattern: str) -> Dict[st
                       "reopened line by line",
                       next_step=f"only on the operator's word: {RETIRE} {NO_RECORD}, then the whole pass is mapped again")
     try:
-        json.loads(meta_path.read_text(encoding="utf-8"))["staging_sha256"]
+        recorded = json.loads(meta_path.read_text(encoding="utf-8"))["staging_sha256"]
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise Refused(f"{meta_path.name} cannot be read: {exc}")
+    # A ruling reopens a reading of the same anchors. When the staging file
+    # changed and its anchor ids with it — the check `--retire` makes — the map
+    # was made from other anchors: the whole pass is retired and mapped again.
+    if recorded != _sha256(staging):
+        mapped = _map_ids(out_path)
+        anchors_now = set(_anchors(staging)[0])
+        if mapped is None or mapped != anchors_now:
+            changed = ("which anchors it classified cannot be told (a line that is not a JSON object with an id)"
+                       if mapped is None else
+                       f"anchors added {sorted(anchors_now - mapped)}, removed {sorted(mapped - anchors_now)}")
+            raise Refused(f"{staging.name} changed since {out_path.name} was written, and its anchor ids with it "
+                          f"({changed}): the map was made from other anchors, so its lines are not reopened one "
+                          "by one. Nothing was moved",
+                          next_step=f'python3 -m kbqa mapstage --subject "{subject}" --batch {batch} --pass {letter} '
+                                    f"{RETIRE} — then the whole pass is mapped again, the ruling applied")
     lines: List[Tuple[int, dict]] = []
     for n, raw in enumerate(out_path.read_text(encoding="utf-8").splitlines(), start=1):
         if not raw.strip():
@@ -570,6 +589,19 @@ def reopen_plan(subject: Path, batch: str, letter: str, pattern: str) -> Dict[st
             continue
         carried, why = draft_of(o)
         if carried is None:
+            left_out = o.get("status") == NEEDS_HUMAN and \
+                pattern_key(note_pattern(str(o.get("note", ""))) or "") == pattern_key(LEFT_OUT_PATTERN)
+            if left_out:
+                # A line written by --leave-out-rejects has no reading to carry
+                # over: it is reopened first, on its own pattern.
+                first = (f'python3 -m kbqa mapstage --subject "{subject}" --batch {batch} --pass {letter} '
+                         f'{REOPEN} "{pattern_key(LEFT_OUT_PATTERN)}"')
+                raise Refused(f"{out_path.name} line {n} ({o['id']}) is a {LEFT_OUT_PATTERN} line (written by "
+                              f"{LEAVE_OUT}: no reading to carry over), so it cannot be carried over to the draft: "
+                              f"reopen it first with {REOPEN} \"{pattern_key(LEFT_OUT_PATTERN)}\", then "
+                              f"{REOPEN} \"{pattern.strip()}\". Nothing was moved",
+                              next_step=f"{first} — the mapper writes that line; once the map file is written again, "
+                                        f"{REOPEN} \"{pattern.strip()}\"")
             raise Refused(f"{out_path.name} line {n} ({o['id']}) cannot be carried over to the draft exactly: {why}. "
                           "Nothing was moved", next_step="operator")
         draft.append(carried)

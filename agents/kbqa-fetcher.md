@@ -237,9 +237,13 @@ whole run:
   the window wrote no capture: nothing in it for the row-writer);
 - `unstaged` — every window of this surface with a capture file and no staging
   file, from this run **and every earlier run**, in order, each with its
-  `state` (no drafts yet; drafts written, not staged; every page drafted
-  `no_row` or `unchanged`, nothing to stage). Hand it back whole: the orchestrator runs the
+  `state` (no drafts yet; drafts written, not staged;
+  drafts written, stage not run — every page drafted `no_row` or `unchanged`
+  but the stop lines `kbqa stage` makes of them not yet added; every page drafted `no_row` or
+  `unchanged` and its stop lines added, nothing to stage). Hand it back whole: the orchestrator runs the
   per-window steps for these first, so no captured window is lost;
+- `closed` — windows whose drafts were all left out (`_draft-<batch>.closed.json`):
+  they have ended, nothing to stage or map; the left-out pages are the operator's;
 - `end` and `next_step` — as the table says; `refusal` — capture's refusal,
   word for word, when there is one;
 - `stop_lines_to_add` — the exact lines for §4, each once, including `js-only`
@@ -310,8 +314,10 @@ Hand back, copied from the result:
 - `needs_operator` — after `--leave-out-rejects`: every draft left out, word for
   word;
 - `stop_lines_to_add` — one `no feature: …` line per page the row-writer
-  drafted `no_row`, and one `no feature: unchanged since <batch>` line per page
-  it drafted `unchanged`: add each with `kbqa stop add` (§4);
+  drafted `no_row`, and one `unchanged since <earlier batch>, in <this batch>`
+  line per page it drafted `unchanged` (it accounts for the page in this window
+  and its collection only — never in a later collection, where the page may
+  have changed): add each with `kbqa stop add` (§4);
 - `unchanged_pages` — the pages drafted `unchanged` that code accepted (by
   text hash), each with where its rows are recorded: nothing new is staged for
   them, and nothing earlier is edited;
@@ -326,7 +332,12 @@ Hand back, copied from the result:
   after the staging file, so the mappers see the batch's own rows;
 - a `next_step` of `no rows — skip mapping for this batch` — every page was
   drafted `no_row` (or `unchanged`): there is no staging file, and no mapping
-  pass for it.
+  pass for it;
+- `closed` and a `next_step` of `no rows — skip mapping; the left-out pages are
+  the operator's` — after `--leave-out-rejects`, every draft that could be a row
+  was left out: the window ends on `_draft-<batch>.closed.json` (every left-out
+  draft with its reason). There is no staging file and no mapping pass; hand
+  back the `needs_operator` entries. `kbqa stage` refuses the batch from then on.
 
 It never overwrites a staging file, and refuses when the capture no longer
 matches its receipt: return a refusal as a blocker, word for word. Never edit a
@@ -449,9 +460,10 @@ exactly so:
 | `not approved: pdf` | a PDF the operator has not approved |
 | `unreachable: <the failure kbqa printed>` | a page no attempt could fetch (a 404, a TLS failure, a page failing in three runs) — only with the operator's word |
 | `no feature: <what the page is>` | a page you captured from which the row-writer recorded no row — say what the page is (`pricing page`, `legal notice`, `blog index`) |
+| `unchanged since <earlier batch>, in <this batch>` | only as `kbqa stage` prints it: a page of <this batch> with the same text as its latest earlier capture, whose rows there stand — it accounts for the page in <this batch> and its collection only |
 
-Every reason but `surface … not published`, `not approved: pdf` and
-`no feature: …` may end with ` (surface <slug>)`, which says the surface's
+Every reason but `surface … not published`, `not approved: pdf`,
+`no feature: …` and `unchanged since …` may end with ` (surface <slug>)`, which says the surface's
 index could not be read. Only `refused: robots` and `refused: HTTP 401|403`
 with that ending, keyed by one of the surface's own denominator items, also
 close the surface's remaining items on that host — every other reason closes

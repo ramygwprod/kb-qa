@@ -221,8 +221,8 @@ def test_an_unchanged_page_adds_nothing_to_the_staging_file_and_is_accounted_for
     assert {r["source_url"] for r in rows} == {U[2], U[4]}, "an unchanged page is never staged again"
     assert {e["page"]: e["unchanged_since"] for e in out["unchanged_pages"]} == {U[1]: b1, U[3]: b1}
     assert next(e for e in out["unchanged_pages"] if e["page"] == U[1])["ids"] == ["example-co.docs.daily-digest"]
-    assert f"- {U[1]} | no feature: unchanged since {b1}" in out["stop_lines_to_add"]
-    assert f"- {U[3]} | no feature: unchanged since {b1}" in out["stop_lines_to_add"]
+    assert f"- {U[1]} | unchanged since {b1}, in {b2}" in out["stop_lines_to_add"]
+    assert f"- {U[3]} | unchanged since {b1}, in {b2}" in out["stop_lines_to_add"]
     assert out["pages_without_row_or_no_row"] == []
     # nothing earlier is edited
     after = _snapshot(d)
@@ -244,7 +244,8 @@ def test_g4_counts_an_unchanged_page_once_its_stop_line_is_added(second):
     v, _ = g4_completeness.coverage(den2, [staging], stops_f)
     assert v.verdict == "PASS" and v.counts["existence_stopped"] == 2, v.counts
     findings = []
-    w = g4_completeness.read_windows([staging], findings, g4_completeness.stopped_urls(stops_f))
+    w = g4_completeness.read_windows([staging], findings, g4_completeness.stopped_urls(stops_f),
+                                     g4_completeness.scoped_urls(stops_f))
     assert w[0]["rows"] + w[0]["stopped_pages"] >= w[0]["returned"] and not any(
         f.code == "window_underwritten" for f in findings)
 
@@ -308,6 +309,9 @@ def test_a_window_unchanged_throughout_writes_no_staging_file(first, monkeypatch
     _drafts(d, b2, {"page": U[1], "unchanged": b1}, {"page": U[3], "unchanged": b1})
     code, out = _stage(d, b2)
     assert code == 0 and out["staging"] is None and out["next_step"] == stage.NO_ROWS_STEP, out
+    assert [u["state"] for u in collect_surface.unstaged(d, "docs") if u["batch"] == b2] == [
+        collect_surface.STAGE_NOT_RUN], "its stop lines are not recorded yet"
+    _add_stops(d, out["stop_lines_to_add"])
     assert [u["state"] for u in collect_surface.unstaged(d, "docs") if u["batch"] == b2] == [
         collect_surface.ALL_NO_ROW]
 

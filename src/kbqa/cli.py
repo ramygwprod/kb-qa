@@ -144,9 +144,12 @@ collection (the fetcher runs these; permission from today's g0 record, g0 run fi
                                                blocks it (one correction round, then
                                                --leave-out-rejects lists each left out);
                                                an {{"page", "unchanged": <batch>}} line adds no
-                                               row, only a "no feature: unchanged since" stop
-                                               line, and is rejected unless the text hash
-                                               matches; ROLE-ROWS.md refreshed after it is written
+                                               row, only an "unchanged since <batch>, in <this
+                                               batch>" stop line (it counts in that window and
+                                               its collection only), and is rejected unless the
+                                               text hash matches; drafts all left out end the
+                                               window on _draft-<b>.closed.json; ROLE-ROWS.md
+                                               refreshed after it is written
   mapstage --subject <d> --batch <b> --pass <A|B> --elements <list> [--leave-out-rejects]
                                                after each mapping pass: _map-<b>-<A|B>.jsonl
                                                from the mapper's _mapdraft-<b>-<A|B>.jsonl —

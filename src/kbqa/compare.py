@@ -37,6 +37,17 @@ and every page that cited it was captured and accounted for in the later one
 not captured.** `added` is the same rule the other way round. Otherwise
 `unknown`, with why.
 
+**Removed only when the text is truly gone.** A page — and each feature it
+gave — that the later side holds under another URL (a capture or a copy of that
+collection with the page's earlier `text_sha256`, from the receipts' pages and
+`duplicates`) is `unknown`, "moved to <url>", never `removed`. A feature whose
+earlier row's `source_quote` is still found (`normalise_for_match`) in the later
+capture of its page is `unknown`, "quote still on the page; no row records it",
+never `removed`.
+
+A stop line scoped to one window (`unchanged since <batch>, in <this batch>`)
+counts for a side only when that window is one of the side's own batches.
+
 Prints a short markdown summary, or with `--json` the whole structure. Exit 0;
 1 only when it refuses: no subject folder, a value that is neither a date nor a
 denominator of the subject, two denominators of different surfaces, the same
@@ -50,9 +61,9 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from . import __version__, capture, stage
+from . import __version__, capture, stage, stops
 from .gates import g4_completeness
-from .parsing import parse_staging
+from .parsing import normalise_for_match, parse_capture, parse_staging
 from .profile import conventions
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -211,14 +222,47 @@ def collection(subject: Path, surface: str, den: Path, stop_reasons: Dict[str, L
                       "nor a stop line" + (f" ({', '.join(other)})" if other else ""))
     return {"denominator": den.name, "index_source": index_source(den), "items": items, "batches": batches,
             "staging_files": [Path(f).name for f in files], "captures": caps, "rows": rows,
-            "coverage": cov, "_stops": stop_reasons}
+            "coverage": cov, "_stops": stop_reasons, "_texts": {}}
 
 
 def _stopped(side: dict, *urls: str) -> Optional[str]:
+    """The first stop reason that accounts for one of the URLs on this side —
+    a line scoped to a window of another collection never does."""
     for u in urls:
         for r in side["_stops"].get(u, []):
-            return r
+            if stops.counts_in(r, side["batches"]):
+                return r
     return None
+
+
+def page_text(subject: Path, side: dict, url: str) -> Optional[str]:
+    """The text of the URL's latest capture on this side, from its batch's
+    capture file; None when there is none to read (a copy, or a capture that
+    cannot be read)."""
+    cap = side["captures"].get(url)
+    if cap is None or cap.get("same_text_as"):
+        return None
+    b = str(cap["batch"])
+    if b not in side["_texts"]:
+        rec = _receipt(subject, b)
+        blocks: Optional[Dict[str, str]] = None
+        if rec is not None and rec.get("capture"):
+            try:
+                blocks = dict(parse_capture(subject / Path(str(rec["capture"])).name).blocks)
+            except READ_ERRORS:
+                blocks = None
+        side["_texts"][b] = blocks
+    blocks = side["_texts"][b]
+    return None if blocks is None else blocks.get(str(cap["url"]))
+
+
+def moved_to(side: dict, url: str, text_sha256: Optional[str]) -> List[str]:
+    """The other URLs under which this side holds the text hash — a page
+    captured there, or a copy of one (the receipts' `duplicates`)."""
+    if not text_sha256:
+        return []
+    return sorted({str(c["url"]) for c in side["captures"].values()
+                   if c.get("text_sha256") == text_sha256 and str(c["url"]) != url})
 
 
 def text_of(side: dict, url: str) -> Tuple[Optional[str], Optional[dict], str]:
@@ -235,6 +279,24 @@ def text_of(side: dict, url: str) -> Tuple[Optional[str], Optional[dict], str]:
 
 def _anchor(row: dict) -> str:
     return str(row.get("same_feature_as") or row["id"])
+
+
+def rows_on(subject: Path, side: dict, url: str) -> List[dict]:
+    """The rows that give the page its features on this side: its own staged
+    rows, else — unchanged since an earlier capture — the rows recorded there."""
+    cap = side["captures"].get(url)
+    if cap is None:
+        return []
+    served = str(cap["url"])
+    rows = side["rows"].get(served, []) + (side["rows"].get(url, []) if url != served else [])
+    if rows or not cap.get("unchanged_since"):
+        return rows
+    rec = stage.recorded(subject, served, str(cap["unchanged_since"]))
+    if not rec.get("rows_in"):
+        return []
+    ids = set(rec.get("ids") or [])
+    return [r.obj for r in parse_staging(subject / conventions().staging_for(str(rec["rows_in"]))).rows
+            if r.obj and str(r.obj.get("id")) in ids]
 
 
 def features_of(subject: Path, side: dict, url: str) -> Tuple[bool, Set[str], str]:
@@ -290,6 +352,7 @@ def compare_surface(subject: Path, surface: str, dens: Tuple[Path, Path],
 
     pages: List[dict] = []
     state_of: Dict[str, str] = {}
+    moves: Dict[str, List[str]] = {}
     for u in order:
         e: Dict[str, object] = {"url": u, "in_from_index": u in in_f, "in_to_index": u in in_t}
         hashes = {}
@@ -310,6 +373,13 @@ def compare_surface(subject: Path, surface: str, dens: Tuple[Path, Path],
         else:
             other = "from" if u in in_t else "to"
             ok, why = one_sided(other)
+            if ok and u in in_f:
+                # Removed only when the text is gone: the later side holding the
+                # same text under another URL is a move, not a removal.
+                moved = moved_to(t, u, hashes["from"])
+                if moved:
+                    ok, why = False, f"moved to {', '.join(moved)}"
+                    moves[u] = moved
             state = ("added" if u in in_t else "removed") if ok else "unknown"
             if not ok:
                 e["why"] = why
@@ -328,6 +398,29 @@ def compare_surface(subject: Path, surface: str, dens: Tuple[Path, Path],
             known[k][u] = (ok, why)
             for a in ids:
                 feats[k].setdefault(a, set()).add(u)
+    def still_there(a: str, from_pages: List[str]) -> List[str]:
+        """Why the feature `a` is not gone from the later collection: its page
+        moved, or an earlier row's quote is still on the page's later capture."""
+        out: List[str] = []
+        for u in from_pages:
+            if u in moves:
+                out.append(f"its page {u} moved to {', '.join(moves[u])}")
+                continue
+            if u not in t["items"]:
+                continue
+            quotes = [normalise_for_match(str(r.get("source_quote") or "")) for r in rows_on(subject, f, u)
+                      if _anchor(r) == a]
+            quotes = [q for q in quotes if q]
+            if not quotes:
+                continue
+            text = page_text(subject, t, u)
+            if text is None:
+                out.append(f"its page {u}: the later capture of the page cannot be read, so whether its quote "
+                           "is still there cannot be told")
+            elif any(q in normalise_for_match(text) for q in quotes):
+                out.append(f"its page {u}: quote still on the page; no row records it")
+        return out
+
     features: List[dict] = []
     for a in sorted(set(feats["from"]) | set(feats["to"])):
         fu, tu = sorted(feats["from"].get(a, ())), sorted(feats["to"].get(a, ()))
@@ -346,6 +439,10 @@ def compare_surface(subject: Path, surface: str, dens: Tuple[Path, Path],
                     ok = False
                     why = "; ".join(f"its page {u} is not accounted for in the {NAMES[other]} collection: {w}"
                                     for u, w in blind)
+                elif here == "from":
+                    still = still_there(a, fu)
+                    if still:
+                        ok, why = False, "; ".join(still)
             e["state"] = ("removed" if here == "from" else "added") if ok else "unknown"
             if not ok:
                 e["why"] = why

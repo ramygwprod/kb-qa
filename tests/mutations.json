@@ -1506,8 +1506,8 @@
   {
     "label": "collect-surface: unstaged windows of earlier runs are listed",
     "file": "src/kbqa/collect_surface.py",
-    "old": "    for w in capture._windows(subject, surface):\n",
-    "new": "    for w in capture._windows(subject, surface)[-1:]:\n",
+    "old": "    for w in capture._windows(subject, surface):\n        b = str(w.get(\"batch\"))\n        cap = subject / f\"_capture-{b}.raw.txt\"\n",
+    "new": "    for w in capture._windows(subject, surface)[-1:]:\n        b = str(w.get(\"batch\"))\n        cap = subject / f\"_capture-{b}.raw.txt\"\n",
     "tests": [
       "tests/test_collect_surface.py"
     ]
@@ -1515,8 +1515,8 @@
   {
     "label": "collect-surface: a window drafted no_row throughout is told apart",
     "file": "src/kbqa/collect_surface.py",
-    "old": "                 ALL_NO_ROW if _all_no_row(draft, receipt) else DRAFTED)\n",
-    "new": "                 DRAFTED)\n",
+    "old": "                 DRAFTED if not _all_no_row(draft, receipt) else\n",
+    "new": "                 DRAFTED if True else\n",
     "tests": [
       "tests/test_collect_surface.py"
     ]
@@ -1758,8 +1758,8 @@
   {
     "label": "status: open items are g4's count over the surface's batches",
     "file": "src/kbqa/ledger.py",
-    "old": "        rows_files = [str(subject / conv.staging_for(str(b[\"batch\"]))) for b in staged]\n",
-    "new": "        rows_files = []\n",
+    "old": "            rows_files = [str(subject / conv.staging_for(str(b[\"batch\"]))) for b in these]\n",
+    "new": "            rows_files = []\n",
     "tests": [
       "tests/test_ledger.py"
     ]
@@ -1794,8 +1794,8 @@
   {
     "label": "status: staged pages that cannot be told are unknown",
     "file": "src/kbqa/ledger.py",
-    "old": "    out[\"items_staged\"] = of_items(None if staged_unknown else staged_urls)\n",
-    "new": "    out[\"items_staged\"] = of_items(staged_urls)\n",
+    "old": "        res[\"items_staged\"] = of_items(None if staged_unknown else staged_urls)\n",
+    "new": "        res[\"items_staged\"] = of_items(staged_urls)\n",
     "tests": [
       "tests/test_ledger.py"
     ]
@@ -1992,8 +1992,8 @@
   {
     "label": "status: --pattern says when a pass cannot be reopened",
     "file": "src/kbqa/ledger.py",
-    "old": "                if why is not None:\n                    entry[\"reopen_refused\"] = why\n",
-    "new": "                if False:\n                    entry[\"reopen_refused\"] = why\n",
+    "old": "                if why is not None:\n                    entry[\"reopen_refused\"], entry[\"reopen_next_step\"] = why\n",
+    "new": "                if False:\n                    entry[\"reopen_refused\"], entry[\"reopen_next_step\"] = why\n",
     "tests": [
       "tests/test_ledger.py"
     ]
@@ -2424,8 +2424,8 @@
   {
     "label": "stage: an unchanged-since stop line never vouches for itself",
     "file": "src/kbqa/stage.py",
-    "old": "    reasons = [r for r in _stop_reasons(subject).get(url, []) if not r.startswith(UNCHANGED_REASON)]\n",
-    "new": "    reasons = list(_stop_reasons(subject).get(url, []))\n",
+    "old": "               if stops.scoped_to(r) is None and not r.startswith(OLD_UNCHANGED_REASON)]\n",
+    "new": "               ]\n",
     "tests": [
       "tests/test_recollection.py"
     ]
@@ -2451,7 +2451,7 @@
   {
     "label": "stage: an unchanged page gets its stop line",
     "file": "src/kbqa/stage.py",
-    "old": "        line, why = stops.try_line(url, UNCHANGED_REASON + since)\n",
+    "old": "        line, why = stops.try_line(url, stops.unchanged_reason(since, batch))\n",
     "new": "        line, why = None, \"not suggested\"\n",
     "tests": [
       "tests/test_recollection.py"
@@ -2554,6 +2554,215 @@
     "new": "        if False:\n            return True, set(), \"\"\n",
     "tests": [
       "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "g4: a scoped unchanged line counts only for its own window's staging file",
+    "file": "src/kbqa/gates/g4_completeness.py",
+    "old": "        here = stops | scoped.get(_batch_of_staging(p, fm) or \"\", set())\n",
+    "new": "        here = stops | set().union(*scoped.values())\n",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "g4: stopped_urls leaves scoped lines out",
+    "file": "src/kbqa/gates/g4_completeness.py",
+    "old": "    return {k for k, r, _ in entries if k.startswith((\"http://\", \"https://\")) and vocabulary.scoped_to(r) is None}\n",
+    "new": "    return {k for k, r, _ in entries if k.startswith((\"http://\", \"https://\"))}\n",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "g4: denominator mode counts a scoped line only in its window's collection",
+    "file": "src/kbqa/gates/g4_completeness.py",
+    "old": "                if vocabulary.counts_in(r, mine):\n",
+    "new": "                if True:\n",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "stops: a scoped reason names its window",
+    "file": "src/kbqa/stops.py",
+    "old": "    return m.group(\"batch\") if m else None\n",
+    "new": "    return None\n",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "headings: a scoped line explains the page in its own window only",
+    "file": "src/kbqa/headings.py",
+    "old": "            if m and counts_in(m.group(\"reason\"), {batch}):\n",
+    "new": "            if m:\n",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "compare: a scoped line counts only on its own side",
+    "file": "src/kbqa/compare.py",
+    "old": "            if stops.counts_in(r, side[\"batches\"]):\n                return r\n",
+    "new": "            return r\n",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "compare: a page whose text moved is never removed",
+    "file": "src/kbqa/compare.py",
+    "old": "                if moved:\n                    ok, why = False, f\"moved to {', '.join(moved)}\"\n",
+    "new": "                if False:\n                    ok, why = False, f\"moved to {', '.join(moved)}\"\n",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "compare: a feature whose page moved is never removed",
+    "file": "src/kbqa/compare.py",
+    "old": "            if u in moves:\n                out.append(f\"its page {u} moved to {', '.join(moves[u])}\")\n                continue\n",
+    "new": "            if False:\n                continue\n",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "compare: a feature whose quote is still on the page is never removed",
+    "file": "src/kbqa/compare.py",
+    "old": "            elif any(q in normalise_for_match(text) for q in quotes):\n",
+    "new": "            elif False:\n",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "status: captured, staged and open items over the current collection",
+    "file": "src/kbqa/ledger.py",
+    "old": "    here = counted(coll)\n",
+    "new": "    here = counted(None)\n",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "status: captures of other collections are not the current one's",
+    "file": "src/kbqa/ledger.py",
+    "old": "            if scope is None or str(w.get(\"batch\")) in scope:\n",
+    "new": "            if True:\n",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "mapstage: --reopen refuses a map made from other anchors",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if mapped is None or mapped != anchors_now:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "mapstage: --reopen names the no-rule way out",
+    "file": "src/kbqa/mapstage.py",
+    "old": "            if left_out:\n",
+    "new": "            if False:\n",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "status: --pattern gives the way out of a refused reopen",
+    "file": "src/kbqa/ledger.py",
+    "old": "        return str(exc), exc.next_step\n",
+    "new": "        return str(exc), \"operator\"\n",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "collect-surface: drafts with stop lines not yet added are not nothing-to-stage",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    return lines is not None and set(lines) <= _recorded_lines(subject)\n",
+    "new": "    return True\n",
+    "tests": [
+      "tests/test_review_v6_23_integration.py",
+      "tests/test_recollection.py",
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "stage: drafts all left out close the window on a record",
+    "file": "src/kbqa/stage.py",
+    "old": "        _write_new(closed, (json.dumps(record, ensure_ascii=False, indent=2) + \"\\n\").encode(\"utf-8\"))\n        result[\"closed\"] = str(closed)\n        result[\"next_step\"] = CLOSED_STEP\n        return 0, result\n",
+    "new": "        return 1, result\n",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "stage: a closed window is refused",
+    "file": "src/kbqa/stage.py",
+    "old": "    if closed.exists():\n        raise Refused(",
+    "new": "    if False:\n        raise Refused(",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "collect-surface: a closed window is never unstaged",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        if (subject / stage.closed_name(b)).is_file():\n            continue  # it ended: listed by `closed`\n",
+    "new": "",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "map: a row checked on other bytes or not at all is unchecked",
+    "file": "src/kbqa/product_map.py",
+    "old": "            state = UNCHECKED if check[\"status\"] in (ledger.NOT_CHECKED, ledger.STALE) else STAGED\n",
+    "new": "            state = STAGED\n",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "map: every row carries its access date",
+    "file": "src/kbqa/product_map.py",
+    "old": "                  \"depth_level\", \"source_url\", \"access_date\")\n",
+    "new": "                  \"depth_level\", \"source_url\")\n",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "fetcher: the scoped unchanged reason is in its table",
+    "file": "agents/kbqa-fetcher.md",
+    "old": "| `unchanged since <earlier batch>, in <this batch>` | only as `kbqa stage` prints it:",
+    "new": "| `unchanged since <batch>` | only as `kbqa stage` prints it:",
+    "tests": [
+      "tests/test_fallbacks_and_stops.py"
+    ]
+  },
+  {
+    "label": "docs: the manual names the scoped unchanged line",
+    "file": "docs/MANUAL.md",
+    "old": "adds no row and suggests a stop line `unchanged since <earlier batch>, in <this\nbatch>`",
+    "new": "adds no row and suggests a stop line `no feature: unchanged since <batch>`",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
+    ]
+  },
+  {
+    "label": "docs: the row-writer drafts every feature still on a changed page",
+    "file": "agents/kbqa-row-writer.md",
+    "old": "  has changed since its earlier capture: read it whole and draft every feature\n  still on it,",
+    "new": "  has changed since its earlier capture: read it whole and draft the new\n  features,",
+    "tests": [
+      "tests/test_review_v6_23_integration.py"
     ]
   }
 ]

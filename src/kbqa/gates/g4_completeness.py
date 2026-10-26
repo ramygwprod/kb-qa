@@ -203,15 +203,56 @@ def _int_or_none(v) -> Optional[int]:
 
 
 def stopped_urls(path: Optional[Path]) -> Set[str]:
-    """The URLs that key a stop-condition with a reason, from a stops file."""
+    """The URLs that key a stop-condition with a reason, from a stops file —
+    an unscoped one: a line scoped to one window (`unchanged since <batch>, in
+    <this batch>`) is counted only where `scoped_urls` places it."""
+    from .. import stops as vocabulary
     if path is None or not path.exists():
         return set()
-    stops, _ = parse_stops(path)
-    return {k for k in stops if k.startswith(("http://", "https://"))}
+    entries, _, _ = read_stop_entries(path)
+    return {k for k, r, _ in entries if k.startswith(("http://", "https://")) and vocabulary.scoped_to(r) is None}
+
+
+def scoped_urls(path: Optional[Path]) -> Dict[str, Set[str]]:
+    """{batch: the URLs a line scoped to that window accounts for}, from a stops file."""
+    from .. import stops as vocabulary
+    out: Dict[str, Set[str]] = {}
+    if path is None or not path.exists():
+        return out
+    entries, _, _ = read_stop_entries(path)
+    for k, r, _ in entries:
+        b = vocabulary.scoped_to(r)
+        if b is not None and k.startswith(("http://", "https://")):
+            out.setdefault(b, set()).add(k)
+    return out
+
+
+def _batch_of_staging(p: Path, fm: dict) -> Optional[str]:
+    """The window a staging file holds: its frontmatter's `batch`, which its
+    name must agree with (`_collect-<batch>-staging.md`); else None."""
+    b = fm.get("batch")
+    if not isinstance(b, str) or p.name != f"_collect-{b}-staging.md":
+        return None
+    return b
+
+
+def collection_batches(denom: Path) -> Set[str]:
+    """The windows of the collection a denominator measures (`compare.batches_of`):
+    those cut from it, and the retry runs that followed them. A denominator
+    outside a subject with window records has none."""
+    from ..compare import batches_of
+    m = re.match(r"^_denominator-(?P<surface>product|docs|help)-", denom.name)
+    if not m:
+        return set()
+    try:
+        return set(batches_of(denom.parent, m.group("surface"), denom))
+    except (OSError, ValueError):
+        return set()
 
 
 def read_windows(
-    rows_files: List[str], findings: List[Finding], stops: Optional[Set[str]] = None
+    rows_files: List[str], findings: List[Finding], stops: Optional[Set[str]] = None,
+    scoped: Optional[Dict[str, Set[str]]] = None,
 ) -> List[Dict[str, object]]:
     """Per-batch window declarations, for surfaces with no published index.
 
@@ -236,8 +277,14 @@ def read_windows(
     counted beside the rows: a page the staging file lists in `pages:`, that no
     row cites, and that a stop-condition names. Counting rows alone reported
     those windows as underwritten, which was untrue of them.
+
+    A line scoped to one window — `unchanged since <earlier batch>, in <this
+    batch>` (`scoped`, by batch) — counts only for the staging file of that
+    batch: the page is accounted for in the window that found it unchanged,
+    never in a later window where it changed.
     """
     stops = stops or set()
+    scoped = scoped or {}
     WINDOW_ENDS = ("exhausted", "budget", "error")
     windows: List[Dict[str, object]] = []
     for r in rows_files:
@@ -269,7 +316,8 @@ def read_windows(
         # the checker counts rows independently. Neither side computes both.
         pages = fm.get("pages") if isinstance(fm.get("pages"), list) else []
         cited = {str(x.obj.get("source_url")) for x in parsed.rows if x.obj is not None}
-        stopped_here = sorted({str(u) for u in pages} & stops - cited)
+        here = stops | scoped.get(_batch_of_staging(p, fm) or "", set())
+        stopped_here = sorted({str(u) for u in pages} & here - cited)
         if rows_here + len(stopped_here) < ret:
             findings.append(
                 Finding(
@@ -335,7 +383,8 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
     if args.stops:
         inputs["stops"] = input_ref(Path(args.stops))
 
-    windows = read_windows(args.rows, findings, stopped_urls(Path(args.stops) if args.stops else None))
+    stops_path = Path(args.stops) if args.stops else None
+    windows = read_windows(args.rows, findings, stopped_urls(stops_path), scoped_urls(stops_path))
 
     if args.denominator is None:
         return _window_mode(windows, inputs, findings)
@@ -392,10 +441,21 @@ def coverage(
                 parent_paths.add(_label_key(rp.obj["parent_path"]))
 
     stops: Dict[str, str] = {}
+    scoped_out = 0
     if stops_path is not None:
         sp = stops_path
         if sp.exists():
-            stops, stop_errors = parse_stops(sp)
+            from .. import stops as vocabulary
+            entries, stop_errors, _ = read_stop_entries(sp)
+            # A line scoped to one window counts only when that window is one of
+            # this denominator's collection: an earlier collection's unchanged
+            # line never accounts for a page in a later one.
+            mine = collection_batches(denom)
+            for k, r, _ in entries:
+                if vocabulary.counts_in(r, mine):
+                    stops[k] = r
+                else:
+                    scoped_out += 1
             for err in stop_errors:
                 findings.append(Finding("stop_condition_without_reason", err))
         else:
@@ -440,6 +500,8 @@ def coverage(
         # as evidence.
         "existence_closed_by_surface_line": len(closed),
         "closing_lines": {h: k for h, k in sorted(closing.items())},
+        # Lines scoped to a window of another collection: read, never counted here.
+        "stop_lines_of_other_collections": scoped_out,
         # EVIDENCE — what we have actually sourced. Never blended with the above.
         "evidence_covered_by_url": len(by_url),
         "evidence_covered_by_name": len(by_name),

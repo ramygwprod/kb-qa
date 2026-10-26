@@ -27,6 +27,10 @@ What the capture holds (since kbqa 6.21.0):
   `unchanged_since: <batch>` in the receipt and is listed in
   `_raw/<batch>/UNCHANGED.md` with the rows already recorded for it. Do not
   read it or draft it again (§1).
+- **Changed pages.** A page collected again that is **not** marked unchanged
+  has changed since its earlier capture: read it whole and draft every feature
+  still on it, not only the new ones — a feature you leave undrafted has no row
+  in this collection, and nothing else records it.
 
 **You judge; code copies** (since kbqa 6.22.0). You write **drafts**: for each
 row, where its words are and what you make of them. `kbqa stage`, run by the
@@ -88,6 +92,7 @@ no heading. Three kinds of line:
   so you neither read nor draft it. Code checks it by text hash and rejects it
   if the page is not unchanged; never write it for a page the list does not
   name. A page the list marks **nothing recorded** is drafted like any other.
+  A page not on the list changed: draft every feature still on it.
 - **Every page of the receipt gets one of these.** A page no line names — no
   row, no `no_row`, no `unchanged` — is rejected by `kbqa stage` as "no row and
   no reason", and blocks the staging file like any reject.

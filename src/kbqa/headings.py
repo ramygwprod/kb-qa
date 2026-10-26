@@ -25,18 +25,19 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .parsing import normalise_for_match, parse_staging
-from .stops import LINE_RE, STOPS_NAME
+from .stops import LINE_RE, STOPS_NAME, counts_in
 
 
-def _no_feature_pages(subject: Path) -> Dict[str, str]:
+def _no_feature_pages(subject: Path, batch: str) -> Dict[str, str]:
     """{url: reason} for each stop line keyed by a page — a page stopped for
-    any reason is explained as a whole."""
+    any reason is explained as a whole. A line scoped to one window (`unchanged
+    since <batch>, in <this batch>`) explains the page in that window only."""
     f = subject / STOPS_NAME
     out: Dict[str, str] = {}
     if f.exists():
         for ln in f.read_text(encoding="utf-8").splitlines():
             m = LINE_RE.match(ln.strip())
-            if m:
+            if m and counts_in(m.group("reason"), {batch}):
                 out.setdefault(m.group("url"), m.group("reason"))
     return out
 
@@ -62,7 +63,7 @@ def coverage(subject: Path, batch: str) -> dict:
             o = rp.obj or {}
             if o.get("source_url") and o.get("source_quote"):
                 quotes.setdefault(str(o["source_url"]), []).append(normalise_for_match(str(o["source_quote"])))
-    stopped = _no_feature_pages(subject)
+    stopped = _no_feature_pages(subject, batch)
 
     counted = with_row = page_stopped = no_text = 0
     without: List[Dict[str, object]] = []
