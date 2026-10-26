@@ -860,6 +860,33 @@ ruling now in the logic sheet; `mapstage` writes the map file once none is
 left (the usual rounds). The ledger says when a pass cannot be reopened — a
 map file with no sidecar.
 
+### 5.13 · Operator — the product map: the vendor's architecture
+
+To see the vendor's product as the rows show it — which modules, which
+features in each, and how each feature is reached — ask code, never a hand-made
+outline:
+
+```bash
+python3 -m kbqa map <subject folder>                    # a nested markdown list
+python3 -m kbqa map <subject folder> --json             # the whole structure
+python3 -m kbqa map <subject folder> --merged-only      # the feature tree alone
+```
+
+It writes nothing, and the map is never merged into the tree. Modules are the
+rows' `parent_path` exactly as printed, split on ` > `: the vendor's words,
+never renamed or merged — `Billing` and `billing` are two modules. Under each
+module, its features (anchors); under each feature, its other sources (rows
+whose `same_feature_as` names it, each with its own `parent_path`) and its ways
+in — `interface_type`, then `operation`, then the parameters, each with the row
+ids that document it. Counts per module (its own and with its sub-modules) and
+totals; rows = features + other sources + links to no anchor. Nothing is
+dropped: rows whose `parent_path` is `unknown` are under **Position unknown**,
+a depth that is `unknown` beside a breadcrumb is named, a row whose
+`same_feature_as` names no anchor of the subject is under **Links to no
+anchor** with the id it names and why, and a row or file that cannot be read
+marks the map **incomplete** and is listed by file and line, as is an id read
+in more than one file (beyond a merged row's staged copy).
+
 ## 6 · All available actions
 
 Thirteen checking actions. **Ten are read-only by default; three write, and
@@ -1009,6 +1036,12 @@ give what it leaves to the row-writer, then check again (§5.1).
 
 What the files cannot tell — a subject left by kbqa 6.21: a staging file written
 by an agent, no window records, no drafts, no sidecars — is `unknown`, never 0.
+
+### Product map — the vendor's architecture, derived; writes nothing
+
+| action | reads | prints | exit |
+|---|---|---|---|
+| `map <subject dir> [--merged-only] [--json]` | `feature-tree.md` and every staging file (the tree first: a row merged and still staged is read as merged); with `--merged-only`, `feature-tree.md` alone | `modules`: the rows' `parent_path` exactly as printed, split on ` > `, as a tree — each with `counts` and `with_sub_modules` (`features`, `other_sources`, `interfaces` — ways in, one per `interface_type` and `operation` — and `interface_rows`); under each module its `features` (anchors: `id`, `vendor_term`, `what_it_does`, `mechanism`, `outcome`, `evidence_grade`, `depth_level`, `source_url`, the file read from), under each its `other_sources` (each with its own `parent_path` and interface fields) and `ways_in` (`interface_type`, `operation`, the row `ids`, `parameters` each with its row ids). `position_unknown`: the features whose `parent_path` is `unknown`, missing or empty, and the other sources there by id beside the feature they are listed under; `depth_unknown`: rows with a breadcrumb whose `depth_level` is `unknown`; `links_to_no_anchor`: each row whose `same_feature_as` names no row of the subject, a row that is itself another source, or no id at all, with the id named and why; `unreadable_files`, `unreadable_rows`, `rows_without_id`, `ids_read_again` (an id read in a further file, other than a merged row still staged — the copy mapped and the copies not mapped named), and `complete` false when any is not empty; `totals`. A nested markdown list by default | 0 · 1 only when refused: no subject folder |
 
 ### Diagnostics, interpretation guards and metadata — never write rows
 

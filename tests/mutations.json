@@ -2150,5 +2150,221 @@
     "tests": [
       "tests/test_merge_all_clear.py"
     ]
+  },
+  {
+    "label": "map: the tree is read first, a merged and still staged row read as merged",
+    "file": "src/kbqa/product_map.py",
+    "old": "            rows.setdefault(str(rid), {\"row\": rp.obj, \"file\": p.name})\n",
+    "new": "            rows[str(rid)] = {\"row\": rp.obj, \"file\": p.name}\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: --merged-only reads the tree alone",
+    "file": "src/kbqa/product_map.py",
+    "old": "    if not merged_only:\n        paths += sorted(",
+    "new": "    if True:\n        paths += sorted(",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: modules are the breadcrumb's items exactly as printed, never normalised",
+    "file": "src/kbqa/product_map.py",
+    "old": "    return parent_path.split(SEP)\n",
+    "new": "    return [s.strip().casefold() for s in parent_path.split(SEP)]\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: a parent_path of unknown is a position unknown, never a module",
+    "file": "src/kbqa/product_map.py",
+    "old": "    if not isinstance(parent_path, str) or not parent_path.strip() or parent_path.strip() == UNKNOWN:\n",
+    "new": "    if not isinstance(parent_path, str) or not parent_path.strip():\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: other sources listed under their anchor",
+    "file": "src/kbqa/product_map.py",
+    "old": "            linked.setdefault(sfa, []).append((rid, e))\n            continue\n",
+    "new": "            continue\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: a link to a row that is not an anchor links to no anchor",
+    "file": "src/kbqa/product_map.py",
+    "old": "        if isinstance(sfa, str) and sfa in anchors:\n",
+    "new": "        if isinstance(sfa, str) and sfa in rows:\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: links to no anchor say why",
+    "file": "src/kbqa/product_map.py",
+    "old": "        elif sfa not in rows:\n",
+    "new": "        elif sfa in rows:\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: ways in grouped by interface_type and operation",
+    "file": "src/kbqa/product_map.py",
+    "old": "        k = (_key(row.get(\"interface_type\")), _key(row.get(\"operation\")))\n",
+    "new": "        k = (_key(row.get(\"interface_type\")), None)\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: the anchor's own interface is one of its ways in",
+    "file": "src/kbqa/product_map.py",
+    "old": "    out[\"ways_in\"] = ways_in([(rid, row)] + [(oid, o[\"row\"]) for oid, o in others])\n",
+    "new": "    out[\"ways_in\"] = ways_in([(oid, o[\"row\"]) for oid, o in others])\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: each way in lists its parameters with their rows",
+    "file": "src/kbqa/product_map.py",
+    "old": "        if param not in (None, \"\"):\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: an operation or parameter with no interface_type is still a way in",
+    "file": "src/kbqa/product_map.py",
+    "old": "    return any(row.get(k) not in (None, \"\") for k in INTERFACE_FIELDS)\n",
+    "new": "    return row.get(\"interface_type\") is not None\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: counts with sub-modules add the sub-modules",
+    "file": "src/kbqa/product_map.py",
+    "old": "                sub[k] += child[\"with_sub_modules\"][k]\n",
+    "new": "                sub[k] += 0\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: totals count the features at an unknown position",
+    "file": "src/kbqa/product_map.py",
+    "old": "        totals[k] += unknown_counts[k]\n",
+    "new": "        pass\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: other sources at an unknown position are named",
+    "file": "src/kbqa/product_map.py",
+    "old": "                 if position(o[\"row\"].get(\"parent_path\")) is None]\n",
+    "new": "                 if False]\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: depth unknown is named only beside a breadcrumb",
+    "file": "src/kbqa/product_map.py",
+    "old": "        if position(e[\"row\"].get(\"parent_path\")) is not None and str(e[\"row\"].get(\"depth_level\")).strip() == UNKNOWN:\n",
+    "new": "        if str(e[\"row\"].get(\"depth_level\")).strip() == UNKNOWN:\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: a row that cannot be parsed is listed, never dropped",
+    "file": "src/kbqa/product_map.py",
+    "old": "                unreadable_rows.append({\"file\": p.name, \"line\": rp.line_no, \"error\": rp.error})\n",
+    "new": "                pass\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: a row with no id is listed, never dropped",
+    "file": "src/kbqa/product_map.py",
+    "old": "                without_id.append({\"file\": p.name, \"line\": rp.line_no})\n",
+    "new": "                pass\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: a file that cannot be read is listed",
+    "file": "src/kbqa/product_map.py",
+    "old": "            unreadable_files.append({\"file\": p.name, \"why\": f\"cannot be read: {exc}\"})\n",
+    "new": "            pass\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: incomplete when anything was not read",
+    "file": "src/kbqa/product_map.py",
+    "old": "    complete = not (read[\"unreadable_files\"] or read[\"unreadable_rows\"] or read[\"rows_without_id\"]\n                    or read[\"ids_read_again\"])\n",
+    "new": "    complete = True\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: refuses a folder that is not there",
+    "file": "src/kbqa/product_map.py",
+    "old": "        if not Path(args.subject).is_dir():\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: merged-only with no tree says nothing is merged",
+    "file": "src/kbqa/product_map.py",
+    "old": "    if out[\"merged_only\"] and not out[\"tree\"]:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "cli: map is dispatched",
+    "file": "src/kbqa/cli.py",
+    "old": "    if argv[0] == \"map\":\n",
+    "new": "    if argv[0] == \"map-off\":\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: an id read again is listed, never dropped unseen",
+    "file": "src/kbqa/product_map.py",
+    "old": "            again.append({\"id\": rid, \"mapped_from\": names[0], \"not_mapped_from\": rest})\n",
+    "new": "            pass\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
+  },
+  {
+    "label": "map: a merged row still staged is not an id read again",
+    "file": "src/kbqa/product_map.py",
+    "old": "        if names[0] == features.TREE and rest and rest[0] != features.TREE:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_product_map.py"
+    ]
   }
 ]

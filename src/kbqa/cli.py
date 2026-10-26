@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from . import __version__, autofix, capture, collect_surface, elements, freeze, index, ledger, mappings, mapstage, probe, profile, report, stage, stops, sweep
+from . import __version__, autofix, capture, collect_surface, elements, freeze, index, ledger, mappings, mapstage, probe, product_map, profile, report, stage, stops, sweep
 from .gates import g0_permission, g1_capture, g2_conformance
 from .gates import g3_grounding, g4_completeness, g5_bundles, g6_integrity
 from .gates import mapcheck, surfaces
@@ -72,7 +72,7 @@ cycle:
                                                run again on the bytes it wrote: "already
                                                applied", with what it left
 
-ledger (read-only: writes nothing):
+ledger and product map (read-only: write nothing):
   status <subject dir> [--json]                what is left and what is done, by code: per
                                                surface items, captured, staged, rows (features /
                                                other sources), stop lines, open items (g4's own
@@ -89,6 +89,14 @@ ledger (read-only: writes nothing):
                                                pass) whose needs-human note names the pattern,
                                                with the mapstage --reopen command per pass
                                                ("unknown" where the files cannot tell, never 0)
+  map <subject dir> [--merged-only] [--json]   the product map, by code: modules (the rows'
+                                               parent_path as printed, split on " > ") >
+                                               features (anchors) > their other sources and
+                                               ways in (interface_type > operation >
+                                               parameters, with the row ids); counts per
+                                               module and totals; rows at an unknown position
+                                               and links to no anchor listed, never dropped;
+                                               --merged-only: the feature tree alone
 
 collection (the fetcher runs these; permission from today's g0 record, g0 run first when missing):
   index --out <d> --surface <s> --rung <n> --url <u> [--html] [--path-prefix <p>] [--supersede]
@@ -270,6 +278,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     # files. Read-only; never a verdict.
     if argv[0] == "status":
         return ledger.run(argv[1:])
+    # The product map: the vendor's architecture as the rows show it, derived
+    # by code. Read-only; never a verdict, never merged into the tree.
+    if argv[0] == "map":
+        return product_map.run(argv[1:])
 
     # Estate-wide audit. Records what can be checked; does not gate.
     if argv[0] == "sweep":

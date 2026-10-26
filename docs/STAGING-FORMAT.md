@@ -212,7 +212,10 @@ so a source found later is a new row pointing at the anchor, and
 feature apart from its naming questions. `kbqa stage --lists` writes the
 subject's anchors to `_raw/<batch>/FEATURES.md` for the row-writer (`kbqa
 capture` did, before v6.22.0), and, since v6.22.0, the same-feature shortlist
-`_raw/<batch>/SAME-FEATURE.md` (below).
+`_raw/<batch>/SAME-FEATURE.md` (below). `kbqa map <subject>` (since v6.23.0)
+shows the result read-only: modules from `parent_path` as printed, each
+module's anchors, and under each anchor its other sources and its ways in by
+`interface_type`, `operation` and `parameter` (MANUAL §5.13).
 
 ### Beside each receipt (since v6.20.0)
 
