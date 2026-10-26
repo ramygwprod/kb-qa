@@ -16,6 +16,63 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.22.0] — 2026-10-24
+
+Code does what code can. The agents kept retyping what code already knew —
+receipt fields, URLs, breadcrumbs, quotes, element names, story openings — and
+ran a loop of commands by hand; every retyped value was a chance to drift, and
+the check found the drift only after the fact, at the cost of the one fix
+round. Built as seven packages by separate agents against one written plan,
+each reviewed, tested and mutation-checked before the next, then reviewed
+together.
+
+### Added
+
+- **The row-writer drafts; `kbqa stage` writes the staging file.** Drafts
+  (`_draft-<batch>.jsonl`) carry the page, the part, the quote and the
+  judgement fields. Stage writes the frontmatter from the receipt, finds each
+  quote in its part and copies the capture's exact text (absent, or found
+  twice: rejected), fills URL, breadcrumb, depth, `canonical` and a unique id,
+  resolves same-batch links (`draft:<line>`), writes schema spellings, and
+  rejects unknown anchors, out-of-list values and pages with neither a row nor
+  a reason — all before the check. Rejects block staging: one correction
+  round, then `--leave-out-rejects` lists every left-out draft for the
+  operator. `kbqa stage --lists` builds FEATURES.md, ROLE-ROWS.md and a scored
+  same-feature shortlist (SAME-FEATURE.md) just before the row-writer, so they
+  include every earlier window; ROLE-ROWS.md is refreshed after staging.
+- **Exact repeats linked by code**: the same name and the same quote text on
+  the same host, with exactly one anchor, get `same_feature_as`; anything else
+  is a `link_conflict`, never a guess.
+- **`kbqa autofix`**: in round 1 only, on the report's own bytes, fixes what
+  code can derive exactly (grade respellings, a breadcrumb or depth from the
+  receipt, `id` first), records every change and keeps the old staging; the
+  rest goes to the row-writer word for word. Part of the one fix round, never
+  a round of its own.
+- **The mapper drafts; `kbqa mapstage` writes the map file**: it builds
+  `user_story` from role, article, role source, want and so-that, and fills
+  each element's hierarchy id and name from the list by id. Rejects: one
+  correction round, then left-out anchors become needs-human lines — every
+  anchor keeps exactly one line, and no reading is invented. `--retire` moves a
+  pass's files to `_qa/retired-…/` when the anchor set changed in the fix
+  round; `--no-record` for map files made before this release, on the
+  operator's word.
+- **`kbqa collect-surface`**: a surface's windows run to their end state
+  (exhausted, throttled, refused, robots unreachable, a window that captured
+  nothing, or the window limit), then one bounded retry; one JSON with every
+  window, the end state and its next step, one merged needs-operator and
+  stop-line list, and every window captured but not yet staged.
+- **Release tooling**: `scripts/release.py` (current-version lines only, the
+  manifest re-pinned, suite and mutation registry run, the brand scan and push
+  printed), `scripts/mutate.py` with `tests/mutations.json` (every guard's
+  mutation, baseline first, restored by sha256), `scripts/audit.sh`.
+- **A chain test** from capture to merge and the estate integrity check.
+
+### Changed
+
+- `element_dominates` needs the element on at least two rows: on a batch of
+  three anchors one element is 33 % by arithmetic, which measured nothing.
+- A capture test no longer depends on a real network lookup failing.
+
 ## [6.21.0] — 2026-10-22
 
 The capture keeps the evidence complete and reads nothing twice — the

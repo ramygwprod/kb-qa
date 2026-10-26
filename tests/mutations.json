@@ -1,0 +1,1704 @@
+[
+  {
+    "label": "chrome: never past the breadcrumb",
+    "file": "src/kbqa/chrome.py",
+    "old": "    return len(page[\"_lines\"]) if crumb is None else crumb\n",
+    "new": "    return len(page[\"_lines\"])\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "chrome: never the whole page",
+    "file": "src/kbqa/chrome.py",
+    "old": "                    if fits and len(lines) - take[\"header\"] - k > 0:\n",
+    "new": "                    if fits:\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "chrome: too few pages leave the text whole",
+    "file": "src/kbqa/chrome.py",
+    "old": "CHROME_MIN_PAGES = 3\n",
+    "new": "CHROME_MIN_PAGES = 2\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "chrome: a later window uses the chrome already kept",
+    "file": "src/kbqa/chrome.py",
+    "old": "\"header\": [c for c in [_detect(heads, False)] if c] + _known(subject, host, \"header\"),",
+    "new": "\"header\": [c for c in [_detect(heads, False)] if c],",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "chrome: header + block + footer is the full rendering",
+    "file": "src/kbqa/chrome.py",
+    "old": "                p[\"_lines\"] = lines[h:len(lines) - f]\n",
+    "new": "                p[\"_lines\"] = lines[h + 1:len(lines) - f]\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "language: a lone language-like path is kept (three pairs needed)",
+    "file": "src/kbqa/language.py",
+    "old": "LANGUAGE_MIN = 3\n",
+    "new": "LANGUAGE_MIN = 1\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "language: an English page is never a copy",
+    "file": "src/kbqa/language.py",
+    "old": "        if lang is None or lang == \"en\":\n            continue\n",
+    "new": "        if lang is None:\n            continue\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "language: a page with no English version stays in",
+    "file": "src/kbqa/language.py",
+    "old": "        if english and english != u:\n",
+    "new": "        if english != u:\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "language: the sitemap's own hreflang names the English page",
+    "file": "src/kbqa/index.py",
+    "old": "    return tag, locs, language.english_alternates(urls)\n",
+    "new": "    return tag, locs, {}\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "language: --all-languages keeps every copy",
+    "file": "src/kbqa/index.py",
+    "old": "    if not args.all_languages:\n",
+    "new": "    if True:\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "language: each copy left out is listed with its English page",
+    "file": "src/kbqa/index.py",
+    "old": "        _write_atomic(raw_dir / LANGUAGE_COPIES, (\"\\n\".join(tsv) + \"\\n\").encode(\"utf-8\"))\n",
+    "new": "        pass\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "duplicates: the same text under a second URL is a copy",
+    "file": "src/kbqa/capture.py",
+    "old": "        if first is not None and first != key:\n",
+    "new": "        if first is not None and first == key:\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "duplicates: a copy of a page from an earlier window is found",
+    "file": "src/kbqa/capture.py",
+    "old": "    seen_text: Dict[str, str] = _captured_texts(subject)",
+    "new": "    seen_text: Dict[str, str] = {}",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "duplicates: a copy gets its stop line to approve",
+    "file": "src/kbqa/capture.py",
+    "old": "                stop_lines.append(line)\n            return True\n",
+    "new": "                pass\n            return True\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "image: an image's alt text is kept in place",
+    "file": "src/kbqa/htmltext.py",
+    "old": "        if tag == \"img\":\n            self._image(dict(attrs))\n            return\n",
+    "new": "        if tag == \"img\":\n            return\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "image: a decorative image is not rendered",
+    "file": "src/kbqa/htmltext.py",
+    "old": "        if not alt or attrs.get(\"aria-hidden\") == \"true\" or attrs.get(\"role\") in (\"presentation\", \"none\"):\n",
+    "new": "        if not alt:\n",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "mutate: a test run that cannot run is never counted as caught",
+    "file": "scripts/mutate.py",
+    "old": "    if code == 1:\n        return \"CAUGHT\", tail\n",
+    "new": "    if code != 0:\n        return \"CAUGHT\", tail\n",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "mutate: old text must occur exactly once",
+    "file": "scripts/mutate.py",
+    "old": "    if n != 1:\n",
+    "new": "    if n == 0:\n",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "mutate: the original bytes are put back",
+    "file": "scripts/mutate.py",
+    "old": "        path.write_bytes(original)\n        os.utime(",
+    "new": "        os.utime(",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "mutate: a failing baseline applies no mutation",
+    "file": "scripts/mutate.py",
+    "old": "    if broken:\n        print(\"No mutation was applied",
+    "new": "    if False:\n        print(\"No mutation was applied",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "release: refuses uncommitted changes outside its files",
+    "file": "scripts/release.py",
+    "old": "    if dirty:\n        refusals.append(",
+    "new": "    if False:\n        refusals.append(",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "release: --check writes nothing",
+    "file": "scripts/release.py",
+    "old": "    if args.check:\n        print(\"--check: nothing was changed.\")\n        return 0\n",
+    "new": "    if args.check:\n        print(\"--check: nothing was changed.\")\n",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "release: refuses a version not above the current one",
+    "file": "scripts/release.py",
+    "old": "        if new_t <= parse_version(current):\n",
+    "new": "        if new_t < parse_version(current):\n",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "release: a history note is never a version line",
+    "file": "scripts/release.py",
+    "old": "    (\"docs/MANUAL.md\", rf\"kbqa --version +# must print {V}$\"),\n",
+    "new": "    (\"docs/MANUAL.md\", rf\"{V}\"),\n",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "release: a registered line holding another version is refused",
+    "file": "scripts/release.py",
+    "old": "            if not token.search(line):\n",
+    "new": "            if False:\n",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "release: the manifest pin is replaced as a whole token",
+    "file": "scripts/release.py",
+    "old": ":-)([0-9a-f]+)(\\}\")$",
+    "new": ":-)([0-9a-f]{64})(\\}\")$",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "audit: a ref that is not a tag is refused",
+    "file": "scripts/audit.sh",
+    "old": "git ls-remote --exit-code --tags \"${REPO}\" \"refs/tags/${TAG}\" >/dev/null 2>&1 \\\n",
+    "new": "true \\\n",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "audit: an installed skill that differs is a DIFF",
+    "file": "scripts/audit.sh",
+    "old": "    if [ \"${want}\" = \"${have}\" ]; then\n",
+    "new": "    if true; then\n",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "audit: the tag's pin must be the tag's code",
+    "file": "scripts/audit.sh",
+    "old": "[ \"${PIN}\" = \"${TAG_MANIFEST}\" ]",
+    "new": "true",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  },
+  {
+    "label": "capture: a window of copies is not an error",
+    "file": "src/kbqa/capture.py",
+    "old": "window_end = (\"error\" if not blocks and not duplicates else",
+    "new": "window_end = (\"error\" if not blocks else",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "capture: a window of copies exits 0 with its stop lines",
+    "file": "src/kbqa/capture.py",
+    "old": "if not blocks and duplicates and not failures:",
+    "new": "if False:",
+    "tests": [
+      "tests/test_chrome_language_duplicates.py"
+    ]
+  },
+  {
+    "label": "stage: a quote is looked for in its part's own lines only",
+    "file": "src/kbqa/stage.py",
+    "old": "        hits = find_quote(own, quote)\n",
+    "new": "        hits = find_quote(blocks[url], quote)\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a quote found more than once in the part is rejected",
+    "file": "src/kbqa/stage.py",
+    "old": "        if len(hits) > 1:\n",
+    "new": "        if len(hits) > 2:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: source_quote is the capture's exact text, never the draft's",
+    "file": "src/kbqa/stage.py",
+    "old": "\"source_quote\": c[\"exact\"],",
+    "new": "\"source_quote\": obj[\"quote\"],",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: an id the subject already has is never reused",
+    "file": "src/kbqa/stage.py",
+    "old": "    taken = set(existing)\n",
+    "new": "    taken = set()\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: ids are unique within the batch",
+    "file": "src/kbqa/stage.py",
+    "old": "        taken.add(rid)\n",
+    "new": "        pass\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a staging file is never overwritten",
+    "file": "src/kbqa/stage.py",
+    "old": "    if staging.exists():\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a capture that no longer hashes to its receipt is refused",
+    "file": "src/kbqa/stage.py",
+    "old": "    if hashlib.sha256(data).hexdigest() != receipt.get(\"sha256\"):\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: the frontmatter declares every page of the receipt",
+    "file": "src/kbqa/stage.py",
+    "old": "    out += [f\"  - {p['url']}\" for p in receipt[\"pages\"]]\n",
+    "new": "    out += [f\"  - {p['url']}\" for p in receipt[\"pages\"][:-1]]\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: the frontmatter carries the receipt's window fields",
+    "file": "src/kbqa/stage.py",
+    "old": "WINDOW_FIELDS = (\"window_offset\", \"window_requested\", \"window_returned\", \"window_end\")\n",
+    "new": "WINDOW_FIELDS = (\"window_offset\", \"window_end\")\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a field no row carries is rejected",
+    "file": "src/kbqa/stage.py",
+    "old": "        if unknown:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a missing judgement field is rejected",
+    "file": "src/kbqa/stage.py",
+    "old": "        if missing:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: the depth is the breadcrumb's levels counted",
+    "file": "src/kbqa/stage.py",
+    "old": "    return (str(crumb), str(len(levels))) if levels else (UNKNOWN, UNKNOWN)\n",
+    "new": "    return (str(crumb), UNKNOWN) if levels else (UNKNOWN, UNKNOWN)\n",
+    "tests": [
+      "tests/test_stage.py",
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "stage: a page drafted no_row becomes its stop line",
+    "file": "src/kbqa/stage.py",
+    "old": "            stop_lines.append(line)\n",
+    "new": "            pass\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage --lists: the features list is the subject's",
+    "file": "src/kbqa/stage.py",
+    "old": "    _write_atomic(raw / FEATURES, features.features_list(subject).encode(\"utf-8\"))\n",
+    "new": "    _write_atomic(raw / FEATURES, b\"\")\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage --lists: role rows are written when the estate names patterns",
+    "file": "src/kbqa/stage.py",
+    "old": "    if listed is not None:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a rejected draft blocks the staging file",
+    "file": "src/kbqa/stage.py",
+    "old": "    if listed and not leave_out:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: there is one correction round, then the flag",
+    "file": "src/kbqa/stage.py",
+    "old": "    if len(earlier) >= CORRECTION_ROUNDS + 1 and not leave_out:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: --leave-out-rejects only after the correction round",
+    "file": "src/kbqa/stage.py",
+    "old": "    if leave_out and len(earlier) < CORRECTION_ROUNDS + 1:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: every left-out draft is listed under needs_operator",
+    "file": "src/kbqa/stage.py",
+    "old": "        result[\"needs_operator\"] = [",
+    "new": "        result[\"left_out\"] = [",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: each round's rejects file is kept, never overwritten",
+    "file": "src/kbqa/stage.py",
+    "old": "    round_no = max([int(p.name.rsplit(\"-\", 1)[1].split(\".\")[0]) for p in earlier] or [0]) + 1\n",
+    "new": "    round_no = 1\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: draft:<line> resolves to the id given that draft",
+    "file": "src/kbqa/stage.py",
+    "old": "            row[\"same_feature_as\"] = ids[t]\n",
+    "new": "            pass\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a draft link to a rejected draft is rejected with its reason",
+    "file": "src/kbqa/stage.py",
+    "old": "        elif t in rejects:\n",
+    "new": "        elif False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a draft link to another source is rejected",
+    "file": "src/kbqa/stage.py",
+    "old": "        elif \"same_feature_as\" in candidates[t][\"obj\"]:\n",
+    "new": "        elif False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a draft link to itself is rejected",
+    "file": "src/kbqa/stage.py",
+    "old": "        elif t == n:\n",
+    "new": "        elif False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a draft link to a no_row line is rejected",
+    "file": "src/kbqa/stage.py",
+    "old": "        elif t in no_row_at:\n",
+    "new": "        elif False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: an exact repeat is on the same host",
+    "file": "src/kbqa/stage.py",
+    "old": "    return host, value, nq\n",
+    "new": "    return \"\", value, nq\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: an exact repeat has the same quote",
+    "file": "src/kbqa/stage.py",
+    "old": "    return host, value, nq\n",
+    "new": "    return host, value, \"\"\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: the parameter is compared when the draft has one",
+    "file": "src/kbqa/stage.py",
+    "old": "    return \"parameter\" if isinstance(param, str) and param.strip() else \"vendor_term\"\n",
+    "new": "    return \"vendor_term\"\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: code never links to a subject row that carries same_feature_as",
+    "file": "src/kbqa/stage.py",
+    "old": "        if k is not None and features.is_anchor(row):\n",
+    "new": "        if k is not None:\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: an exact repeat of an anchor gets same_feature_as by code",
+    "file": "src/kbqa/stage.py",
+    "old": "        c[\"obj\"] = {**obj, \"same_feature_as\": target}\n",
+    "new": "        pass\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: every link made by code is listed under linked_by_code",
+    "file": "src/kbqa/stage.py",
+    "old": "        linked.append(entry)\n",
+    "new": "        pass\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: a draft that names another anchor is never changed",
+    "file": "src/kbqa/stage.py",
+    "old": "        if has:\n            conflicts.append({**entry,",
+    "new": "        if False:\n            conflicts.append({**entry,",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: a draft that names the same anchor is left as it is",
+    "file": "src/kbqa/stage.py",
+    "old": "        if has == target:\n            continue\n",
+    "new": "",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: a draft that is another source is never the anchor of a repeat",
+    "file": "src/kbqa/stage.py",
+    "old": "            if not has:\n                batch_anchors[k] = n\n",
+    "new": "            batch_anchors[k] = n\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: an exact repeat of an earlier anchor draft is linked to it",
+    "file": "src/kbqa/stage.py",
+    "old": "        elif k in batch_anchors:\n",
+    "new": "        elif False:\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: a draft other drafts name as their anchor is not linked",
+    "file": "src/kbqa/stage.py",
+    "old": "        if n in named_by:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: a repeat of several anchors is listed, not linked",
+    "file": "src/kbqa/stage.py",
+    "old": "            if len(ids_of) > 1 and has not in ids_of:\n",
+    "new": "            if False:\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage: linked_by_code names the id given to an anchor draft",
+    "file": "src/kbqa/stage.py",
+    "old": "            e[\"anchor\"] = ids.get(e[\"anchor_line\"])\n",
+    "new": "            pass\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage --lists: the shortlist is written and named in the result",
+    "file": "src/kbqa/stage.py",
+    "old": "        out[\"same_feature\"] = f\"_raw/{batch}/{shortlist.NAME}\"\n",
+    "new": "        out[\"same_feature\"] = None\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "stage --lists: the shortlist reads only a capture that matches its receipt",
+    "file": "src/kbqa/stage.py",
+    "old": "        text = _capture_text(subject, receipt)\n",
+    "new": "        text = (subject / Path(receipt[\"capture\"]).name).read_text(encoding=\"utf-8\")\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "shortlist: two words in common at least",
+    "file": "src/kbqa/shortlist.py",
+    "old": "MIN_SHARED = 2 ",
+    "new": "MIN_SHARED = 1 ",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "shortlist: at most ten anchors a page",
+    "file": "src/kbqa/shortlist.py",
+    "old": "MAX_PER_PAGE = 10 ",
+    "new": "MAX_PER_PAGE = 11 ",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "shortlist: stop words are not compared",
+    "file": "src/kbqa/shortlist.py",
+    "old": "if len(w) >= MIN_LEN and w not in STOP_WORDS}",
+    "new": "if len(w) >= MIN_LEN}",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "shortlist: words of two characters or fewer are not compared",
+    "file": "src/kbqa/shortlist.py",
+    "old": "MIN_LEN = 3 ",
+    "new": "MIN_LEN = 1 ",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "shortlist: only parameter-like tokens of the page's text count",
+    "file": "src/kbqa/shortlist.py",
+    "old": "if \"_\" in t or CAMEL_RE.search(t)]",
+    "new": "]",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "shortlist: a camelCase identifier is parameter-like",
+    "file": "src/kbqa/shortlist.py",
+    "old": "if \"_\" in t or CAMEL_RE.search(t)]",
+    "new": "if \"_\" in t]",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "shortlist: the page's headings count",
+    "file": "src/kbqa/shortlist.py",
+    "old": "    return heads | _union(",
+    "new": "    return _union(",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "shortlist: anchors only",
+    "file": "src/kbqa/shortlist.py",
+    "old": "    anchors = {rid: r for rid, r in rows.items() if is_anchor(r)}\n",
+    "new": "    anchors = dict(rows)\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "shortlist: highest score first, then id",
+    "file": "src/kbqa/shortlist.py",
+    "old": "    scored.sort(key=lambda x: (-x[1], x[0]))\n",
+    "new": "    scored.sort(key=lambda x: x[0])\n",
+    "tests": [
+      "tests/test_exact_repeats_and_shortlist.py"
+    ]
+  },
+  {
+    "label": "autofix: refused unless the report is on the staging file's current bytes",
+    "file": "src/kbqa/autofix.py",
+    "old": "    if report.get(\"staging_sha256\") != sha_before:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: refused without a check report",
+    "file": "src/kbqa/autofix.py",
+    "old": "    if not report_path.is_file():\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a legacy batch is never edited",
+    "file": "src/kbqa/autofix.py",
+    "old": "    if not stage.BATCH_RE.match(batch):\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a staging file changed while it runs is not overwritten",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if _sha(staging.read_bytes()) != sha_before:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: structural and planner findings never go to the row-writer",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if f.get(\"kind\") != FIXABLE:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: only the four codes are fixed by code",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if code not in FIXES:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a finding naming no row changes nothing",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if rp is None or rp.obj is None:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: only a line written as stage writes it is rewritten",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if content != json.dumps(rp.obj, ensure_ascii=False):\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: nothing is written when no fix applies",
+    "file": "src/kbqa/autofix.py",
+    "old": "    if not changes:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: the old bytes are kept",
+    "file": "src/kbqa/autofix.py",
+    "old": "        stage._write_new(before_path, data)\n",
+    "new": "        stage._write_new(before_path, new)\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: each run is numbered, never over an earlier one",
+    "file": "src/kbqa/autofix.py",
+    "old": "        run_no = _runs(qa, batch) + 1\n",
+    "new": "        run_no = 1\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a grade already spelled right is not changed",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if new == row.get(\"evidence_grade\"):\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: id is moved first",
+    "file": "src/kbqa/autofix.py",
+    "old": "                row = {\"id\": row[\"id\"], **{k: v for k, v in row.items() if k != \"id\"}}\n",
+    "new": "                row = dict(row)\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: an id already first is not moved",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if next(iter(row)) == \"id\":\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a row without an id is not reordered",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if \"id\" not in row:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a parent_path that is not empty is not replaced",
+    "file": "src/kbqa/autofix.py",
+    "old": "    if code == PARENT and isinstance(pp, str) and pp.strip():\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a depth that is not unknown is not replaced",
+    "file": "src/kbqa/autofix.py",
+    "old": "    if code == DEPTH and str(row.get(\"depth_level\", \"\")).strip() != DEPTH_UNKNOWN:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a depth only when parent_path is its part's breadcrumb",
+    "file": "src/kbqa/autofix.py",
+    "old": "    if pp != parent_path:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a filled parent_path brings its depth only from unknown to a number",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if str(row.get(\"depth_level\", \"\")).strip() == DEPTH_UNKNOWN and depth_level != DEPTH_UNKNOWN:\n",
+    "new": "        if True:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: the receipt must name the staging file's capture",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if staging_capture_sha != receipt.get(\"sha256\"):\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: the row's page must be a page of the receipt",
+    "file": "src/kbqa/autofix.py",
+    "old": "        page = self.pages.get(row.get(\"source_url\"))\n",
+    "new": "        page = self.pages.get(row.get(\"source_url\"), next(iter(self.pages.values())))\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: parts giving different breadcrumbs are left",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if len(found) != 1:\n",
+    "new": "        if len(found) == 0:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: parts must carry a breadcrumb",
+    "file": "src/kbqa/autofix.py",
+    "old": "            if \"breadcrumb\" not in part:\n",
+    "new": "            if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a schema finding is resolved only when its field no longer fails",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if f.get(\"code\") == \"schema_violation\" and n in errors and field not in errors[n]:\n",
+    "new": "        if f.get(\"code\") == \"schema_violation\" and n in errors:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "respelling: only a known respelling, never the nearest grade",
+    "file": "src/kbqa/profiles/vendor_catalogue.py",
+    "old": "    return known.get(key)\n",
+    "new": "    return known.get(key, SCHEMA_EVIDENCE_GRADES[0])\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "respelling: case and spaces are folded",
+    "file": "src/kbqa/profiles/vendor_catalogue.py",
+    "old": "    key = \"\".join(value.split()).lower()\n",
+    "new": "    key = value\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "respelling: the bare verify is [verify]",
+    "file": "src/kbqa/profiles/vendor_catalogue.py",
+    "old": "BARE_EVIDENCE_GRADES = {\"verify\": \"[verify]\"}\n",
+    "new": "BARE_EVIDENCE_GRADES = {}\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a report of round 2 or later is refused: the batch is the operator's",
+    "file": "src/kbqa/autofix.py",
+    "old": "    if isinstance(round_no, int) and round_no >= 2:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a report naming no round takes its round from the subject's log",
+    "file": "src/kbqa/autofix.py",
+    "old": "    if round_no is None and log.is_file():\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "mapstage: an element id not on the list is rejected",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        unknown = [i for i in pcfs if i not in elements]\n",
+    "new": "        unknown = []\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a key the draft does not carry is rejected",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if missing or extra:\n",
+    "new": "    if missing:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: an id that is not a row of the staging file is rejected",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if rid_s is None or rid_s not in anchor_set:\n",
+    "new": "        if rid_s is None:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a line for another source is rejected as one",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if rid_s is not None and rid_s in others:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: an anchor with no line is rejected",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if rid not in drafted:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: the article is a, an or nothing",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if obj[\"article\"] not in ARTICLES:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a needs-human note opens with its pattern",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if obj[\"status\"] == NEEDS_HUMAN and note_pattern(obj[\"note\"]) is None:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: one line per id",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if rid_s is not None and rid_s in first_line:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a null is rejected",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if nulls:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: no want only on a no-function or not-feature line",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if obj.get(\"theme\") not in NO_ROLE:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a want needs a role",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if not obj[\"role\"].strip():\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: the tag follows an apqc-closest role only",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if role_source == APQC_CLOSEST:\n",
+    "new": "    if True:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: no so-that part when so_that is empty",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if so_that.strip():\n",
+    "new": "    if True:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: an article only when the mapper gave one",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    story = \"As \" + (f\"{article} \" if article else \"\") + role\n",
+    "new": "    story = \"As a \" + role\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: elements copied from the list",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        out.append({\"pcf_id\": e[\"pcf_id\"], \"hierarchy_id\": e[\"hierarchy_id\"], \"name\": e[\"name\"]})\n",
+    "new": "        out.append({\"pcf_id\": i, \"hierarchy_id\": \"\", \"name\": \"\"})\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: the mapper's key order",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    return {k: built[k] for k in FIELDS}\n",
+    "new": "    return built\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: lines in the staging file's order",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    lines: List[dict] = []\n    for rid in anchors:\n",
+    "new": "    lines: List[dict] = []\n    for rid in sorted(anchors):\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a map file is never overwritten",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if p.exists():\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: rejects block the map file",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if not leave_out:\n            if round_no <= CORRECTION_ROUNDS:\n",
+    "new": "        if False:\n            if round_no <= CORRECTION_ROUNDS:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: no second correction round",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if len(earlier) >= CORRECTION_ROUNDS + 1 and not leave_out:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: leaving out only after the correction round",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if leave_out and len(earlier) < CORRECTION_ROUNDS + 1:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: each round's rejects file is its own",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    round_no = max([_round_of(p) for p in earlier] or [0]) + 1\n",
+    "new": "    round_no = 1\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: leaving out keeps a line for every anchor",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        lines.append(_left_out_line(rid, drafted.get(rid, (0, None))[1], anchor_reason[rid], elements))\n",
+    "new": "        continue\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a left-out line's note names no rule and the reason",
+    "file": "src/kbqa/mapstage.py",
+    "old": "            \"note\": f\"{LEFT_OUT_PATTERN} {reason}\"}\n",
+    "new": "            \"note\": reason}\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a left-out line keeps only elements on the list",
+    "file": "src/kbqa/mapstage.py",
+    "old": "            \"pcf_ids\": pcf_entries([i for i in ids if isinstance(i, str) and i in elements], elements),\n",
+    "new": "            \"pcf_ids\": [],\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a pass never counts the other pass's rounds",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    earlier = _rounds(subject, batch, letter)\n",
+    "new": "    earlier = _rounds(subject, batch, letter) + _rounds(subject, batch, \"B\" if letter == \"A\" else \"A\")\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a leftover sidecar is never overwritten",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    for p in (out_path, meta_path):\n",
+    "new": "    for p in (out_path,):\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: the sidecar records the staging sha256",
+    "file": "src/kbqa/mapstage.py",
+    "old": "            \"staging\": staging.name, \"staging_sha256\": staging_sha}\n",
+    "new": "            \"staging\": staging.name, \"staging_sha256\": \"\"}\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "retire: refused while the staging is unchanged",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if recorded == _sha256(staging):\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "retire: a map file without its sidecar is refused",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if not meta_path.is_file():\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "retire: numbered one past every earlier folder",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    n = max(used or [0]) + 1\n",
+    "new": "    n = len(used) + 1\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "retire: the sidecar moves with the map file",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    files = [p for p in (out_path, meta_path, subject / draft_name(batch, letter)) if p.exists()]\n",
+    "new": "    files = [p for p in (out_path, subject / draft_name(batch, letter)) if p.exists()]\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "retire: the pass's rejects files move too",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    files += _rounds(subject, batch, letter)\n",
+    "new": "    files += []\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "retire: only the given pass is touched",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    files += _rounds(subject, batch, letter)\n",
+    "new": "    files += _rounds(subject, batch, \"A\") + _rounds(subject, batch, \"B\")\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "retire: a run of its own",
+    "file": "src/kbqa/mapstage.py",
+    "old": "            if args.leave_out or args.elements:\n",
+    "new": "            if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "collect-surface: stops when the selection is exhausted",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    if r.get(\"window_end\") == \"exhausted\":\n        return \"exhausted\"\n",
+    "new": "    if False:\n        return \"exhausted\"\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: stops when a window is throttled",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    if (r.get(\"stopped\") or {}).get(\"reason\") == \"throttled\":\n        return \"throttled\"\n",
+    "new": "    if False:\n        return \"throttled\"\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: a window that captured nothing stops the surface",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    if r.get(\"window_end\") == \"error\":\n        return \"error\"\n",
+    "new": "    if False:\n        return \"error\"\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: robots unreachable is its own end",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        return \"robots_unreachable\" if r.get(\"robots_unreachable\") else \"refused\"\n",
+    "new": "        return \"refused\"\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: the refusal is printed, not hidden",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        out[\"refusal\"] = refusal\n",
+    "new": "        pass\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: --max-windows bounds the run",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        if len(windows) >= args.max_windows:\n",
+    "new": "        if len(windows) > args.max_windows:\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: --max-windows below 1 is refused",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    if args.max_windows < 1:\n",
+    "new": "    if args.max_windows < 0:\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: later windows resume",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        resume = [\"--resume\"] if _chain(subject, surface, den) else []\n",
+    "new": "        resume = []\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: the first window does not resume",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        resume = [\"--resume\"] if _chain(subject, surface, den) else []\n",
+    "new": "        resume = [\"--resume\"]\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: the loop reads window_end, never capture's exit code",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        end = take(_capture(window_args + resume)[1])\n",
+    "new": "        code_, r_ = _capture(window_args + resume)\n        end = take(r_) or (\"error\" if code_ else None)\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: an exhausted surface is not asked again",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    if already_exhausted:\n        end = \"exhausted\"\n",
+    "new": "    if False:\n        end = \"exhausted\"\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: a superseded denominator is never taken as done",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        and current is not None and current.name == den.name\n",
+    "new": "        and True\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: retry only at the end of the selection",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    if end == \"exhausted\":  # failed pages wait for the end of the selection\n",
+    "new": "    if True:\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: retry only when a page may still pass",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        if retryable:\n",
+    "new": "        if True:\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: a retry run's own end is kept",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "            end = take(_capture(base + [\"--retry-failed\"])[1]) or \"exhausted\"\n",
+    "new": "            take(_capture(base + [\"--retry-failed\"])[1])\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: pages given up on are the operator's",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        merge_operator(needs_operator, given_up)\n",
+    "new": "        pass\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: needs_operator once per URL",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        if k not in seen:\n",
+    "new": "        if True:\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: a surface-wide item once per host",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    return (\"host\", item.get(\"host\"))  # a surface-wide item: one per host\n",
+    "new": "    return (\"host\", id(item))\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: each stop line once",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        if ln not in into:\n",
+    "new": "        if True:\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: exit 0 for a surface already done",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    return 0 if already_exhausted or any(",
+    "new": "    return 0 if any(",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: exit 1 when nothing was captured",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "any(w[\"pages_captured\"] for w in windows) else 1",
+    "new": "True else 1",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "capture: robots unreachable is named apart",
+    "file": "src/kbqa/capture.py",
+    "old": "isinstance(exc, fetch.RobotsUnreachable) else {}",
+    "new": "False else {}",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: a staged window is not unstaged",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "        if not cap.is_file() or (subject / f\"_collect-{b}-staging.md\").exists():\n",
+    "new": "        if not cap.is_file():\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: unstaged windows of earlier runs are listed",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "    for w in capture._windows(subject, surface):\n",
+    "new": "    for w in capture._windows(subject, surface)[-1:]:\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "collect-surface: a window drafted no_row throughout is told apart",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "                 ALL_NO_ROW if _all_no_row(draft, receipt) else DRAFTED)\n",
+    "new": "                 DRAFTED)\n",
+    "tests": [
+      "tests/test_collect_surface.py"
+    ]
+  },
+  {
+    "label": "mapstage: --no-record only for a map file without a record",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if no_record and (not out_path.exists() or meta_path.exists()):\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: a retirement without a record says so in the folder",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if no_record:\n        note = dest / NO_RECORD_NOTE\n",
+    "new": "    if False:\n        note = dest / NO_RECORD_NOTE\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: retire refuses when the anchor ids did not change",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if not changed[\"anchor_set_changed\"]:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapstage: the anchor set compared is the staging file's anchors",
+    "file": "src/kbqa/mapstage.py",
+    "old": "            changed = {\"anchor_set_changed\": mapped != anchors_now,\n",
+    "new": "            changed = {\"anchor_set_changed\": True,\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "autofix: run again on its own bytes, already applied",
+    "file": "src/kbqa/autofix.py",
+    "old": "    applied = _applied(qa, batch, sha_before) if report.get(\"staging_sha256\") != sha_before else None\n",
+    "new": "    applied = None\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: a report on its own bytes is round 2, not already applied",
+    "file": "src/kbqa/autofix.py",
+    "old": "    applied = _applied(qa, batch, sha_before) if report.get(\"staging_sha256\") != sha_before else None\n",
+    "new": "    applied = _applied(qa, batch, sha_before)\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "autofix: already applied only for the bytes a run wrote",
+    "file": "src/kbqa/autofix.py",
+    "old": "        if isinstance(record, dict) and record.get(\"staging_sha256_after\") == sha:\n",
+    "new": "        if isinstance(record, dict):\n",
+    "tests": [
+      "tests/test_autofix.py"
+    ]
+  },
+  {
+    "label": "stage: a page with no row and no reason is rejected",
+    "file": "src/kbqa/stage.py",
+    "old": "                    for u in pages if u not in drafted_pages]\n",
+    "new": "                    for u in pages if False]\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: same_feature_as must name a row of the subject",
+    "file": "src/kbqa/stage.py",
+    "old": "            if anchor is None or not features.is_anchor(anchor):\n",
+    "new": "            if anchor is not None and not features.is_anchor(anchor):\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: same_feature_as must name an anchor, not another source",
+    "file": "src/kbqa/stage.py",
+    "old": "            if anchor is None or not features.is_anchor(anchor):\n",
+    "new": "            if anchor is None:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: an enumerated value outside the profile is rejected",
+    "file": "src/kbqa/stage.py",
+    "old": "            if value in allowed:\n                continue\n",
+    "new": "            if True:\n                continue\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: a known grade respelling is written in the schema's spelling",
+    "file": "src/kbqa/stage.py",
+    "old": "            if new is not None and new in allowed:\n",
+    "new": "            if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: the lists are refused once the batch is staged",
+    "file": "src/kbqa/stage.py",
+    "old": "    if staged.exists():\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: ROLE-ROWS.md is refreshed after the staging file",
+    "file": "src/kbqa/stage.py",
+    "old": "        _write_atomic(subject / \"_raw\" / batch / ROLE_ROWS, listed_roles.encode(\"utf-8\"))\n",
+    "new": "        pass\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "stage: every page no_row says skip mapping",
+    "file": "src/kbqa/stage.py",
+    "old": "        if not listed:  # every page was drafted no_row\n",
+    "new": "        if False:  # every page was drafted no_row\n",
+    "tests": [
+      "tests/test_stage.py"
+    ]
+  },
+  {
+    "label": "capture: --files tells rejects files from drafts",
+    "file": "src/kbqa/capture.py",
+    "old": "    return REJECTS_RE.search(p.name) is not None\n",
+    "new": "    return False\n",
+    "tests": [
+      "tests/test_fallbacks_and_stops.py"
+    ]
+  },
+  {
+    "label": "capture: --files lists the drafts",
+    "file": "src/kbqa/capture.py",
+    "old": "        \"drafts\": [entry(p) for p in names if p.name.startswith(f\"_draft-{surface}-\") and not _rejects(p)],\n",
+    "new": "        \"drafts\": [],\n",
+    "tests": [
+      "tests/test_fallbacks_and_stops.py"
+    ]
+  },
+  {
+    "label": "mapcheck: an element on one row never dominates",
+    "file": "src/kbqa/gates/mapcheck.py",
+    "old": "DOMINANCE_MIN_ROWS = 2\n",
+    "new": "DOMINANCE_MIN_ROWS = 1\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "mapcheck: two of three rows on one element still dominate",
+    "file": "src/kbqa/gates/mapcheck.py",
+    "old": "DOMINANCE_MIN_ROWS = 2\n",
+    "new": "DOMINANCE_MIN_ROWS = 3\n",
+    "tests": [
+      "tests/test_mapstage.py"
+    ]
+  },
+  {
+    "label": "release: loading the manifest writes no bytecode into the tree",
+    "file": "scripts/release.py",
+    "old": "    sys.dont_write_bytecode = True\n",
+    "new": "    sys.dont_write_bytecode = False\n",
+    "tests": [
+      "tests/test_release_tooling.py"
+    ]
+  }
+]

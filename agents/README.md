@@ -5,8 +5,8 @@ delegates to. They are **not** active in this repository.
 
 | agent | tools | does |
 |---|---|---|
-| `kbqa-fetcher.md` | `WebFetch`, `Write`, `Read`, `Bash` | permission (G0), each surface's index, captures, stop-conditions, receipts |
-| `kbqa-row-writer.md` | `Read`, `Write` | the staging file, from the capture on disk alone |
+| `kbqa-fetcher.md` | `WebFetch`, `Write`, `Read`, `Bash` | permission (G0), each surface's index, captures, the staging file by code (`kbqa stage`), stop-conditions, receipts |
+| `kbqa-row-writer.md` | `Read`, `Write` | drafts of the batch's rows, from the capture on disk alone; code writes the staging file from them |
 | `kbqa-mapper.md` | `Read`, `Write` | one classification pass (A or B) of one batch |
 
 ## Install

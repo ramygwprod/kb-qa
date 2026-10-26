@@ -252,18 +252,4 @@ def test_a_source_merges_only_after_its_anchor(tmp_path):
     assert code == 0, out
 
 
-# ── capture writes the list beside its receipt ───────────────────────────────
-
-def test_capture_writes_the_subjects_features_beside_the_receipt(tmp_path, monkeypatch):
-    from kbqa import fetch
-    from test_capture import DAY, HOST, OK, SeqWeb, _cap, _den
-    d = tmp_path / "Example-Co"
-    d.mkdir()
-    (d / f"_robots-{HOST}-{DAY}.txt").write_text("User-agent: *\nAllow: /\n")
-    shutil.copy(HERE / "fixtures" / "merge" / "clear" / "feature-tree.md", d / "feature-tree.md")
-    monkeypatch.setattr(fetch, "_sleep", lambda s: None)
-    monkeypatch.setattr(fetch, "_open", SeqWeb({f"https://{HOST}/p1": OK}))
-    code, r = _cap(d, "--surface", "docs", "--denominator", str(_den(d, n=1)))
-    assert code == 0 and r["features"] == f"_raw/{r['batch']}/FEATURES.md"
-    text = (d / r["features"]).read_text()
-    assert "example.product.overview" in text and text == features.features_list(d)
+# The list is written by `kbqa stage --lists` since v6.22.0: tests/test_stage.py.

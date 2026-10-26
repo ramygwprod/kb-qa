@@ -16,7 +16,7 @@ than different.
 """
 
 from enum import Enum
-from typing import Dict, List, Literal, Optional, Tuple, Union
+from typing import Dict, List, Literal, Optional, Tuple, Union, get_args
 
 from pydantic import Field, field_validator
 
@@ -261,6 +261,21 @@ INTERFACE_DETAIL = "operation parameter".split()
 # above still accepts both spellings of "verify", because legacy rows use the
 # bare form and are never edited. A NEW batch writes the schema's spelling.
 SCHEMA_EVIDENCE_GRADES = ("official-doc", "help", "marketing", "verified", "[verify]")
+# The bare spelling of a grade whose schema spelling is bracketed.
+BARE_EVIDENCE_GRADES = {"verify": "[verify]"}
+
+
+def schema_evidence_grade(value: object) -> Optional[str]:
+    """The schema's spelling of a grade written another known way — in another
+    case, with spaces, or bare (`verify` for `[verify]`) — else None. A value
+    that is no known respelling of one grade is never mapped to the nearest
+    one: which grade was meant is the row-writer's judgement, not code's."""
+    if not isinstance(value, str):
+        return None
+    key = "".join(value.split()).lower()
+    known = {g.lower(): g for g in SCHEMA_EVIDENCE_GRADES}
+    known.update(BARE_EVIDENCE_GRADES)
+    return known.get(key)
 
 
 def strict_row_check(obj: dict) -> List[Tuple[str, str]]:
@@ -341,4 +356,14 @@ PROFILE = register(Profile(
         "vendor_term", "parent_path",
     ),
     strict_row_check=strict_row_check,
+    # What `kbqa stage` holds a draft's judgement to before the check: the
+    # schema's spelling of each value (one spelling per value, K1).
+    enumerated={
+        "evidence_grade": SCHEMA_EVIDENCE_GRADES,
+        "confidence": get_args(Row.model_fields["confidence"].annotation),
+        "mechanism": tuple(m.value for m in Mechanism),
+        "outcome": tuple(o.value for o in Outcome),
+        "interface_type": INTERFACE_TYPES,
+    },
+    respellings={"evidence_grade": schema_evidence_grade},
 ))

@@ -1,6 +1,6 @@
 ---
 name: kbqa-check
-description: Run the kbqa validation gates over a collected batch or a whole estate, read the verdict, and route failures. Use when a capture and staging file exist and need checking, when a gate has failed and the next step is unclear, when a mapping file needs checking, or when asked whether a batch is grounded. Read-only with respect to the validator — it never modifies kbqa, never installs it, never merges, and never edits rows to make a gate pass.
+description: Run the kbqa validation gates over a collected batch or a whole estate, read the verdict, and route failures. Use when a capture and staging file exist and need checking, when a gate has failed and the next step is unclear, when a mapping file needs checking, or when asked whether a batch is grounded. Read-only with respect to the validator — it never modifies kbqa, never installs it, never merges, and never edits rows itself: only `kbqa autofix`, which it runs in round 1, rewrites a staging file, with the fixes code computes exactly from the evidence, each recorded.
 allowed-tools: Bash, Read
 ---
 
@@ -24,7 +24,7 @@ It prints **PASS** or **STOP** and never installs anything. Its first line names
 the `python3` it used — the interpreter every gate below runs under. It checks,
 in order:
 
-1. the installed kbqa is the version this copy pins (`v6.21.0`)
+1. the installed kbqa is the version this copy pins (`v6.22.0`)
 2. its manifest is the one this copy expects
 3. the installed skill is the tagged skill: every file matches
    `INSTALLED-FROM-kbqa-check`, the record `skills/install.sh` wrote — none changed,
@@ -53,7 +53,7 @@ re-derive it.**
 | | |
 |---|---|
 | **You may read** | captures, staging files, denominators, stop-conditions, mapping files, `_qa/` verdicts and reports |
-| **You may write** | nothing directly. `kbqa` writes `<subject>/_qa/`, `<subject>/_qa-log.jsonl`, and the estate audit files |
+| **You may write** | nothing directly. `kbqa` writes `<subject>/_qa/`, `<subject>/_qa-log.jsonl`, and the estate audit files; `kbqa autofix` (§4), and only it, rewrites a staging file — the fixes code computes exactly, each recorded |
 | **You may never touch** | anything under the kbqa install path — `gates/`, `models.py`, `profiles/`, `conventions.py`, `report.py`, tests, fixtures — or a feature tree |
 
 A gate is satisfied by the data, never by changing what the gate says. If you
@@ -168,7 +168,9 @@ wrote, `_map-<batch>-<A|B>.jsonl`:
   that list's hierarchy id and name
 - `role_source` filled; `needs-human` rows listed and never counted as mapped
 - A/B agreement on **ALL** rows — a missing or needs-human row is a disagreement
-- `element_dominates`: one element on more than 30 % of the batch
+- `element_dominates`: one element on more than 30 % of the batch's rows and on
+  at least two of them (on a tiny batch one row is a large share by arithmetic
+  alone, and measures nothing)
 - `story_role_mismatch`: the story's "As <role>, I want" names another role than
   the line's `role` — singular or plural as printed, "a"/"an" optional — or an
   APQC-closest role lacks the "(APQC-closest)" tag after it, or another role carries it
@@ -194,9 +196,40 @@ staging hashes in `<subject>/_qa-log.jsonl`:
 
 | report says | what happens |
 |---|---|
-| round 1, BLOCKED | `fixable` findings go to the row-writer — the specific findings, not the gate name |
-| round 2, CLEAR | done; the batch is ready for mapping, then merge |
+| round 1, BLOCKED | first `kbqa autofix` (below); then the `fixable` findings it leaves go to the row-writer — the specific findings, not the gate name |
+| round 2, CLEAR | done; the batch is ready for merge (its map files were written during collection, and made again in the fix round when its anchor ids changed) |
 | round 2+, **PARKED** | stop. The batch and its finding list go to the operator. Nothing goes back to the row-writer without the operator |
+
+**Code fixes first.** For each batch BLOCKED in round 1 with `fixable`
+findings, run:
+
+```bash
+python3 -m kbqa autofix --subject "<subject folder path>" --batch <batch>
+```
+
+It reads the report you just made and refuses unless that report is on the
+staging file's current bytes. It runs in round 1 only: it is part of the one
+fix round, never a second, so it refuses a report of round 2 or later (from
+`_qa-log.jsonl` when the report names no round) with `next_step`
+`operator: the one fix round is used; the batch is PARKED for the operator` —
+report that refusal to the operator as it is. It fixes only what code computes exactly from the
+evidence — `evidence_grade_spelling` (a known respelling), `parent_path_empty`
+and `depth_unknown_with_breadcrumb` (from the receipt, as `kbqa stage` derives
+them), `id_not_first_key` — records each change in `_qa/<batch>.autofix-<n>.json`
+and keeps the old bytes as `_qa/<batch>.staging-before-autofix-<n>.md`. Report
+its `fixed`, `left_for_row_writer` and `files_written`. Its `left_findings`,
+word for word, are the only findings the row-writer receives
+(`/kbqa-collect <Subject> fix <batch>`). **Do not run the report again before
+that fix round** when it changed the file: new bytes are the next round, and a
+check of them would leave the row-writer none. When it left nothing for the
+row-writer, the operator runs `/kbqa-check` again: round 2. G1 still requires
+the capture to be older than the staging file — it is, since autofix writes the
+staging file anew.
+
+Run on the bytes it wrote itself — a second run before the fix round — autofix
+is no dead end: it writes nothing, says `already applied`, and gives that run's
+`left_findings` again, with the next step, the row-writer's fix round. Report
+it as that, not as a refusal.
 
 Re-running on unchanged bytes is the same round. **Never hand a failure back as
 "try again"** — that retry loop is where gaming begins. `structural` and
@@ -223,7 +256,8 @@ without opening a file:
   **This check is the one counter**: the
   collecting agents report no counts, so these numbers come from here or from nowhere
 - the **structural** and **planner** findings, which go back to planning
-- the **fixable** findings — the only ones a row-writer may receive, in round 1 only
+- the **fixable** findings — the only ones a row-writer may receive, in round 1 only:
+  what `kbqa autofix` fixed (per code) and its `left_findings`, which go to the row-writer
 - **PARKED** batches with their finding lists
 - per surface: coverage, and whether its windows reached the end or are parked at an offset
 - mappings: per mapper rows / mapped / needs-human (with ids) — the mapping line prints each

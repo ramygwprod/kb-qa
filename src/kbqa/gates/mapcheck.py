@@ -20,8 +20,10 @@ Checked, per mapper:
     `rbac-vendor:<row id>` naming a row of this subject)
   · `actor`, `confidence`, `status` are values of their fixed sets
   · `needs-human` rows are listed and never counted as mapped
-  · one APQC element on more than 30 % of the batch's rows → a finding that a
-    human must read a sample before the batch is accepted
+  · one APQC element on more than 30 % of the batch's rows, and on at least
+    two of them → a finding that a human must read a sample before the batch
+    is accepted. An element on one row never dominates: below two rows the
+    share measures nothing (one row of three anchors is 33 % by arithmetic)
   · the story's role — the words after "As" (and its "a" / "an", when the
     role is singular), up to "I want" — is the row's `role`, singular or
     plural as printed, compared without case or punctuation (a FAIL: the
@@ -72,6 +74,9 @@ CONFIDENCE = ("low", "medium", "high")
 STATUSES = ("mapped", "needs-human")
 PCF_KEYS = ("pcf_id", "hierarchy_id", "name")
 DOMINANCE = 0.30
+# An element on fewer rows than this never dominates: on a batch of three
+# anchors one row is 33 % by arithmetic, and that share measures nothing.
+DOMINANCE_MIN_ROWS = 2
 
 THEME_ROW_RE = re.compile(r"^\|\s*(?P<code>I\d{2})\s*\|")
 # "As a <role>, I want … so that …" — the role is what stands between them.
@@ -280,7 +285,9 @@ def check_one(letter: str, path: Path, staging_ids: List[str], themes: Set[str],
     total = len(staging_ids)
     dominant = []
     for e, c in element_rows.most_common():
-        if total and c / total > DOMINANCE:
+        # Below two rows the share measures nothing: one element on one row of
+        # a three-anchor batch is 33 % by arithmetic alone.
+        if total and c >= DOMINANCE_MIN_ROWS and c / total > DOMINANCE:
             dominant.append({"pcf_id": e, "rows": c, "share": round(c / total, 3)})
             findings.append(Finding(
                 "element_dominates",

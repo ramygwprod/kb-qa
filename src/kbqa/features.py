@@ -74,7 +74,7 @@ def features_list(subject: Path) -> str:
     head = [
         f"# Features of this subject — {len(anchors)} anchors in {len(order)} groups",
         "",
-        "Written by `kbqa capture` from the feature tree and every staging file. One line per",
+        "Written by `kbqa stage --lists` from the feature tree and every staging file. One line per",
         "anchor: `id | vendor_term | parent_path | what_it_does`. A row for a feature already",
         "listed here carries `same_feature_as: <its id>`. Read the outline, then only the",
         "groups that could hold your page's features (offset and limit).",
