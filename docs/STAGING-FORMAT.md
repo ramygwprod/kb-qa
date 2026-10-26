@@ -248,6 +248,18 @@ module's anchors, and under each anchor its other sources and its ways in by
   Candidates only: the row-writer judges sameness. When the capture cannot be
   read (none written, or no longer the receipt's), the shortlist is not
   written and `same_feature_note` says why; the other lists are still written.
+- **Unchanged pages** (since v6.23.0). When the subject is collected again,
+  `kbqa capture` marks a page `unchanged_since: <batch>` in the receipt when its
+  `text_sha256` equals that of its latest earlier capture in the subject (the
+  same URL, latest by access date then window; a receipt from before v6.21.0
+  has no text hash and never counts). The page is still captured, bytes and
+  text. `kbqa stage --lists` writes `_raw/<batch>/UNCHANGED.md` — one line per
+  such page: `<url> | unchanged since <batch> | ` and what is recorded for it:
+  the batch and row ids whose staging file cites it (followed back along the
+  pages' `unchanged_since` marks), or the stop line that names it, or
+  `nothing recorded` (then the page is drafted like any other) — and lists the
+  same under `unchanged_pages`; with none, the file is not written and
+  `unchanged_note` says so.
 - **Once staged, never rebuilt.** `kbqa stage --lists` refuses once the batch's
   staging file exists: the lists are what the drafts were written from. `kbqa
   stage` itself writes `ROLE-ROWS.md` again right after it writes the staging
@@ -265,6 +277,7 @@ One JSON object per line, in `<subject folder>/_draft-<batch>.jsonl`:
 ```
 {"page": "https://docs.example.test/hooks/retries", "part": 0, "quote": "Failed webhook calls are retried for up to 24 hours.", "vendor_term": "Retries", "what_it_does": "Retries a failed webhook call for up to a day.", "evidence_grade": "official-doc", "confidence": "high", "mechanism": "Native", "outcome": "yes"}
 {"page": "https://docs.example.test/pricing", "no_row": "pricing page"}
+{"page": "https://docs.example.test/hooks/limits", "unchanged": "docs-2026-10-18-w03"}
 ```
 
 | key | value |
@@ -276,6 +289,7 @@ One JSON object per line, in `<subject folder>/_draft-<batch>.jsonl`:
 | `same_feature_as` | when the feature already has a row: the anchor's `id` (from `FEATURES.md`), or `draft:<line>` — another draft of this batch, by its 1-based line in the drafts file, which code replaces with the id it gives that draft |
 | `interface_type`, `operation`, `parameter`, `source_typo`, `mechanism_raw`, `outcome_raw`, `mechanism_via` | only when they apply; copied to the row as written |
 | `no_row` | instead of all the above: a page read that holds no row, in a few words (`{"page": …, "no_row": …}` and nothing else) |
+| `unchanged` | instead of all the above (since v6.23.0): a page the receipt marks `unchanged_since` an earlier capture, not drafted again — the batch it names (`{"page": …, "unchanged": …}` and nothing else) |
 
 `kbqa stage --subject <d> --batch <b>`:
 
@@ -358,8 +372,21 @@ One JSON object per line, in `<subject folder>/_draft-<batch>.jsonl`:
   `- <url> | no feature: <words>`, under `stop_lines_to_add`, for the fetcher to
   add with `kbqa stop add`; the pages that end with neither a staged row nor a
   `no_row` line are listed under `pages_without_row_or_no_row`.
+- **Unchanged** (since v6.23.0). A page drafted `unchanged` adds nothing to
+  the staging file — the rows recorded earlier stand, and nothing earlier is
+  edited — and is listed under `unchanged_pages` (`page`, `unchanged_since`,
+  `rows_in` and `ids` where its rows are recorded, or `stop_line`), with a
+  suggested `- <url> | no feature: unchanged since <batch>` under
+  `stop_lines_to_add`, so `g4` counts the page as accounted for once the
+  fetcher adds it. The line is rejected, never taken on its word, unless the
+  page is unchanged **by text hash**: the named batch's receipt lists the URL
+  with the same `text_sha256`, that batch is the page's latest earlier capture
+  (this receipt's `unchanged_since`), and a staged row or a stop line (not an
+  `unchanged since` one, which would vouch for itself) is recorded there to
+  stand. A page drafted `unchanged` beside rows or a `no_row` line is a reject.
 - It never overwrites a staging file. When no draft became a row it writes no
-  staging file; when that is because every page was drafted `no_row`, its
+  staging file; when that is because every page was drafted `no_row` (or
+  `unchanged`), its
   `next_step` is `no rows — skip mapping for this batch`. The result is printed as JSON: the round, counts, the staging
   and rejects paths, the rejected lines and reasons, `linked_by_code`,
   `link_conflicts`, and the `next_step`.

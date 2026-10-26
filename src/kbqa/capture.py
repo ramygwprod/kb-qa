@@ -44,6 +44,15 @@ path ending in `/`), the llms.txt convention. The copy is used only when it is
 on the same host, robots allows it, and it is served as text; the capture keys
 it by the page's own URL and the receipt says `fetch_method: site-copy`.
 
+**Collected again** (a new dated denominator and its windows; since kbqa
+6.23.0): a captured page whose text hash (`text_sha256`) equals that of its
+latest earlier capture in the subject — the same URL, by access date then window
+— is marked `unchanged_since: <that batch>` in the receipt. It is still
+captured, bytes and text; its rows are already recorded, so the row-writer does
+not draft it again (`kbqa stage --lists` lists it, `kbqa stage` accepts its
+`unchanged` line). A page whose earlier receipt has no text hash is never
+marked.
+
 Batch dates follow the access date: a surface collected across midnight goes
 on in batches of the new date (`…-10-17-w07` → `…-10-18-w01`); its windows
 still chain, because the chain is read from the windows' state, not their names.
@@ -267,6 +276,34 @@ def _captured_texts(subject: Path) -> Dict[str, str]:
             for pg in pages:
                 if pg.get("text_sha256") and pg.get("url"):
                     out.setdefault(pg["text_sha256"], pg["url"])
+    return out
+
+
+WINDOW_NO_RE = re.compile(r"-w(\d+)$")
+
+
+def _earlier_captures(subject: Path) -> Dict[str, Dict[str, object]]:
+    """{URL: {"batch", "text_sha256"}}: the latest capture of each page among the
+    subject's receipts on disk — every one of them earlier than the window being
+    written — latest by access date, then window number. A receipt written before
+    kbqa 6.21.0 carries no text hash: its pages are recorded with none, so a page
+    is never called unchanged since it."""
+    found: List[Tuple[Tuple[str, int, str], Dict]] = []
+    raw = subject / "_raw"
+    if raw.is_dir():
+        for rec in raw.glob("*/" + RECEIPT):
+            try:
+                data = json.loads(rec.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            b = str(data.get("batch") or rec.parent.name)
+            m = WINDOW_NO_RE.search(b)
+            found.append(((str(data.get("access_date") or ""), int(m.group(1)) if m else 0, b), data))
+    out: Dict[str, Dict[str, object]] = {}
+    for (_, _, b), data in sorted(found, key=lambda x: x[0]):
+        for pg in data.get("pages") or []:
+            if isinstance(pg, dict) and pg.get("url"):
+                out[pg["url"]] = {"batch": b, "text_sha256": pg.get("text_sha256")}
     return out
 
 
@@ -574,6 +611,7 @@ def run(argv: Optional[List[str]] = None) -> int:
     by_host: Dict[str, Dict[str, list]] = {}
     duplicates: List[Dict[str, object]] = []
     seen_text: Dict[str, str] = _captured_texts(subject)  # text sha256 -> the page it was captured as
+    earlier = _earlier_captures(subject)  # URL -> its latest earlier capture: batch, text sha256
 
     def host_tally(host: str) -> Dict[str, list]:
         return by_host.setdefault(host, {"attempted": [], "refused": [], "captured": []})
@@ -664,6 +702,11 @@ def run(argv: Optional[List[str]] = None) -> int:
                 "_lines": text.split("\n"), "_heads": heads, "_crumb": crumb}
         if copy_of:
             page["served_by"] = r.url
+        # Collected again: the same text as the page's latest earlier capture.
+        # Its rows are already recorded there; the row-writer does not draft it again.
+        prev = earlier.get(key)
+        if prev is not None and prev["text_sha256"] == text_sha:
+            page["unchanged_since"] = prev["batch"]
         pages.append(page)
         return True
 

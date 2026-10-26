@@ -2366,5 +2366,194 @@
     "tests": [
       "tests/test_product_map.py"
     ]
+  },
+  {
+    "label": "re-collection: a page is unchanged only when its text hash is the same",
+    "file": "src/kbqa/capture.py",
+    "old": "        if prev is not None and prev[\"text_sha256\"] == text_sha:\n",
+    "new": "        if prev is not None:\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "re-collection: unchanged against the latest earlier capture",
+    "file": "src/kbqa/capture.py",
+    "old": "    for (_, _, b), data in sorted(found, key=lambda x: x[0]):\n",
+    "new": "    for (_, _, b), data in sorted(found, key=lambda x: x[0], reverse=True):\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "re-collection: a receipt without text hashes marks nothing unchanged",
+    "file": "src/kbqa/capture.py",
+    "old": "prev[\"text_sha256\"] == text_sha:",
+    "new": "prev[\"text_sha256\"] in (text_sha, None):",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "stage: an unchanged line is rejected unless the text hash matches",
+    "file": "src/kbqa/stage.py",
+    "old": "    if not before or not now or before != now:\n",
+    "new": "    if not before or not now:\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "stage: an unchanged line names the page's latest earlier capture",
+    "file": "src/kbqa/stage.py",
+    "old": "    if marked != since:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "stage: an unchanged line needs something recorded to stand",
+    "file": "src/kbqa/stage.py",
+    "old": "    if rec.get(\"why\"):\n        return f\"{rec['why']} — draft its rows, or its no_row line\"\n",
+    "new": "    if False:\n        return \"\"\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "stage: an unchanged-since stop line never vouches for itself",
+    "file": "src/kbqa/stage.py",
+    "old": "    reasons = [r for r in _stop_reasons(subject).get(url, []) if not r.startswith(UNCHANGED_REASON)]\n",
+    "new": "    reasons = list(_stop_reasons(subject).get(url, []))\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "stage: an unchanged line is exactly its two keys",
+    "file": "src/kbqa/stage.py",
+    "old": "            if set(obj) != UNCHANGED_KEYS or not isinstance(since, str) or not since.strip():\n",
+    "new": "            if not isinstance(since, str) or not since.strip():\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "stage: an unchanged page with rows or a no_row line is rejected",
+    "file": "src/kbqa/stage.py",
+    "old": "        if url in with_rows or url in no_row:\n            reject(n, {\"page\": url, \"unchanged\": since},\n",
+    "new": "        if False:\n            reject(n, {\"page\": url, \"unchanged\": since},\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "stage: an unchanged page gets its stop line",
+    "file": "src/kbqa/stage.py",
+    "old": "        line, why = stops.try_line(url, UNCHANGED_REASON + since)\n",
+    "new": "        line, why = None, \"not suggested\"\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "stage: an unchanged page is accounted for",
+    "file": "src/kbqa/stage.py",
+    "old": "    accounted = with_rows | set(no_row) | {e[\"page\"] for e in unchanged_pages}\n",
+    "new": "    accounted = with_rows | set(no_row)\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "stage --lists: the unchanged pages are listed for the row-writer",
+    "file": "src/kbqa/stage.py",
+    "old": "        _write_atomic(raw / UNCHANGED, text_unchanged.encode(\"utf-8\"))\n",
+    "new": "        pass\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "collect-surface: a window unchanged throughout is nothing to stage",
+    "file": "src/kbqa/collect_surface.py",
+    "old": "NOTHING_NEW = ({\"page\", \"no_row\"}, {\"page\", \"unchanged\"})",
+    "new": "NOTHING_NEW = ({\"page\", \"no_row\"},)",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "compare: added or removed only when the other side's coverage is complete",
+    "file": "src/kbqa/compare.py",
+    "old": "        if not cov[\"complete\"]:\n            return False, f\"the {NAMES[other]} collection's coverage is not complete: {cov['why']}\"\n",
+    "new": "        if False:\n            return False, \"\"\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "compare: coverage is complete only as g4 counts it",
+    "file": "src/kbqa/compare.py",
+    "old": "    complete = verdict.verdict == g4_completeness.PASS\n",
+    "new": "    complete = True\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "compare: a page captured on both sides is changed or unchanged by text hash",
+    "file": "src/kbqa/compare.py",
+    "old": "                state = \"unchanged\" if hashes[\"from\"] == hashes[\"to\"] else \"changed\"\n",
+    "new": "                state = \"unchanged\"\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "compare: a page not captured on a side is unknown",
+    "file": "src/kbqa/compare.py",
+    "old": "            if hashes[\"from\"] and hashes[\"to\"]:\n",
+    "new": "            if True:\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "compare: never a feature removed from a page that was not captured",
+    "file": "src/kbqa/compare.py",
+    "old": "                if blind:\n",
+    "new": "                if False:\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "compare: denominators of different indexes never say added or removed",
+    "file": "src/kbqa/compare.py",
+    "old": "        if not comparable:\n            return False, index_why\n",
+    "new": "        if False:\n            return False, index_why\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "compare: a feature is unchanged only when every page citing it is",
+    "file": "src/kbqa/compare.py",
+    "old": "            e[\"state\"] = \"unchanged\" if all(state_of.get(u) == \"unchanged\" for u in set(fu) | set(tu)) else \"changed\"\n",
+    "new": "            e[\"state\"] = \"unchanged\"\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
+  },
+  {
+    "label": "compare: an unchanged page's features are the rows recorded for it",
+    "file": "src/kbqa/compare.py",
+    "old": "        if rec.get(\"anchors\"):\n            return True, set(rec[\"anchors\"]), \"\"\n",
+    "new": "        if False:\n            return True, set(), \"\"\n",
+    "tests": [
+      "tests/test_recollection.py"
+    ]
   }
 ]

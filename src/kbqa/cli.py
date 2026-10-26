@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from . import __version__, autofix, capture, collect_surface, elements, freeze, index, ledger, mappings, mapstage, probe, product_map, profile, report, stage, stops, sweep
+from . import __version__, autofix, capture, collect_surface, compare, elements, freeze, index, ledger, mappings, mapstage, probe, product_map, profile, report, stage, stops, sweep
 from .gates import g0_permission, g1_capture, g2_conformance
 from .gates import g3_grounding, g4_completeness, g5_bundles, g6_integrity
 from .gates import mapcheck, surfaces
@@ -72,7 +72,7 @@ cycle:
                                                run again on the bytes it wrote: "already
                                                applied", with what it left
 
-ledger and product map (read-only: write nothing):
+ledger, product map and comparison (read-only: write nothing):
   status <subject dir> [--json]                what is left and what is done, by code: per
                                                surface items, captured, staged, rows (features /
                                                other sources), stop lines, open items (g4's own
@@ -97,6 +97,14 @@ ledger and product map (read-only: write nothing):
                                                module and totals; rows at an unknown position
                                                and links to no anchor listed, never dropped;
                                                --merged-only: the feature tree alone
+  compare <subject dir> --from <denominator|date> --to <denominator|date> [--json]
+                                               two collections of a subject: per page added /
+                                               removed / changed / unchanged — by the indexes
+                                               and by text hash — and per feature (anchor ids by
+                                               the pages their rows cite); added or removed only
+                                               when the other side's coverage is complete (g4's
+                                               count), else unknown with why; never a feature
+                                               removed from a page that was not captured
 
 collection (the fetcher runs these; permission from today's g0 record, g0 run first when missing):
   index --out <d> --surface <s> --rung <n> --url <u> [--html] [--path-prefix <p>] [--supersede]
@@ -108,7 +116,9 @@ collection (the fetcher runs these; permission from today's g0 record, g0 run fi
           | --resume | --retry-failed | --status [--files]
                                                capture one window verbatim: raw
                                                bytes kept, text by a fixed rendering,
-                                               the receipt in _raw/<batch>/RECEIPT.json
+                                               the receipt in _raw/<batch>/RECEIPT.json;
+                                               collected again, a page with the text hash of its
+                                               latest earlier capture is marked unchanged_since
   collect-surface --out <d> --surface <s> --denominator <f> [--select <lines> | --select-prefix <p>...]
           [--max-windows <n>] [--max-pages <n>] [--max-chars <n>]
                                                capture's windows for one surface (the first,
@@ -121,7 +131,8 @@ collection (the fetcher runs these; permission from today's g0 record, g0 run fi
                                                earlier runs too), the end state, one merged
                                                needs_operator and stop-line list
   stage --subject <d> --batch <b> --lists      before the row-writer: the subject's features
-                                               and role-row lists beside the receipt;
+                                               and role-row lists beside the receipt, and the
+                                               unchanged pages with the rows recorded for them;
                                                refused once the batch is staged
   stage --subject <d> --batch <b> [--leave-out-rejects]
                                                after it: the staging file from the
@@ -132,7 +143,10 @@ collection (the fetcher runs these; permission from today's g0 record, g0 run fi
                                                to no anchor, a value outside the profile)
                                                blocks it (one correction round, then
                                                --leave-out-rejects lists each left out);
-                                               ROLE-ROWS.md refreshed after it is written
+                                               an {{"page", "unchanged": <batch>}} line adds no
+                                               row, only a "no feature: unchanged since" stop
+                                               line, and is rejected unless the text hash
+                                               matches; ROLE-ROWS.md refreshed after it is written
   mapstage --subject <d> --batch <b> --pass <A|B> --elements <list> [--leave-out-rejects]
                                                after each mapping pass: _map-<b>-<A|B>.jsonl
                                                from the mapper's _mapdraft-<b>-<A|B>.jsonl —
@@ -282,6 +296,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     # by code. Read-only; never a verdict, never merged into the tree.
     if argv[0] == "map":
         return product_map.run(argv[1:])
+    # Two collections of a subject compared, by the indexes and by text hash.
+    # Read-only; never a verdict.
+    if argv[0] == "compare":
+        return compare.run(argv[1:])
 
     # Estate-wide audit. Records what can be checked; does not gate.
     if argv[0] == "sweep":

@@ -25,7 +25,7 @@ runs) stays the limit.
 It lists, under `unstaged`, every window of this surface — this run's and every
 earlier run's — that has a capture file and no staging file, in batch order,
 each with its state: no drafts yet, drafts not yet staged, or every page drafted
-`no_row` (nothing to stage). The collect skill runs the per-window steps for
+`no_row` or `unchanged` (nothing to stage). The collect skill runs the per-window steps for
 those before anything new, so a window captured in a run that stopped half-way
 is never lost.
 
@@ -35,7 +35,8 @@ order the collect skill gives, so the lists `kbqa stage --lists` builds hold
 every row written so far.
 
 It prints one JSON: every window written (batch, `window_end`, pages captured,
-copies, failures, receipt and capture paths), the `unstaged` windows, the end
+copies, pages unchanged since an earlier capture, failures, receipt and capture
+paths), the `unstaged` windows, the end
 state, one merged
 `needs_operator` list (each URL once; a host's surface-wide item once per
 host), the merged `stop_lines_to_add` (each line once) and the next step. It
@@ -116,6 +117,7 @@ def _window(r: Dict) -> Dict[str, object]:
     return {"batch": r.get("batch"), "kind": r.get("kind"), "window_end": r.get("window_end"),
             "stopped": (r.get("stopped") or {}).get("reason"),
             "pages_captured": len(r.get("pages") or []), "duplicates": len(r.get("duplicates") or []),
+            "unchanged": sum(1 for p in r.get("pages") or [] if p.get("unchanged_since")),
             "failures": len(r.get("failures") or []), "next_offset": r.get("next_offset"),
             "remaining": r.get("remaining"), "receipt": r.get("receipt"), "capture": r.get("capture")}
 
@@ -129,17 +131,19 @@ def _chain(subject: Path, surface: str, den: Path) -> List[Dict]:
 
 NO_DRAFTS = "no drafts: the per-window steps, from kbqa stage --lists"
 DRAFTED = "drafts written, no staging file: kbqa stage, then the per-window steps after it"
-ALL_NO_ROW = "every page drafted no_row: no rows, nothing to stage or map"
+ALL_NO_ROW = "every page drafted no_row or unchanged: no rows, nothing to stage or map"
+NOTHING_NEW = ({"page", "no_row"}, {"page", "unchanged"})  # draft lines that make no row
 
 
 def _all_no_row(draft: Path, receipt: Path) -> bool:
-    """The drafts are `no_row` lines only, one for every page of the receipt."""
+    """The drafts are `no_row` or `unchanged` lines only, one for every page of
+    the receipt."""
     try:
         pages = {p.get("url") for p in json.loads(receipt.read_text(encoding="utf-8")).get("pages") or []}
         objs = [json.loads(ln) for ln in draft.read_text(encoding="utf-8").splitlines() if ln.strip()]
     except (OSError, ValueError, AttributeError):
         return False
-    return bool(objs) and all(isinstance(o, dict) and set(o) == {"page", "no_row"} for o in objs) \
+    return bool(objs) and all(isinstance(o, dict) and set(o) in NOTHING_NEW for o in objs) \
         and {o["page"] for o in objs} == pages
 
 
