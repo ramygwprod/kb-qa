@@ -391,6 +391,21 @@ python3 -m kbqa mapstage --subject "<subject folder>" --batch <batch> --pass <A|
 It retires the file like any other and writes `RETIRED-WITHOUT-RECORD.txt` into
 the folder, saying it was retired without a record on the operator's word.
 
+**After the operator's ruling on a pattern** (the rows unchanged), when the
+orchestrator brings the pattern and the passes the ledger listed, run for each
+of those passes alone:
+
+```bash
+python3 -m kbqa mapstage --subject "<subject folder>" --batch <batch> --pass <A|B> --reopen "<pattern>"
+```
+
+It moves the pass's files into `_qa/retired-<batch>-<A|B>-<n>/` with
+`REOPENED-FOR-RULING.txt`, and writes a new draft: every other line carried
+over exactly, a placeholder for each reopened row. Hand back `reopened`,
+`carried_over`, `retired_to` and `next_step`; a refusal, word for word. Then
+that pass's mapper rewrites only the placeholders, and you run `kbqa mapstage`
+as above.
+
 ## 4 · Stop-conditions
 
 `_stop-conditions.md` in the subject folder, one list item per stop:

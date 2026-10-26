@@ -475,6 +475,27 @@ exactly these keys:
   like any other and `RETIRED-WITHOUT-RECORD.txt` in the folder says it was
   retired without a record, on the operator's word, with the staging sha256 at
   that moment. It touches only the given pass.
+- **Mapping again after a ruling** (the rows unchanged, since v6.23.0):
+  `kbqa mapstage --subject <d> --batch <b> --pass <A|B> --reopen "<pattern>"`
+  runs only when the map file, with its sidecar, has a `needs-human` line whose
+  note names the pattern (brackets optional, without case). It moves the pass's
+  files aside as `--retire` does, writes `REOPENED-FOR-RULING.txt` there (the
+  pattern, the ids reopened, the date) and a new draft: every other line
+  carried over as the exact draft line it was written from — `article`, `want`
+  and `so_that` read back from `user_story` by the rule that builds it, kept
+  only when building it again gives the same story and only one reading does;
+  `pcf_ids` as the element ids — and, for each reopened id, the placeholder
+
+  ```json
+  {"id": "<anchor id>", "reopened": "<pattern>"}
+  ```
+
+  A line that cannot be carried over exactly refuses the whole reopen, naming
+  the line; nothing is moved. A draft line still holding `reopened` is a reject
+  (*not yet re-mapped after the ruling*): the mapper replaces each placeholder
+  with a full draft line, and the usual rounds apply — after the correction
+  round, `--leave-out-rejects` writes a placeholder still there as a
+  `needs-human` line, its note `[no rule] not yet re-mapped after the ruling …`.
 
 A left-out line whose draft gave no role source, actor or theme — an anchor
 that had no line, say — carries none: `mapcheck` fails it

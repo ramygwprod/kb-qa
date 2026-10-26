@@ -339,8 +339,22 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
 
     if args.denominator is None:
         return _window_mode(windows, inputs, findings)
+    return coverage(Path(args.denominator), args.rows, Path(args.stops) if args.stops else None,
+                    findings, inputs)
 
-    denom = Path(args.denominator)
+
+def coverage(
+    denom: Path,
+    rows: List[str],
+    stops_path: Optional[Path] = None,
+    findings: Optional[List[Finding]] = None,
+    inputs: Optional[Dict[str, object]] = None,
+) -> Tuple[Verdict, int]:
+    """Coverage of one denominator by rows files and stop lines — the
+    denominator mode of the gate, also read by `kbqa status` (which may have
+    no rows file yet: every item not stopped is then open)."""
+    findings = [] if findings is None else findings
+    inputs = {} if inputs is None else inputs
     if not denom.exists():
         findings.append(Finding("denominator_missing", f"not found: {denom}"))
         return Verdict(GATE, FAIL, inputs, {"scanned": 0, "failed": 1}, findings), EXIT_FAIL
@@ -360,7 +374,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
     row_terms: Set[str] = set()
     parent_paths: Set[str] = set()
     total_rows = 0
-    for r in args.rows:
+    for r in rows:
         p = Path(r)
         if not p.exists():
             findings.append(Finding("rows_file_missing", f"not found: {p}"))
@@ -378,8 +392,8 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
                 parent_paths.add(_label_key(rp.obj["parent_path"]))
 
     stops: Dict[str, str] = {}
-    if args.stops:
-        sp = Path(args.stops)
+    if stops_path is not None:
+        sp = stops_path
         if sp.exists():
             stops, stop_errors = parse_stops(sp)
             for err in stop_errors:

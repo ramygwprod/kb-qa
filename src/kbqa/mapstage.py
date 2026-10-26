@@ -64,6 +64,28 @@ only, for a map file written before sidecars existed: it is retired and
 `RETIRED-WITHOUT-RECORD.txt` in the folder says so. It touches only the given
 pass.
 
+**Mapping again after the operator's ruling** (the rows unchanged):
+
+    python3 -m kbqa mapstage --subject <d> --batch <b> --pass <A|B> --reopen "<pattern>"
+
+runs only when the map file, with its sidecar, has at least one `needs-human`
+line whose note names the pattern (brackets optional, without case — as `kbqa
+status --pattern` matches it). The staging file need not have changed: the
+reason is a recorded ruling, not a row change, so ruling M2 stands for
+`--retire`. It moves this pass's map file, sidecar, draft and rejects files
+into a new `_qa/retired-<batch>-<A|B>-<n>/` as `--retire` does, writes there
+`REOPENED-FOR-RULING.txt` (the pattern, the ids reopened, the date), and writes
+a new `_mapdraft-<batch>-<A|B>.jsonl`: every line not reopened carried over as
+the exact draft line it was written from — the story read back by the rule that
+builds it, kept only when building it again gives the same story and only one
+reading does; element ids from `pcf_ids` — and for each reopened id the
+placeholder `{"id": <id>, "reopened": <pattern>}`. A line that cannot be carried
+over exactly (a map file of another era) refuses the whole reopen, naming the
+line; nothing is moved. A draft line still holding `reopened` is rejected —
+"not yet re-mapped after the ruling" — so no map file is written until the
+mapper has replaced every placeholder; the rounds are the usual ones (one
+correction round, then `--leave-out-rejects`).
+
 Prints one JSON result. Exit 0 when the file was written (or there is nothing
 to classify) or the files were retired, 1 when refused or lines were rejected.
 Never overwrites a mapping file.
@@ -77,7 +99,9 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from .gates.mapcheck import APQC_TAG, FIELDS, NO_ROLE, note_pattern, read_elements
+from datetime import date
+
+from .gates.mapcheck import APQC_TAG, FIELDS, NO_ROLE, UNNAMED, names_pattern, note_pattern, pattern_key, read_elements
 from .parsing import parse_staging
 from .profile import conventions
 from .stage import _write_new
@@ -97,6 +121,9 @@ LEAVE_OUT = "--leave-out-rejects"
 RETIRE = "--retire"
 NO_RECORD = "--no-record"
 NO_RECORD_NOTE = "RETIRED-WITHOUT-RECORD.txt"
+REOPEN = "--reopen"
+REOPENED = "reopened"  # the key of a placeholder line: the pattern its anchor was reopened for
+REOPEN_NOTE = "REOPENED-FOR-RULING.txt"
 BATCH_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 ANCHOR_NEXT = ("the mapper corrects this line in its one correction round; still rejected, the anchor is "
                "written needs-human for the operator")
@@ -353,6 +380,14 @@ def mapstage(subject: Path, batch: str, letter: str, elements_path: Path,
                             "draft": obj})
             continue
         drafted[rid_s] = (n, obj)
+        if REOPENED in obj:
+            # A placeholder `kbqa mapstage --reopen` wrote: the mapper replaces it
+            # with its reading under the ruling, or the anchor is not mapped.
+            anchor_reason[rid_s] = (f"not yet re-mapped after the ruling on [{obj[REOPENED]}]: the line is still "
+                                    "the placeholder --reopen wrote")
+            rejects.append({"line": n, "id": rid_s, "reason": anchor_reason[rid_s], "next_step": ANCHOR_NEXT,
+                            "draft": obj})
+            continue
         reasons = _check(obj, elements)
         if reasons:
             anchor_reason[rid_s] = "; ".join(reasons)
@@ -421,6 +456,157 @@ def _map_ids(path: Path) -> Optional[set]:
     return ids
 
 
+def _move_aside(subject: Path, batch: str, letter: str, files: List[Path]) -> Tuple[Path, List[dict]]:
+    """Move the files into a new `_qa/retired-<batch>-<pass>-<n>/`, `n` one
+    past every earlier folder of this batch and pass. Nothing is overwritten."""
+    qa = subject / "_qa"
+    qa.mkdir(exist_ok=True)
+    pat = retired_dir_re(batch, letter)
+    used = [int(m.group(1)) for p in qa.iterdir() for m in [pat.fullmatch(p.name)] if m]
+    n = max(used or [0]) + 1
+    dest = qa / f"retired-{batch}-{letter}-{n}"
+    dest.mkdir()  # a new folder: never reused
+    moved = []
+    for p in files:
+        target = dest / p.name
+        if target.exists():  # pragma: no cover — the folder is new
+            raise Refused(f"{target} exists: nothing is overwritten")
+        p.rename(target)
+        moved.append({"from": str(p), "to": str(target)})
+    return dest, moved
+
+
+def draft_of(line: object) -> Tuple[Optional[dict], str]:
+    """A map line as `kbqa mapstage` writes it, converted back to the draft
+    line it was written from — exactly, or (None, why not). The story is read
+    back by the one rule that builds it; a reading is kept only when building
+    the story from it gives back the very same story, and only when exactly one
+    reading does. Never a guess."""
+    if not isinstance(line, dict) or list(line) != list(FIELDS):
+        return None, f"its keys are not the mapping format's, in its order ({', '.join(FIELDS)})"
+    texts = ("id", "user_story", "role", "role_source", "actor", "theme", "confidence", "status", "note")
+    if any(not isinstance(line[k], str) for k in texts):
+        return None, "a text field is not text"
+    links, pcfs = line["theme_links"], line["pcf_ids"]
+    if not isinstance(links, list) or not all(isinstance(t, str) for t in links):
+        return None, "theme_links is not a list of codes"
+    if not isinstance(pcfs, list) or not all(isinstance(e, dict) and list(e) == ["pcf_id", "hierarchy_id", "name"]
+                                             and isinstance(e["pcf_id"], (str, int))
+                                             and not isinstance(e["pcf_id"], bool) for e in pcfs):
+        return None, "pcf_ids is not a list of {pcf_id, hierarchy_id, name}"
+    if line["status"] == NEEDS_HUMAN and note_pattern(line["note"]) is None:
+        return None, "a needs-human note that does not open with its [<name>]"
+    common = {"id": line["id"], "role": line["role"], "role_source": line["role_source"], "actor": line["actor"],
+              "theme": line["theme"], "theme_links": list(links), "pcf_ids": [str(e["pcf_id"]) for e in pcfs],
+              "confidence": line["confidence"], "status": line["status"], "note": line["note"]}
+    story = line["user_story"]
+    readings = []
+    if story == "":
+        readings.append({**common, "article": "", "want": "", "so_that": ""})
+    for article in ARTICLES:
+        head = ("As " + (f"{article} " if article else "") + line["role"]
+                + (f" {APQC_TAG}" if line["role_source"] == APQC_CLOSEST else "") + ", I want ")
+        if not story or not story.startswith(head):
+            continue
+        parts = story[len(head):].split(", so that ")
+        if len(parts) > 2:
+            return None, "its user_story holds \", so that \" more than once: which part is the want is not code's to say"
+        readings.append({**common, "article": article, "want": parts[0], "so_that": parts[1] if len(parts) == 2 else ""})
+    exact = [r for r in readings if story_of(r) == story and story_problem(r) is None]
+    if len(exact) != 1:
+        return None, ("its user_story cannot be read back exactly as \"As [a|an ]<role>[ (APQC-closest)], I want "
+                      "<want>[, so that <so_that>]\" from its role and role_source" if not exact else
+                      f"its user_story reads back {len(exact)} ways")
+    return {k: exact[0][k] for k in DRAFT_FIELDS}, ""
+
+
+def reopen_plan(subject: Path, batch: str, letter: str, pattern: str) -> Dict[str, object]:
+    """What `--reopen` would do, or Refused: the map file's lines, the ids whose
+    needs-human note names the pattern, and the new draft — every other line
+    carried over as its exact draft, one placeholder per reopened id. Reads only."""
+    if not subject.is_dir():
+        raise Refused(f"no subject folder {subject}")
+    if not BATCH_NAME_RE.match(batch):
+        raise Refused(f"batch {batch!r} is not a batch name")
+    if letter not in PASSES:
+        raise Refused(f"pass {letter!r} is not A or B")
+    key = pattern_key(pattern)
+    if not key:
+        raise Refused(f"{REOPEN} needs the name of the pattern the operator ruled on")
+    staging = subject / conventions().staging_for(batch)
+    if not staging.is_file():
+        raise Refused(f"no staging file {staging.name}")
+    out_path, meta_path = subject / map_name(batch, letter), subject / meta_name(batch, letter)
+    if not out_path.is_file():
+        raise Refused(f"no map file {out_path.name}: there is no reading to reopen")
+    if not meta_path.is_file():
+        raise Refused(f"{out_path.name} has no {meta_path.name}: a map file written before sidecars existed is not "
+                      "reopened line by line",
+                      next_step=f"only on the operator's word: {RETIRE} {NO_RECORD}, then the whole pass is mapped again")
+    try:
+        json.loads(meta_path.read_text(encoding="utf-8"))["staging_sha256"]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise Refused(f"{meta_path.name} cannot be read: {exc}")
+    lines: List[Tuple[int, dict]] = []
+    for n, raw in enumerate(out_path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not raw.strip():
+            continue
+        try:
+            obj = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise Refused(f"{out_path.name} line {n} is not JSON ({exc.msg}): nothing was moved")
+        if not isinstance(obj, dict) or not isinstance(obj.get("id"), str):
+            raise Refused(f"{out_path.name} line {n} is not a JSON object with an id: nothing was moved")
+        lines.append((n, obj))
+    hits = [(n, o) for n, o in lines if names_pattern(o, key)]
+    if not hits:
+        raise Refused(f"no needs-human line of {out_path.name} names the pattern [{pattern.strip()}]: there is "
+                      "nothing to reopen for that ruling")
+    named = note_pattern(hits[0][1]["note"]) or UNNAMED  # the pattern as the notes spell it
+    draft: List[dict] = []
+    for n, o in lines:
+        if names_pattern(o, key):
+            draft.append({"id": o["id"], REOPENED: named})
+            continue
+        carried, why = draft_of(o)
+        if carried is None:
+            raise Refused(f"{out_path.name} line {n} ({o['id']}) cannot be carried over to the draft exactly: {why}. "
+                          "Nothing was moved", next_step="operator")
+        draft.append(carried)
+    # as --retire moves them: the map file, its sidecar, this pass's draft and rejects files
+    moving = [p for p in (out_path, meta_path, subject / draft_name(batch, letter)) if p.exists()] \
+        + _rounds(subject, batch, letter)
+    return {"pattern": named, "reopened": [o["id"] for _, o in hits], "carried_over": len(lines) - len(hits),
+            "draft": draft, "files": moving}
+
+
+def reopen(subject: Path, batch: str, letter: str, pattern: str, today: Optional[str] = None) -> Dict[str, object]:
+    """After the operator's ruling on a pattern: move this pass's map file,
+    sidecar, draft and rejects files aside, as `--retire` does, and write a new
+    draft — every line not reopened carried over exactly, a placeholder for each
+    reopened id — so only the rows the ruling reopens go back to the mapper.
+    The staging file need not have changed: the reason is the ruling."""
+    plan = reopen_plan(subject, batch, letter, pattern)
+    dest, moved = _move_aside(subject, batch, letter, list(plan["files"]))
+    day = today or date.today().isoformat()
+    note = dest / REOPEN_NOTE
+    _write_new(note, (
+        f"Reopened for the operator's ruling on [{plan['pattern']}], {day} ({REOPEN}). Pass {letter} of {batch}: "
+        f"{len(plan['reopened'])} line(s) reopened, {plan['carried_over']} carried over unchanged into the new "
+        f"{draft_name(batch, letter)}.\nReopened ids:\n" + "".join(f"- {i}\n" for i in plan["reopened"])
+    ).encode("utf-8"))
+    draft_path = subject / draft_name(batch, letter)
+    _write_new(draft_path, "".join(json.dumps(x, ensure_ascii=False) + "\n" for x in plan["draft"]).encode("utf-8"))
+    return {"batch": batch, "pass": letter, "pattern": plan["pattern"], "reopened": plan["reopened"],
+            "carried_over": plan["carried_over"], "retired_to": str(dest), "moved": moved, "note": str(note),
+            "draft": str(draft_path),
+            "next_step": (f"the mapper rewrites only the {len(plan['reopened'])} placeholder line(s) of "
+                          f"{draft_path.name} (`{{\"id\": …, \"{REOPENED}\": …}}`), applying the ruling now in the "
+                          "logic sheet, and changes no carried-over line; then "
+                          f'python3 -m kbqa mapstage --subject "{subject}" --batch {batch} --pass {letter} '
+                          "--elements <the element list>")}
+
+
 def retire(subject: Path, batch: str, letter: str, no_record: bool = False) -> Dict[str, object]:
     """Move this pass's map file, its sidecar, its draft and its rejects files
     into a new `_qa/retired-<batch>-<pass>-<n>/` — only when the staging file
@@ -476,20 +662,7 @@ def retire(subject: Path, batch: str, letter: str, no_record: bool = False) -> D
                           "without same_feature_as) did not: there is nothing to re-map, so nothing was moved",
                           next_step=f"keep {out_path.name}: the classification stands for the same anchors; "
                                     "/kbqa-check the batch again")
-    qa = subject / "_qa"
-    qa.mkdir(exist_ok=True)
-    pat = retired_dir_re(batch, letter)
-    used = [int(m.group(1)) for p in qa.iterdir() for m in [pat.fullmatch(p.name)] if m]
-    n = max(used or [0]) + 1
-    dest = qa / f"retired-{batch}-{letter}-{n}"
-    dest.mkdir()  # a new folder: never reused
-    moved = []
-    for p in files:
-        target = dest / p.name
-        if target.exists():  # pragma: no cover — the folder is new
-            raise Refused(f"{target} exists: nothing is overwritten")
-        p.rename(target)
-        moved.append({"from": str(p), "to": str(target)})
+    dest, moved = _move_aside(subject, batch, letter, files)
     out: Dict[str, object] = {"batch": batch, "pass": letter, "retired_to": str(dest), "moved": moved}
     if no_record:
         note = dest / NO_RECORD_NOTE
@@ -522,11 +695,18 @@ def run(argv: Optional[List[str]] = None) -> int:
     ap.add_argument(NO_RECORD, action="store_true", dest="no_record",
                     help="with --retire, on the operator's word only: retire a map file that has no .meta.json "
                          "(written before kbqa 6.22.0)")
+    ap.add_argument(REOPEN, dest="reopen", metavar="PATTERN",
+                    help="after the operator's ruling on this pattern: move this pass's files aside and write a new "
+                         "draft — every other line carried over exactly, a placeholder per needs-human line naming it")
     args = ap.parse_args(argv)
     try:
         if args.no_record and not args.retire:
             raise Refused(f"{NO_RECORD} is given with {RETIRE} only")
-        if args.retire:
+        if args.reopen is not None:
+            if args.retire or args.leave_out or args.elements:
+                raise Refused(f"{REOPEN} is a run of its own: no {RETIRE}, no --elements, no {LEAVE_OUT}")
+            code, out = 0, reopen(Path(args.subject), args.batch, args.letter, args.reopen)
+        elif args.retire:
             if args.leave_out or args.elements:
                 raise Refused(f"{RETIRE} is a run of its own: no --elements, no {LEAVE_OUT}")
             code, out = 0, retire(Path(args.subject), args.batch, args.letter, args.no_record)

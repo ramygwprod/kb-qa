@@ -348,6 +348,18 @@ Pass those reasons on with the findings, word for word.
 Only `fixable` findings come through here. `structural` and `planner` findings
 mean re-fetching or re-planning: a new batch, never an edit.
 
+**After a ruling on a question** (the rows unchanged): the operator brings the
+pattern they ruled on and the passes `kbqa status <subject folder> --pattern
+"<name>"` listed for it — exactly the rows that stopped on it, per batch and
+pass (the operator runs the ledger; it writes nothing). For each pass listed,
+`kbqa-fetcher` runs `kbqa mapstage --reopen "<name>"` for that pass alone (its
+§3b); it moves the pass's files into
+`_qa/retired-<batch>-<A|B>-<n>/` with `REOPENED-FOR-RULING.txt`, and writes a
+draft whose only open lines are placeholders for those rows. Then that pass's
+`kbqa-mapper` rewrites only the placeholders (its §2b) and `kbqa mapstage`
+runs as in §4. A pass the ledger says cannot be reopened (no sidecar) goes to
+the operator.
+
 ## 7 · Never
 
 - fetch, write a file, or run a command yourself

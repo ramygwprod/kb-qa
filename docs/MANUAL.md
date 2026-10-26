@@ -790,6 +790,55 @@ It refuses unless the tree is still exactly what that merge left and the
 result has exactly the logged pre-merge sha256. The rows stay in the staging
 file.
 
+### 5.12 · Operator — the ledger: what is left, and what is done
+
+Before you plan the next session, ask the files, not an agent:
+
+```bash
+python3 -m kbqa status <subject folder>                 # a short markdown summary
+python3 -m kbqa status <subject folder> --json          # the whole structure
+python3 -m kbqa status --estate <estate root>           # open questions across every subject
+```
+
+It writes nothing. Per surface it shows the items of the current denominator,
+how many were captured and staged, the rows (features and other sources), the
+items stop lines cover, and the **open items** — index items with neither a row
+nor a stop line, counted by `g4`'s own code exactly as `/kbqa-check` runs it;
+then whether the windows are exhausted or parked (and where the next resumes),
+the windows still unstaged, and the pages to retry or given up on. Per batch:
+the last check on the staging file's current bytes (`not checked`, or `stale`
+when the report was made on other bytes), the autofix records, each map pass
+and whether it was made from the current staging file, and whether it is
+merged (its ids in `feature-tree.md`). A subject collected before kbqa 6.22
+has no window records or sidecars: what they would say is `unknown`, never 0.
+
+**The operator's questions, once each.** Every `needs-human` map line is
+grouped by the `[pattern]` its note opens with, across every batch — with
+`--estate`, across every subject — so one ruling answers every row that stops
+on it. After the ruling:
+
+```bash
+python3 -m kbqa status <subject folder> --pattern "<name>"
+python3 -m kbqa status --estate <estate root> --pattern "<name>"
+```
+
+lists exactly the rows (batch, id, pass) whose note names that pattern — the
+rows to send back to the mappers — with, per batch and pass, the command that
+sends back only those rows:
+
+```bash
+python3 -m kbqa mapstage --subject <d> --batch <b> --pass <A|B> --reopen "<name>"
+```
+
+The rows did not change, so `--retire` stays refused (ruling M2); `--reopen`'s
+reason is the recorded ruling instead. It retires the pass's files as
+`--retire` does, notes `REOPENED-FOR-RULING.txt` in the folder, and writes a new
+draft in which every other line is carried over exactly and each reopened row
+is a placeholder. The mapper rewrites only the placeholders, applying the
+ruling now in the logic sheet; `mapstage` writes the map file once none is
+left (the usual rounds). The ledger says when a pass cannot be reopened — a
+map file with no sidecar.
+
 ## 6 · All available actions
 
 Thirteen checking actions. **Ten are read-only by default; three write, and
@@ -856,6 +905,7 @@ in `docs/STAGING-FORMAT.md`.
 |---|---|---|---|
 | `mapstage --subject <d> --batch <b> --pass <A\|B> --elements <list> [--leave-out-rejects]` | the batch's staging file (its anchor rows: rows without `same_feature_as`), this pass's `_mapdraft-<b>-<A\|B>.jsonl` and rejects files — never the other pass's — and the element list | `_map-<b>-<A\|B>.jsonl` in the mapper's format, one line per anchor in the staging file's order: `user_story` built as `As [a\|an ]<role>[ (APQC-closest)], I want <want>[, so that <so_that>]` (the article only when the draft gives one, the tag exactly when `role_source` is `apqc-closest`, no "so that" part when `so_that` is empty; `""` for a `NO-FUNCTION`/`NOT-FEATURE` line with no `want`), each `pcf_ids` entry `{pcf_id, hierarchy_id, name}` copied from the list by id, every other key as drafted. **A rejected line blocks the file**: the run writes only `_mapdraft-<b>-<A\|B>.rejects-<n>.jsonl` — a line not a JSON object, a key missing or extra, a `null`, a text key not text, an id that is no anchor row or has a line already, an `article` other than `a`, `an` or `""`, an element id not on the list, a story that cannot be built, a `needs-human` note not opening `[<name>]`, an anchor with no line — one file per round, never overwritten. The mapper corrects once; then `--leave-out-rejects` writes the file with every anchor still on one line — an anchor whose line is rejected or missing written `needs-human`, its note `[no rule] <reason>`, with what its draft gave that can be copied — and lists each reject under `needs_operator` | 0 written (or no anchor to classify) · 1 refused, or lines rejected; a third run without `--leave-out-rejects`, or the flag before the correction round, is refused with its `next_step`; never overwrites a map file or its sidecar `_map-<b>-<A\|B>.meta.json` (the staging file's name and sha256 it was written from, also printed as `staging_sha256`; `mapcheck` never reads it) |
 | `mapstage --subject <d> --batch <b> --pass <A\|B> --retire [--no-record]` | this pass's map file and its sidecar, the staging file (its anchor ids) | moves this pass's `_map-<b>-<P>.jsonl`, `.meta.json`, `_mapdraft-<b>-<P>.jsonl` and every `_mapdraft-<b>-<P>.rejects-*.jsonl` into a new `_qa/retired-<b>-<P>-<n>/` (`n` one past every earlier folder of that batch and pass; nothing deleted or overwritten) and prints each move, `anchor_set_changed` with `anchors_added` / `anchors_removed` (the anchor ids — rows without `same_feature_as` — of the staging file now against the ids the map file has lines for) and the `next_step` (the mapper writes a fresh draft for this pass). `--no-record`, **only on the operator's word**, retires a map file that has no `.meta.json` (written before sidecars existed) and writes `RETIRED-WITHOUT-RECORD.txt` into the folder saying so. Never touches the other pass | 0 moved · 1 refused: the staging file still has the sha256 the sidecar recorded (classifying unchanged rows again is wasted work), the staging bytes changed but its anchor ids did not (nothing to re-map: the map file stands, check again), a map file with no sidecar (`next_step`: `--no-record`, on the operator's word), `--no-record` with a sidecar present or with no map file, nothing to retire, or combined with `--elements` / `--leave-out-rejects` |
+| `mapstage --subject <d> --batch <b> --pass <A\|B> --reopen "<pattern>"` | this pass's map file and its sidecar, the staging file | after the operator's ruling on a pattern, the rows unchanged: moves this pass's map file, sidecar, draft and rejects files into a new `_qa/retired-<b>-<P>-<n>/` as `--retire` does, writes there `REOPENED-FOR-RULING.txt` (the pattern, the ids reopened, the date), and writes a new `_mapdraft-<b>-<P>.jsonl`: every line whose `needs-human` note does not name the pattern carried over as the exact draft line it was written from (the story read back by the rule that builds it, kept only when it builds the same story and only one reading does; element ids from `pcf_ids`), and for each reopened id the placeholder `{"id": <id>, "reopened": <pattern>}`. A draft line still holding `reopened` is a reject (*not yet re-mapped after the ruling*), so the map file waits until the mapper has replaced every placeholder; the usual rounds apply (one correction round, then `--leave-out-rejects`) | 0 reopened · 1 refused, nothing moved: no map file, no sidecar (`next_step`: `--retire --no-record` on the operator's word, then a full re-map), no `needs-human` line naming the pattern (brackets optional, without case, as `status --pattern` matches), a line that cannot be carried over exactly (named), or combined with `--retire` / `--elements` / `--leave-out-rejects` |
 
 Since v6.22.0 the mapper writes drafts and code writes the map file, so a
 story's form and an element's hierarchy id and name are never typed by an
@@ -927,6 +977,17 @@ detect — the fetcher records `gated: login` from what it sees.
 
 The new bytes are the batch's next round: run `autofix` on a round-1 report,
 give what it leaves to the row-writer, then check again (§5.1).
+
+### Ledger — what is left and what is done; writes nothing
+
+| action | reads | prints | exit |
+|---|---|---|---|
+| `status <subject dir> [--json]` | the subject's denominators, window records (`WINDOW.json`), receipts and captures, drafts and rejects files, staging files, `_qa/<b>.report.json`, autofix records, map files and their sidecars, retired folders, `_stop-conditions.md`, `feature-tree.md` | per surface (`product`, `docs`, `help`): its state as `surfaces` reads it, the current denominator, `items`, `items_captured` (a page of a window record or a capture file), `items_staged` (a page of a batch with a staging file: its `pages:`, else its receipt's), `rows` · `features` (anchors) · `other_sources`, `stop_lines` (items stopped, items closed by a surface line, the closing lines), `open_items` with `open_item_urls` — index items with neither a row nor a stop line, by `g4`'s own code over the surface's batches as `/kbqa-check` runs it — `windows` (recorded, from the current denominator, `exhausted`, `parked` with `resume_from`, `ended_in_error`, `unstaged` as `collect-surface` lists them), `retryable_pages`, `given_up_pages`. Per batch: `rows`, `check` (`status` and `round` from the report on the staging file's current bytes; `not checked` without one; `stale` when made on other bytes, with the report's own status beside it), `autofix` records (changes, findings left, on the current bytes or not), `maps` per pass (map file, `from_current_staging` from its sidecar — `unknown` without one — draft, rejects rounds, retired folders, lines, needs-human lines), `merged` (`merged` · `partly merged` · `not merged`, read from the tree by id). `open_questions`: every `needs-human` map line grouped by its note's `[pattern]` (`mapcheck`'s `note_pattern`, `group_by_pattern`, `questions`), names joined without case, each with its batches, row ids and passes. A markdown summary by default | 0 · 1 only when refused: no subject folder |
+| `status [<subject dir>] --estate <root> [--json]` | the estate's `kbqa-estate.json` (`subjects_dir`) and every subject folder in it | the subject's ledger when one is named, and `estate.open_questions`: the same grouping across every subject, each batch with its subject | 0 · 1 refused: no `kbqa-estate.json` in the root, one that cannot be read, no `subjects_dir`, or a `subjects_dir` that is not a folder |
+| `status <subject dir> \| --estate <root> --pattern "<name>" [--json]` | the map files of the subject (or of every subject) and, per pass listed, its sidecar and staging file | after a ruling: exactly the rows — subject, batch, id, pass — whose `needs-human` note names the pattern (without case; brackets optional), the rows to re-map; per batch and pass the `reopen` command (`mapstage --reopen "<pattern>"`), the re-map step (`then`), and `reopen_refused` when `--reopen` would refuse that pass now (by `mapstage`'s own plan: a map file with no sidecar, say) | 0 · 1 refused: as above, or an empty name |
+
+What the files cannot tell — a subject left by kbqa 6.21: a staging file written
+by an agent, no window records, no drafts, no sidecars — is `unknown`, never 0.
 
 ### Diagnostics, interpretation guards and metadata — never write rows
 

@@ -150,6 +150,22 @@ rejected is written by the operator's command as a `needs-human` line, its note
 correction round. Once the map file exists, the draft is no longer yours to
 change.
 
+## 2b · Reopened after a ruling
+
+After the operator rules on a pattern, `kbqa mapstage --reopen "<pattern>"`
+gives you back a draft in which every line is the one the map file was written
+from, except one placeholder per row that stopped on that pattern:
+`{"id": "<id>", "reopened": "<pattern>"}`. Given it:
+
+- Read the ruling, now recorded in the logic sheet, first.
+- Rewrite **only the placeholder lines**, each at its own line number, as full
+  draft lines (§2), applying the ruling. Never change a carried-over line —
+  not a word, not its key order.
+- Hand back each reopened id with its new reading.
+
+A placeholder left as it is, is a reject: no map file is written until every
+one is replaced; the rounds of §2a apply.
+
 ## 3 · When you are not sure — `needs-human`
 
 Mark the row `needs-human`, with the reason in `note`, when:

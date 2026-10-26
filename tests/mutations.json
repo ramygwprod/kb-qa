@@ -1700,5 +1700,302 @@
     "tests": [
       "tests/test_release_tooling.py"
     ]
+  },
+  {
+    "label": "status: a report made on other bytes is stale",
+    "file": "src/kbqa/ledger.py",
+    "old": "    if sha is None or rep.get(\"staging_sha256\") != sha:\n",
+    "new": "    if sha is None:\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: a report with no round says unknown, never 0",
+    "file": "src/kbqa/ledger.py",
+    "old": "\"round\": rnd if isinstance(rnd, int) else UNKNOWN,",
+    "new": "\"round\": rnd if isinstance(rnd, int) else 0,",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: a map file with no sidecar is unknown",
+    "file": "src/kbqa/ledger.py",
+    "old": "        out[\"from_current_staging\"] = UNKNOWN\n        out[\"why\"] = f\"no {meta.name}",
+    "new": "        out[\"from_current_staging\"] = False\n        out[\"why\"] = f\"no {meta.name}",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: made from the current staging, by the sidecar's sha256",
+    "file": "src/kbqa/ledger.py",
+    "old": "            out[\"from_current_staging\"] = recorded == sha\n",
+    "new": "            out[\"from_current_staging\"] = True\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: merged needs every id in the tree",
+    "file": "src/kbqa/ledger.py",
+    "old": "    state = MERGED if present == len(ids) else NOT_MERGED if present == 0 else PARTLY\n",
+    "new": "    state = MERGED if present else NOT_MERGED\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: merged is read from the tree",
+    "file": "src/kbqa/ledger.py",
+    "old": "        tree_ids = {str(r[\"id\"]) for r in rows or [] if r.get(\"id\")}\n",
+    "new": "        tree_ids = set()\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: open items are g4's count over the surface's batches",
+    "file": "src/kbqa/ledger.py",
+    "old": "        rows_files = [str(subject / conv.staging_for(str(b[\"batch\"]))) for b in staged]\n",
+    "new": "        rows_files = []\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: open items read the stop lines",
+    "file": "src/kbqa/ledger.py",
+    "old": "coverage(den, rows_files, stops if stops.is_file() else None)",
+    "new": "coverage(den, rows_files, None)",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: a surface closed by a stop line has no items, not unknown ones",
+    "file": "src/kbqa/ledger.py",
+    "old": "out[\"open_items\"] = None if out[\"state\"] == \"stop-condition\" else UNKNOWN",
+    "new": "out[\"open_items\"] = UNKNOWN",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: captures with no window record are counted from the capture",
+    "file": "src/kbqa/ledger.py",
+    "old": "            captured |= set(parse_capture(cap).blocks)\n",
+    "new": "            pass\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: staged pages that cannot be told are unknown",
+    "file": "src/kbqa/ledger.py",
+    "old": "    out[\"items_staged\"] = of_items(None if staged_unknown else staged_urls)\n",
+    "new": "    out[\"items_staged\"] = of_items(staged_urls)\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: no window records under old batches is unknown",
+    "file": "src/kbqa/ledger.py",
+    "old": "    legacy_only = not windows and bool(captures or mine)\n",
+    "new": "    legacy_only = False\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: the retry state of old batches is unknown",
+    "file": "src/kbqa/ledger.py",
+    "old": "    if windows is None or legacy_only:\n",
+    "new": "    if windows is None:\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: exhausted only when the last window says so",
+    "file": "src/kbqa/ledger.py",
+    "old": "            w_out[\"exhausted\"] = last.get(\"window_end\") == \"exhausted\"\n",
+    "new": "            w_out[\"exhausted\"] = True\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: unstaged windows as collect-surface lists them",
+    "file": "src/kbqa/ledger.py",
+    "old": "        w_out[\"unstaged\"] = [{\"batch\": u[\"batch\"], \"state\": u[\"state\"]} for u in collect_surface.unstaged(subject, surface)]\n",
+    "new": "        w_out[\"unstaged\"] = []\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: an autofix record is on the current bytes only by its sha256",
+    "file": "src/kbqa/ledger.py",
+    "old": "entry[\"on_current_staging\"] = rec.get(\"staging_sha256_after\") == sha if sha else UNKNOWN",
+    "new": "entry[\"on_current_staging\"] = True if sha else UNKNOWN",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: questions are joined across batches without case",
+    "file": "src/kbqa/ledger.py",
+    "old": "                key = str(q[\"pattern\"]).casefold()\n",
+    "new": "                key = str(q[\"pattern\"])\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "mapcheck: questions join pattern names without case",
+    "file": "src/kbqa/gates/mapcheck.py",
+    "old": "            key = next((k for k in grouped if k.casefold() == name.casefold()), name)\n",
+    "new": "            key = name\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: an estate without kbqa-estate.json is refused",
+    "file": "src/kbqa/ledger.py",
+    "old": "    if not cfg.is_file():\n        raise Refused(f\"no {roles.CONFIG}",
+    "new": "    if False:\n        raise Refused(f\"no {roles.CONFIG}",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: an estate config names its subjects_dir",
+    "file": "src/kbqa/ledger.py",
+    "old": "    if not isinstance(sd, str) or not sd.strip():\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: exit 0 unless refused",
+    "file": "src/kbqa/ledger.py",
+    "old": "    return 0\n\n\ndef main() -> None:",
+    "new": "    return 1\n\n\ndef main() -> None:",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "mapcheck: a pattern is matched without case",
+    "file": "src/kbqa/gates/mapcheck.py",
+    "old": "    return n.casefold()\n",
+    "new": "    return n\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "mapcheck: a pattern's brackets are optional",
+    "file": "src/kbqa/gates/mapcheck.py",
+    "old": "    if n.startswith(\"[\") and n.endswith(\"]\"):\n        n = \" \".join(n[1:-1].split())\n    return n.casefold()\n",
+    "new": "    return n.casefold()\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "mapcheck: only a needs-human line names a pattern",
+    "file": "src/kbqa/gates/mapcheck.py",
+    "old": "    return line.get(\"status\") == \"needs-human\" and \\\n        pattern_key(",
+    "new": "    return \\\n        pattern_key(",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "mapstage: a placeholder line is not yet re-mapped",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if REOPENED in obj:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "mapstage: --reopen needs the map file's sidecar",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if not meta_path.is_file():\n        raise Refused(f\"{out_path.name} has no {meta_path.name}: a map file written",
+    "new": "    if False:\n        raise Refused(f\"{out_path.name} has no {meta_path.name}: a map file written",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "mapstage: --reopen needs a needs-human line naming the pattern",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    if not hits:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "mapstage: --reopen refuses a line it cannot carry over exactly",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if carried is None:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "mapstage: a story is read back only when it builds the same story",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    exact = [r for r in readings if story_of(r) == story and story_problem(r) is None]\n",
+    "new": "    exact = readings\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "mapstage: a story holding the joining words twice is never guessed",
+    "file": "src/kbqa/mapstage.py",
+    "old": "        if len(parts) > 2:\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "mapstage: --reopen moves the old draft and rejects aside",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    moving = [p for p in (out_path, meta_path, subject / draft_name(batch, letter)) if p.exists()] \\\n        + _rounds(subject, batch, letter)\n",
+    "new": "    moving = [p for p in (out_path, meta_path) if p.exists()]\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "mapstage: --reopen records the ruling in the retired folder",
+    "file": "src/kbqa/mapstage.py",
+    "old": "    note = dest / REOPEN_NOTE\n    _write_new(note,",
+    "new": "    note = dest / REOPEN_NOTE\n    (lambda *a: None)(note,",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "status: --pattern says when a pass cannot be reopened",
+    "file": "src/kbqa/ledger.py",
+    "old": "                if why is not None:\n                    entry[\"reopen_refused\"] = why\n",
+    "new": "                if False:\n                    entry[\"reopen_refused\"] = why\n",
+    "tests": [
+      "tests/test_ledger.py"
+    ]
   }
 ]
