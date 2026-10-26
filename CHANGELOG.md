@@ -16,6 +16,53 @@ estate is validated against until that pin is moved deliberately.
 
 ---
 
+## [6.23.0] — 2026-10-27
+
+One picture of what is left — and a re-collection that does no work twice and
+never calls a feature removed on weak evidence. Four packages by separate
+agents against one plan, each reviewed and mutation-checked, then reviewed
+together; the integration review found two blocking defects, fixed before
+release.
+
+### Added
+
+- **`kbqa status <subject>`** — the subject ledger, read-only: per surface the
+  current collection's coverage (counted as G4 counts it), windows (parked,
+  unstaged, drafts written but not staged, closed), retries; per batch the
+  check status and round on the current bytes, autofix records, map passes,
+  merged or not; every open question grouped by `[pattern]` across batches
+  (and subjects with `--estate`). `--pattern "<name>"` lists exactly the rows
+  to re-map after a ruling.
+- **`kbqa mapstage --reopen "<pattern>"`** — re-mapping after a ruling: every
+  other line is carried over exactly (refused if any cannot be read back), the
+  reopened rows become placeholders that block the map file until the mapper
+  replaces them; refused when the anchors changed (`--retire` instead).
+- **`/kbqa-merge <subject> --all-clear`** — every CLEAR batch, anchors first,
+  through the single-batch path; stops at the first refusal with the earlier
+  merges kept; `--dry-run`.
+- **`kbqa map <subject>`** — the vendor's product map, derived by code:
+  modules from its own breadcrumbs → features → other sources and ways in,
+  each row with its access date and state (merged, staged with its check,
+  unchecked); nothing dropped — unknown positions, broken links and
+  unreadable rows are listed.
+- **Re-collection**: a page whose text equals its last capture is marked
+  `unchanged_since`; the row-writer confirms that the earlier rows stand
+  (`{"page", "unchanged": <batch>}`, accepted only when the hash matches),
+  recorded with the window-scoped stop reason `unchanged since <earlier
+  batch>, in <this batch>`, which counts only for that window and its
+  collection.
+- **`kbqa compare --from --to`** — per page and per feature: unchanged or
+  changed by text hash; added or removed only when the other side's coverage
+  is complete, and never removed while the text is still published (moved to
+  another URL, or the quote still on the page) — otherwise `unknown`, with
+  why.
+
+### Changed
+
+- G4's coverage and mapcheck's question grouping are functions the ledger
+  reuses; their behaviour is unchanged. G4 counts a window-scoped stop line
+  only for its own window and collection (stricter, never looser).
+
 ## [6.22.0] — 2026-10-24
 
 Code does what code can. The agents kept retyping what code already knew —
