@@ -760,7 +760,7 @@ did not run has found nothing — not the same as having found nothing wrong.
 |---|---|---|---|
 | collect | `/kbqa-collect <Subject>` | plans, fetches, writes rows from captures, classifies | read a verdict |
 | check | `/kbqa-check <subject folder>` | runs the gates per batch and per surface; reports CLEAR · BLOCKED · PARKED · NOT CHECKED | edit a row, collect, merge |
-| merge | `/kbqa-merge <subject folder> <batch>` | appends one CLEAR batch to `feature-tree.md` | merge on its own, edit a row, renumber an id |
+| merge | `/kbqa-merge <subject folder> <batch>` · `/kbqa-merge <subject folder> --all-clear` | appends one CLEAR batch to `feature-tree.md` · or every batch CLEAR on its current bytes and not yet in the tree, one at a time, anchors' batches first, stopping at the first refusal | merge on its own, edit a row, renumber an id |
 
 Each runs in its own session. All three skills and the collector's agents ship
 with this package and are installed together with `bash skills/install.sh <tag>`,
@@ -779,6 +779,27 @@ The rows are appended unchanged as one fenced block; nothing above it moves.
 The `proof:` line is recomputed, the tree is written atomically and durably,
 and `_merge-log.jsonl` records both hashes and both proof lines. G6 then runs:
 it must say nothing about this tree or batch.
+
+**Every CLEAR batch at once:**
+
+```bash
+python3 ~/.claude/skills/kbqa-merge/scripts/merge.py --vendor-dir <subject> --all-clear --dry-run
+python3 ~/.claude/skills/kbqa-merge/scripts/merge.py --vendor-dir <subject> --all-clear
+```
+
+It selects every batch CLEAR on its current staging bytes whose rows are not
+yet in the tree (as `kbqa status` reads them) and merges them one at a time
+through the single-batch path above — each with its own checks, pre-merge
+hash, log line and proof line. Batch-name order, except that a batch whose
+rows name (`same_feature_as`) an anchor only another selected batch holds
+merges after that batch; batches that wait on each other are refused before
+anything merges. At the first refusal it stops: the batches already merged
+stay merged (each undone on its own, the latest first), and it prints them,
+the refused batch with its reason word for word, and the batches not
+attempted — exit 1. Every other batch is listed with why it is left out. G6
+runs once, at the end. The dry run checks each batch on the tree the merges
+before it would leave, and writes nothing. Nothing CLEAR: a plain message,
+exit 0. `--all-clear` with `--batch` or `--undo` is refused.
 
 **Undo** uses the log alone, and only for a tree's latest merge:
 

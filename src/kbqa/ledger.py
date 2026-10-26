@@ -515,14 +515,19 @@ def pattern_rows(subjects: List[Tuple[Optional[str], Path]], name: str) -> Dict[
 # The subject, the estate
 # --------------------------------------------------------------------------
 
+def tree_ids(subject: Path) -> Optional[Set[str]]:
+    """Every row id in the subject's `feature-tree.md`; None without one."""
+    tree = subject / features.TREE
+    if not tree.is_file():
+        return None
+    rows, _, _, _ = _staging_rows(tree)
+    return {str(r["id"]) for r in rows or [] if r.get("id")}
+
+
 def subject_ledger(subject: Path) -> Dict[str, object]:
     conv = conventions()
-    tree = subject / features.TREE
-    tree_ids: Optional[Set[str]] = None
-    if tree.is_file():
-        rows, _, _, _ = _staging_rows(tree)
-        tree_ids = {str(r["id"]) for r in rows or [] if r.get("id")}
-    batches = [batch_ledger(subject, b, tree_ids) for b in batches_of(subject)]
+    ids = tree_ids(subject)
+    batches = [batch_ledger(subject, b, ids) for b in batches_of(subject)]
     verdict, _ = surfaces_gate.run(["--subject", str(subject)])
     states = verdict.counts.get("surfaces") or {}
     return {"subject": str(subject),

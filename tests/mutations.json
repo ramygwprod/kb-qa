@@ -1749,8 +1749,8 @@
   {
     "label": "status: merged is read from the tree",
     "file": "src/kbqa/ledger.py",
-    "old": "        tree_ids = {str(r[\"id\"]) for r in rows or [] if r.get(\"id\")}\n",
-    "new": "        tree_ids = set()\n",
+    "old": "    return {str(r[\"id\"]) for r in rows or [] if r.get(\"id\")}\n",
+    "new": "    return set()\n",
     "tests": [
       "tests/test_ledger.py"
     ]
@@ -1996,6 +1996,159 @@
     "new": "                if False:\n                    entry[\"reopen_refused\"] = why\n",
     "tests": [
       "tests/test_ledger.py"
+    ]
+  },
+  {
+    "label": "merge --all-clear: refused together with --batch",
+    "file": "skills/kbqa-merge/scripts/merge.py",
+    "old": "        if args.batch:\n            return refuse(\"--all-clear merges every",
+    "new": "        if False:\n            return refuse(\"--all-clear merges every",
+    "tests": [
+      "tests/test_merge_all_clear.py"
+    ]
+  },
+  {
+    "label": "merge --all-clear: refused together with --undo",
+    "file": "skills/kbqa-merge/scripts/merge.py",
+    "old": "        if args.undo:\n            return refuse(\"--undo undoes one batch",
+    "new": "        if False:\n            return refuse(\"--undo undoes one batch",
+    "tests": [
+      "tests/test_merge_all_clear.py"
+    ]
+  },
+  {
+    "label": "merge --all-clear: only batches CLEAR on their current bytes",
+    "file": "skills/kbqa-merge/scripts/merge.py",
+    "old": "        if check[\"status\"] != \"CLEAR\":\n",
+    "new": "        if False:\n",
+    "tests": [
+      "tests/test_merge_all_clear.py"
+    ]
+  },
+  {
+    "label": "merge --all-clear: only batches with no row in the tree",
+    "file": "skills/kbqa-merge/scripts/merge.py",
+    "old": "        elif merged[\"state\"] != ledger.NOT_MERGED:\n",
+    "new": "        elif False:\n",
+    "tests": [
+      "tests/test_merge_all_clear.py"
+    ]
+  },
+  {
+    "label": "merge --all-clear: every batch left out is listed with why",
+    "file": "skills/kbqa-merge/scripts/merge.py",
+    "old": "        print(f\"  left out: {b} — {why}\")\n",
+    "new": "        pass\n",
+    "tests": [
+      "tests/test_merge_all_clear.py"
+    ]
+  },
+  {
+    "label": "merge --all-clear: nothing to merge is exit 0",
+    "file": "skills/kbqa-merge/scripts/merge.py",
+    "old": "not yet in the tree. Nothing was written.\")\n        return 0\n",
+    "new": "not yet in the tree. Nothing was written.\")\n        return 1\n",
+    "tests": [
+      "tests/test_merge_all_clear.py"
+    ]
+  },
+  {
+    "label": "merge --all-clear: an anchor's batch merges first",
+    "file": "skills/kbqa-merge/scripts/merge.py",
+    "old": "            if len(holders) == 1:\n",
+    "new": "            if False:\n",
+    "tests": [
+      "tests/test_merge_all_clear.py"
+    ]
+  },
+  {
+    "label": "merge --all-clear: batches waiting on each other are refused before any merge",
+    "file": "skills/kbqa-merge/scripts/merge.py",
+    "old": "        if not ready:\n            raise Cycle(",
+    "new": "        if not ready:\n            break\n            raise Cycle(",
+    "tests": [
+      "tests/test_merge_all_clear.py"
+    ]
+  },
+  {
+    "label": "merge --all-clear: stops at the first refusal",
+    "file": "skills/kbqa-merge/scripts/merge.py",
+    "old": "            return 1\n        merged.append(b)\n",
+    "new": "            continue\n        merged.append(b)\n",
+    "tests": [
+      "tests/test_merge_all_clear.py"
+    ]
+  },
+  {
+    "label": "merge --all-clear: a dry run writes nothing",
+    "file": "skills/kbqa-merge/scripts/merge.py",
+    "old": "r = merge_batch(d, b, dry_run, new_tree,",
+    "new": "r = merge_batch(d, b, False, new_tree,",
+    "tests": [
+      "tests/test_merge_all_clear.py"
+    ]
+  },
+  {
+    "label": "merge --all-clear: a dry run checks each batch on the tree the plan leaves",
+    "file": "skills/kbqa-merge/scripts/merge.py",
+    "old": "tree_text=text if dry_run else None",
+    "new": "tree_text=None",
+    "tests": [
+      "tests/test_merge_all_clear.py"
+    ]
+  },
+  {
+    "label": "merge --all-clear: G6 once, not after each merge",
+    "file": "skills/kbqa-merge/scripts/merge.py",
+    "old": "run_g6=False)\n",
+    "new": "run_g6=True)\n",
+    "tests": [
+      "tests/test_merge_all_clear.py"
+    ]
+  },
+  {
+    "label": "merge --all-clear: G6 looks at every batch the run merged",
+    "file": "skills/kbqa-merge/scripts/merge.py",
+    "old": "for b in merged])",
+    "new": "for b in merged[-1:]])",
+    "tests": [
+      "tests/test_merge_all_clear.py"
+    ]
+  },
+  {
+    "label": "merge --all-clear: a G6 finding after the run is exit 1",
+    "file": "skills/kbqa-merge/scripts/merge.py",
+    "old": "        return 1\n    print(f\"G6 after merge: nothing on this tree or the batches merged\"",
+    "new": "        return 0\n    print(f\"G6 after merge: nothing on this tree or the batches merged\"",
+    "tests": [
+      "tests/test_merge_all_clear.py"
+    ]
+  },
+  {
+    "label": "merge --all-clear: G6 after a stopped run too, never in a dry run",
+    "file": "skills/kbqa-merge/scripts/merge.py",
+    "old": "            if merged and not dry_run:\n",
+    "new": "            if merged:\n",
+    "tests": [
+      "tests/test_merge_all_clear.py"
+    ]
+  },
+  {
+    "label": "merge --all-clear: G6 after a stopped run",
+    "file": "skills/kbqa-merge/scripts/merge.py",
+    "old": "                all_clear_g6(d, tree, merged)\n            return 1\n",
+    "new": "                pass\n            return 1\n",
+    "tests": [
+      "tests/test_merge_all_clear.py"
+    ]
+  },
+  {
+    "label": "merge: a supplied tree is for a dry run only",
+    "file": "skills/kbqa-merge/scripts/merge.py",
+    "old": "    if tree_text is not None and not dry_run:\n",
+    "new": "    if False:\n",
+    "tests": [
+      "tests/test_merge_all_clear.py"
     ]
   }
 ]
