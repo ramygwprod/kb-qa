@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # Collecting a subject
 
-**This copy is kbqa-collect v6.22.0**, installed with kb-qa v6.22.0.
+**This copy is kbqa-collect v6.23.0**, installed with kb-qa v6.23.0.
 
 **Invoked as**, by the operator, in a session opened at the estate root:
 
