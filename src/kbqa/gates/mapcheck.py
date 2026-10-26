@@ -331,6 +331,36 @@ def group_by_pattern(rows: List[dict]) -> Dict[str, List[str]]:
     return {spelling[k]: ids for k, ids in ordered}
 
 
+def pattern_key(name: str) -> str:
+    """A pattern as the operator names it — spaces collapsed, the brackets a
+    note writes it in optional — for comparing without case."""
+    n = " ".join(str(name).split())
+    if n.startswith("[") and n.endswith("]"):
+        n = " ".join(n[1:-1].split())
+    return n.casefold()
+
+
+def names_pattern(line: dict, key: str) -> bool:
+    """A needs-human line whose note names the pattern `key` (`pattern_key`);
+    a note naming none is UNNAMED."""
+    return line.get("status") == "needs-human" and \
+        pattern_key(note_pattern(str(line.get("note", ""))) or UNNAMED) == key
+
+
+def questions(by_pass: Dict[str, Dict[str, List[str]]]) -> List[dict]:
+    """The operator's questions across the passes: one per rule or open
+    pattern (`group_by_pattern` of each pass, names joined without case), with
+    every row it covers and each pass's rows, the most rows first. `kbqa
+    status` joins these across batches and subjects."""
+    grouped: Dict[str, Dict[str, List[str]]] = {}
+    for letter, groups in sorted(by_pass.items()):
+        for name, ids in groups.items():
+            key = next((k for k in grouped if k.casefold() == name.casefold()), name)
+            grouped.setdefault(key, {})[letter] = ids
+    return [{"pattern": k, "rows": sorted({i for ids in v.values() for i in ids}), "per_pass": v}
+            for k, v in sorted(grouped.items(), key=lambda kv: -len({i for ids in kv[1].values() for i in ids}))]
+
+
 def agreement(staging_ids: List[str], a: Dict[str, dict], b: Dict[str, dict]) -> dict:
     """Agreement on ALL staging rows. A row either side lacks, or marks
     needs-human, counts as a disagreement — it is never dropped from the base."""
@@ -415,15 +445,7 @@ def run(argv: Optional[List[str]] = None) -> Tuple[Verdict, int]:
     if len(parsed) == 2:
         (_, a), (_, b) = sorted(parsed.items())
         counts["agreement"] = agreement(staging_ids, a, b)
-    # The operator's questions across both passes: one per rule or open pattern.
-    questions: Dict[str, Dict[str, List[str]]] = {}
-    for letter, s in sorted(per.items()):
-        for name, ids in s["needs_human_by_pattern"].items():
-            key = next((k for k in questions if k.casefold() == name.casefold()), name)
-            questions.setdefault(key, {})[letter] = ids
-    counts["questions"] = [{"pattern": k, "rows": sorted({i for ids in v.values() for i in ids}), "per_pass": v}
-                           for k, v in sorted(questions.items(),
-                                              key=lambda kv: -len({i for ids in kv[1].values() for i in ids}))]
+    counts["questions"] = questions({letter: s["needs_human_by_pattern"] for letter, s in per.items()})
     if not staging_ids:
         findings.append(Finding("nothing_checked", "the staging file has no rows to classify; an empty check "
                                                    "is not a pass"))

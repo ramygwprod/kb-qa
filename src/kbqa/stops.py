@@ -29,6 +29,7 @@ from typing import List, Optional, Tuple
 
 STOPS_NAME = "_stop-conditions.md"
 SURFACES = ("product", "docs", "help")
+BATCH_PATTERN = r"(?:product|docs|help)-\d{4}-\d{2}-\d{2}-w\d{2}"  # a batch, as `kbqa capture` names it
 
 
 @dataclass(frozen=True)
@@ -68,7 +69,39 @@ REASONS: Tuple[Reason, ...] = (
     Reason("no feature: <what the page is>", r"no feature: \S.*",
            "a page you captured from which the row-writer recorded no row — say what the page is "
            "(`pricing page`, `legal notice`, `blog index`)"),
+    Reason("unchanged since <earlier batch>, in <this batch>",
+           rf"unchanged since {BATCH_PATTERN}, in {BATCH_PATTERN}",
+           "only as `kbqa stage` prints it: a page of <this batch> with the same text as its latest earlier "
+           "capture, whose rows there stand — it accounts for the page in <this batch> and its collection only"),
 )
+
+# `unchanged since <earlier batch>, in <this batch>` is scoped: it accounts for
+# the page only in the window it names (g4's window mode, the heading check) and
+# only in the collection that window belongs to (g4's denominator mode, `kbqa
+# status`, `kbqa compare`). Read anywhere else it accounts for nothing — a page
+# that changed later and lost its rows is never closed by an earlier window's
+# line (a v6.23.0 integration review found exactly that).
+UNCHANGED_SCOPED_RE = re.compile(rf"^unchanged since (?P<since>{BATCH_PATTERN}), in (?P<batch>{BATCH_PATTERN})$")
+
+
+def unchanged_reason(since: str, batch: str) -> str:
+    """The reason of an unchanged page's stop line: scoped to its own window."""
+    return f"unchanged since {since}, in {batch}"
+
+
+def scoped_to(reason: str) -> Optional[str]:
+    """The one window a reason accounts for a page in, or None when it is not
+    scoped (every other reason)."""
+    m = UNCHANGED_SCOPED_RE.match(str(reason).strip())
+    return m.group("batch") if m else None
+
+
+def counts_in(reason: str, batches) -> bool:
+    """Whether a stop line's reason accounts for its page when the windows
+    measured are `batches`: an unscoped reason always, a scoped one only when
+    its window is one of them."""
+    b = scoped_to(reason)
+    return b is None or b in set(batches)
 
 SURFACE_SUFFIX_RE = re.compile(r"^(?P<reason>.*\S) \(surface (?P<surface>product|docs|help)\)$")
 LINE_RE = re.compile(r"^- (?P<url>https?://\S+) \| (?P<reason>\S.*)$")

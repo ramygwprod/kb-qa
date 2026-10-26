@@ -212,7 +212,10 @@ so a source found later is a new row pointing at the anchor, and
 feature apart from its naming questions. `kbqa stage --lists` writes the
 subject's anchors to `_raw/<batch>/FEATURES.md` for the row-writer (`kbqa
 capture` did, before v6.22.0), and, since v6.22.0, the same-feature shortlist
-`_raw/<batch>/SAME-FEATURE.md` (below).
+`_raw/<batch>/SAME-FEATURE.md` (below). `kbqa map <subject>` (since v6.23.0)
+shows the result read-only: modules from `parent_path` as printed, each
+module's anchors, and under each anchor its other sources and its ways in by
+`interface_type`, `operation` and `parameter` (MANUAL §5.13).
 
 ### Beside each receipt (since v6.20.0)
 
@@ -245,6 +248,22 @@ capture` did, before v6.22.0), and, since v6.22.0, the same-feature shortlist
   Candidates only: the row-writer judges sameness. When the capture cannot be
   read (none written, or no longer the receipt's), the shortlist is not
   written and `same_feature_note` says why; the other lists are still written.
+- **Unchanged pages** (since v6.23.0). When the subject is collected again,
+  `kbqa capture` marks a page `unchanged_since: <batch>` in the receipt when its
+  `text_sha256` equals that of its latest earlier capture in the subject (the
+  same URL, latest by access date then window; a receipt from before v6.21.0
+  has no text hash and never counts). The page is still captured, bytes and
+  text. `kbqa stage --lists` writes `_raw/<batch>/UNCHANGED.md` — one line per
+  such page: `<url> | unchanged since <batch> | ` and what is recorded for it:
+  the batch and row ids whose staging file cites it (followed back along the
+  pages' `unchanged_since` marks), or the stop line that names it, or
+  `nothing recorded` (then the page is drafted like any other) — and lists the
+  same under `unchanged_pages`; with none, the file is not written and
+  `unchanged_note` says so. A page **not** marked unchanged — it changed since
+  its earlier capture — is drafted whole: every feature still on it, not only
+  the new ones. A feature left undrafted on a changed page is not called
+  removed by `kbqa compare` while its quote is still there ("quote still on the
+  page; no row records it"): it stays `unknown`.
 - **Once staged, never rebuilt.** `kbqa stage --lists` refuses once the batch's
   staging file exists: the lists are what the drafts were written from. `kbqa
   stage` itself writes `ROLE-ROWS.md` again right after it writes the staging
@@ -262,6 +281,7 @@ One JSON object per line, in `<subject folder>/_draft-<batch>.jsonl`:
 ```
 {"page": "https://docs.example.test/hooks/retries", "part": 0, "quote": "Failed webhook calls are retried for up to 24 hours.", "vendor_term": "Retries", "what_it_does": "Retries a failed webhook call for up to a day.", "evidence_grade": "official-doc", "confidence": "high", "mechanism": "Native", "outcome": "yes"}
 {"page": "https://docs.example.test/pricing", "no_row": "pricing page"}
+{"page": "https://docs.example.test/hooks/limits", "unchanged": "docs-2026-10-18-w03"}
 ```
 
 | key | value |
@@ -273,6 +293,7 @@ One JSON object per line, in `<subject folder>/_draft-<batch>.jsonl`:
 | `same_feature_as` | when the feature already has a row: the anchor's `id` (from `FEATURES.md`), or `draft:<line>` — another draft of this batch, by its 1-based line in the drafts file, which code replaces with the id it gives that draft |
 | `interface_type`, `operation`, `parameter`, `source_typo`, `mechanism_raw`, `outcome_raw`, `mechanism_via` | only when they apply; copied to the row as written |
 | `no_row` | instead of all the above: a page read that holds no row, in a few words (`{"page": …, "no_row": …}` and nothing else) |
+| `unchanged` | instead of all the above (since v6.23.0): a page the receipt marks `unchanged_since` an earlier capture, not drafted again — the batch it names (`{"page": …, "unchanged": …}` and nothing else) |
 
 `kbqa stage --subject <d> --batch <b>`:
 
@@ -355,9 +376,33 @@ One JSON object per line, in `<subject folder>/_draft-<batch>.jsonl`:
   `- <url> | no feature: <words>`, under `stop_lines_to_add`, for the fetcher to
   add with `kbqa stop add`; the pages that end with neither a staged row nor a
   `no_row` line are listed under `pages_without_row_or_no_row`.
+- **Unchanged** (since v6.23.0). A page drafted `unchanged` adds nothing to
+  the staging file — the rows recorded earlier stand, and nothing earlier is
+  edited — and is listed under `unchanged_pages` (`page`, `unchanged_since`,
+  `rows_in` and `ids` where its rows are recorded, or `stop_line`), with a
+  suggested `- <url> | unchanged since <earlier batch>, in <this batch>` under
+  `stop_lines_to_add`, so `g4` counts the page as accounted for once the
+  fetcher adds it — **in this window and its collection only**: g4's window
+  mode counts the line for `<this batch>`'s staging file alone, and g4's
+  denominator mode, `kbqa status` and `kbqa compare` only when `<this batch>`
+  is a window of the collection they measure. In a later collection, where the
+  page may have changed, the line accounts for nothing. The line is rejected, never taken on its word, unless the
+  page is unchanged **by text hash**: the named batch's receipt lists the URL
+  with the same `text_sha256`, that batch is the page's latest earlier capture
+  (this receipt's `unchanged_since`), and a staged row or a stop line (not an
+  `unchanged since` one, which would vouch for itself) is recorded there to
+  stand. A page drafted `unchanged` beside rows or a `no_row` line is a reject.
 - It never overwrites a staging file. When no draft became a row it writes no
-  staging file; when that is because every page was drafted `no_row`, its
-  `next_step` is `no rows — skip mapping for this batch`. The result is printed as JSON: the round, counts, the staging
+  staging file; when that is because every page was drafted `no_row` (or
+  `unchanged`), its
+  `next_step` is `no rows — skip mapping for this batch`. When it is because
+  `--leave-out-rejects` left out every draft that could be a row, the window
+  ends on `_draft-<batch>.closed.json` — written once, never overwritten: the
+  batch, the round, every left-out draft with its reason and next step, the
+  stop lines to add — `closed` names it, the `next_step` is `no rows — skip
+  mapping; the left-out pages are the operator's`, and stage refuses the batch
+  from then on (`kbqa collect-surface` lists the window under `closed`, never
+  as unstaged). The result is printed as JSON: the round, counts, the staging
   and rejects paths, the rejected lines and reasons, `linked_by_code`,
   `link_conflicts`, and the `next_step`.
 
@@ -475,6 +520,27 @@ exactly these keys:
   like any other and `RETIRED-WITHOUT-RECORD.txt` in the folder says it was
   retired without a record, on the operator's word, with the staging sha256 at
   that moment. It touches only the given pass.
+- **Mapping again after a ruling** (the rows unchanged, since v6.23.0):
+  `kbqa mapstage --subject <d> --batch <b> --pass <A|B> --reopen "<pattern>"`
+  runs only when the map file, with its sidecar, has a `needs-human` line whose
+  note names the pattern (brackets optional, without case). It moves the pass's
+  files aside as `--retire` does, writes `REOPENED-FOR-RULING.txt` there (the
+  pattern, the ids reopened, the date) and a new draft: every other line
+  carried over as the exact draft line it was written from — `article`, `want`
+  and `so_that` read back from `user_story` by the rule that builds it, kept
+  only when building it again gives the same story and only one reading does;
+  `pcf_ids` as the element ids — and, for each reopened id, the placeholder
+
+  ```json
+  {"id": "<anchor id>", "reopened": "<pattern>"}
+  ```
+
+  A line that cannot be carried over exactly refuses the whole reopen, naming
+  the line; nothing is moved. A draft line still holding `reopened` is a reject
+  (*not yet re-mapped after the ruling*): the mapper replaces each placeholder
+  with a full draft line, and the usual rounds apply — after the correction
+  round, `--leave-out-rejects` writes a placeholder still there as a
+  `needs-human` line, its note `[no rule] not yet re-mapped after the ruling …`.
 
 A left-out line whose draft gave no role source, actor or theme — an anchor
 that had no line, say — carries none: `mapcheck` fails it

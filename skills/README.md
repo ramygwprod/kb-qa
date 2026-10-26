@@ -9,7 +9,7 @@ that collect into an estate, check it and merge it.
 |---|---|---|
 | `kbqa-collect` | `/kbqa-collect <Subject>` | plan → approval → captures → rows → two classification passes |
 | `kbqa-check` | `/kbqa-check <subject folder>` | the gates per batch and per surface; CLEAR · BLOCKED · PARKED · NOT CHECKED |
-| `kbqa-merge` | `/kbqa-merge <subject folder> <batch>` | appends one CLEAR batch to `feature-tree.md` |
+| `kbqa-merge` | `/kbqa-merge <subject folder> <batch>` · `--all-clear` | appends one CLEAR batch to `feature-tree.md` · or every CLEAR batch, one at a time |
 
 Each runs in its own session, in the estate.
 
@@ -42,7 +42,7 @@ All three skills and the three agents, from one tag, by the operator in their
 own terminal (PIPELINE-SPEC §5):
 
 ```bash
-bash skills/install.sh v6.22.0
+bash skills/install.sh v6.23.0
 ```
 
 It clones the tag, copies each skill to `~/.claude/skills/<skill>/` and the

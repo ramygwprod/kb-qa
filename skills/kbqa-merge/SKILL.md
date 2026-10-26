@@ -1,13 +1,14 @@
 ---
 name: kbqa-merge
-description: Merge one CLEAR staging batch into its subject's feature tree — refuses anything not CLEAR on its current bytes, takes a pre-merge hash, appends the rows unchanged, recomputes the tree's proof line, then runs g6. Use only when the operator runs /kbqa-merge on a batch /kbqa-check reported CLEAR. Never edits a row, never renumbers an id, never merges on its own initiative.
+description: Merge a CLEAR staging batch — or, with --all-clear, every CLEAR batch of the subject, one at a time — into its subject's feature tree — refuses anything not CLEAR on its current bytes, takes a pre-merge hash, appends the rows unchanged, recomputes the tree's proof line, then runs g6. Use only when the operator runs /kbqa-merge on a batch /kbqa-check reported CLEAR, or on a subject with --all-clear. Never edits a row, never renumbers an id, never merges on its own initiative.
 allowed-tools: Bash, Read
 disable-model-invocation: true
 ---
 
 # Merging a CLEAR batch
 
-**Invoked as:** `/kbqa-merge <subject folder path> <batch>` — by the operator, only.
+**Invoked as:** `/kbqa-merge <subject folder path> <batch>`, or
+`/kbqa-merge <subject folder path> --all-clear` — by the operator, only.
 
 A merge is the one step that changes a feature tree, so it is a separate
 command, run by a person, after a separate check said CLEAR (RamyGW 2026-10-04).
@@ -69,6 +70,42 @@ When it merges, it:
 Exit 0 = merged. Exit 1 = refused (or `g6` objected to this tree or batch after
 the merge — report it as a stop for a human).
 
+## 1a · Every CLEAR batch at once — `--all-clear`
+
+```bash
+python3 "$S" --vendor-dir "<subject folder path>" --all-clear --dry-run
+python3 "$S" --vendor-dir "<subject folder path>" --all-clear
+```
+
+It selects every batch of the subject that is CLEAR on its current staging
+bytes and has no row in the tree yet — read by the ledger's own code, as
+`kbqa status` reports it — and merges them **one at a time through the same
+single-batch path** as section 1: every check in the table above, its own
+pre-merge hash, its own `_merge-log.jsonl` line, its own proof line. Every
+other batch is listed as `left out:` with why (its check status, `merged`,
+`partly merged` — a human compares before any merge).
+
+- **Order:** by batch name, except that a batch whose rows name, in
+  `same_feature_as`, an anchor only another selected batch holds merges after
+  that batch. Batches that wait on each other are refused before anything
+  merges.
+- **Stops at the first refusal.** The batches merged before it **stay merged**
+  — each merge is complete, and undone on its own (section 1b, the latest
+  first). It prints `merged:`, `refused: <batch> — <the reason word for word>`
+  and `not attempted:`. Exit 1 then.
+- **G6 runs once**, after the last merge (or after the stop, when anything was
+  merged), over the tree and every batch the run merged.
+- **Dry run:** the plan, and each batch's checks on the tree as the merges
+  before it would leave it; nothing is written, no G6. Show it to the operator
+  before the run.
+- Nothing CLEAR and unmerged: `Nothing to merge`, exit 0.
+- `--all-clear` with `--batch` or with `--undo` is refused. `--new-tree` works
+  as in section 1: the first merge starts the tree.
+
+Exit 0 = every selected batch merged (or nothing to merge, or a clean dry run).
+Exit 1 = refused or stopped — report which batches were merged, the refusal
+verbatim, and which were not attempted.
+
 ## 1b · Undo — only when the operator asks
 
 ```bash
@@ -90,7 +127,9 @@ subject.
 
 ## 2 · Report
 
-- MERGED or REFUSED, and the reason line verbatim
+- MERGED or REFUSED, and the reason line verbatim (with `--all-clear`: the plan,
+  the batches merged, the refused batch and its reason, the batches not
+  attempted, and the batches left out with why)
 - pre-merge and post-merge tree sha256
 - rows before, added, after; old and new proof line
 - `g6` after the merge: anything on this tree or batch (should be nothing), and
@@ -103,6 +142,8 @@ subject.
 - Edit the tree by hand, before or after — including the proof line
 - Merge without a dry run shown to the operator
 - Retry a refused merge or undo by changing anything; report the refusal
+- Undo the merges an `--all-clear` run made before its refusal, unless the
+  operator asks — they are complete merges
 - Undo a merge on your own initiative, or "fix" a tree by hand instead of undoing
 - Merge on your own initiative, or because a list said "ready for merge"
 - Delete or rewrite `_merge-log.jsonl`

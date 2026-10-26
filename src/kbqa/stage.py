@@ -11,7 +11,10 @@ page's `parts`, from 0), the quote (the words it chose) and its judgement —
 `outcome`, and when they apply `same_feature_as`, `interface_type`,
 `operation`, `parameter`, `source_typo`, `mechanism_raw`, `outcome_raw`,
 `mechanism_via`. A page it read and found no row on is one line
-`{"page": <url>, "no_row": "<what the page is>"}`.
+`{"page": <url>, "no_row": "<what the page is>"}`. A page the receipt marks
+`unchanged_since` an earlier capture (collected again, the same text hash) is
+not drafted again: one line `{"page": <url>, "unchanged": "<that batch>"}` says
+the rows already recorded stand.
 
 `kbqa stage` writes `_collect-<batch>-staging.md` from those drafts and the
 batch's receipt, so nothing a code can copy is typed by an agent:
@@ -30,8 +33,20 @@ batch's receipt, so nothing a code can copy is typed by an agent:
   made unique with `-2`, `-3`… against every id the subject already has (the
   feature tree and every staging file) — the same drafts give the same ids;
 - a page drafted `no_row` becomes a suggested `no feature: …` stop line; when
-  every page is drafted `no_row` there are no rows, no staging file, and the
-  next step is `no rows — skip mapping for this batch`;
+  every page is drafted `no_row` (or `unchanged`) there are no rows, no staging
+  file, and the next step is `no rows — skip mapping for this batch`;
+- a page drafted `unchanged` adds nothing to the staging file: it is listed
+  under `unchanged_pages` — the earlier batch, and the batch and row ids where
+  its rows are recorded (back along the pages' `unchanged_since` marks), or the
+  stop line that names it — and becomes a suggested `unchanged since <that
+  batch>, in <this batch>` stop line, so the page is accounted for in this
+  window — and only in it, and in its collection (`stops.scoped_to`): in a later
+  window where the page changed, the line accounts for nothing. The
+  line is **rejected** unless the page is unchanged by text hash: its
+  `text_sha256` equals the one the named batch's receipt records for the URL,
+  that batch is the page's latest earlier capture (the receipt's
+  `unchanged_since`), and a row or a stop line is recorded there to stand.
+  Nothing earlier is edited;
 - after the staging file is written, `_raw/<batch>/ROLE-ROWS.md` is written
   again, so the mappers see the batch's own rows (`role_rows_refreshed`).
 
@@ -69,7 +84,13 @@ row-writer has one correction round — it rewrites only the rejected lines —
 and stage runs again. Drafts still rejected after it are not dropped unseen:
 `--leave-out-rejects` writes the staging file without them and prints each
 under `needs_operator`; a third run without it is refused. The result says
-which round it is. The staging file is never overwritten.
+which round it is. The staging file is never overwritten. When the drafts left
+out were the only ones that could be rows, there is no staging file: the
+window ends on a record of its own, `_draft-<batch>.closed.json` (never
+overwritten; `stage` refuses the batch once it exists), listing every draft
+left out with its reason, and the next step is `no rows — skip mapping; the
+left-out pages are the operator's` (`kbqa collect-surface` reports the window
+`closed`, not unstaged).
 
 `--lists` writes, before the row-writer runs, the lists it and the mapper read:
 `_raw/<batch>/FEATURES.md` (the subject's anchors, `kbqa.features`) and
@@ -78,7 +99,11 @@ the estate names patterns), and `_raw/<batch>/SAME-FEATURE.md`, the
 same-feature shortlist per page of the window (`kbqa.shortlist`; not written,
 with the reason under `same_feature_note`, when the window has no capture to
 read). Built when they are needed, they hold every row staged so far — the
-windows before this one included. They are refused once the batch's staging
+windows before this one included. When the receipt marks pages
+`unchanged_since` an earlier capture, `_raw/<batch>/UNCHANGED.md` lists them for
+the row-writer, each with the rows recorded for it (ids) or the stop line that
+names it, or `nothing recorded` (then it is drafted like any page); the result
+lists them under `unchanged_pages`. They are refused once the batch's staging
 file exists: they are what the drafts were written from.
 
 Both print one JSON result. Exit 0 when the files were written, 1 when refused.
@@ -96,7 +121,7 @@ from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 from . import features, roles, shortlist, stops
-from .parsing import _QUOTE_MAP, normalise_for_match, parse_capture
+from .parsing import _QUOTE_MAP, normalise_for_match, parse_capture, parse_staging
 from .profile import active, conventions
 
 BATCH_RE = re.compile(r"^(product|docs|help)-\d{4}-\d{2}-\d{2}-w\d{2}$")
@@ -111,6 +136,12 @@ OPTIONAL = ("same_feature_as", "interface_type", "operation", "parameter", "sour
             "mechanism_raw", "outcome_raw", "mechanism_via")
 LOCATION = ("page", "part", "quote")
 NO_ROW_KEYS = {"page", "no_row"}
+UNCHANGED_KEYS = {"page", "unchanged"}  # a page unchanged since an earlier capture: its rows stand
+UNCHANGED = "UNCHANGED.md"              # the window's unchanged pages, for the row-writer
+# The form kbqa 6.23.0's first builds suggested; like the scoped reason, it never
+# vouches for a page (`recorded`).
+OLD_UNCHANGED_REASON = "no feature: unchanged since "
+CLOSED_STEP = "no rows — skip mapping; the left-out pages are the operator's"
 WINDOW_FIELDS = ("window_offset", "window_requested", "window_returned", "window_end")
 UNKNOWN = "unknown"
 CRUMB_SEP = " > "  # how the capture writes a breadcrumb's items on one line
@@ -127,6 +158,11 @@ def draft_name(batch: str) -> str:
 
 def rejects_name(batch: str, round_no: int) -> str:
     return f"_draft-{batch}.rejects-{round_no}.jsonl"
+
+
+def closed_name(batch: str) -> str:
+    """The record of a window whose drafts were all left out: it ends there."""
+    return f"_draft-{batch}.closed.json"
 
 
 def slug(text: object) -> str:
@@ -273,6 +309,129 @@ def _capture_text(subject: Path, receipt: Dict) -> str:
     return data.decode("utf-8")
 
 
+def _stop_reasons(subject: Path) -> Dict[str, List[str]]:
+    """{url: every reason a stop line gives it}, from the subject's stop-conditions."""
+    f = subject / stops.STOPS_NAME
+    out: Dict[str, List[str]] = {}
+    if f.is_file():
+        for ln in f.read_text(encoding="utf-8").splitlines():
+            m = stops.LINE_RE.match(ln.strip())
+            if m:
+                out.setdefault(m.group("url"), []).append(m.group("reason"))
+    return out
+
+
+def receipt_page(subject: Path, batch: str, url: str) -> Optional[dict]:
+    """The page `url` of another batch's receipt, or None (no receipt, not a page of it)."""
+    try:
+        rec = json.loads((subject / "_raw" / batch / RECEIPT).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    pages = rec.get("pages") if isinstance(rec, dict) else None
+    for p in pages if isinstance(pages, list) else []:
+        if isinstance(p, dict) and p.get("url") == url:
+            return p
+    return None
+
+
+def recorded(subject: Path, url: str, since: str) -> Dict[str, object]:
+    """What is already recorded for a page unchanged since the batch `since`:
+    from that batch back along the pages' own `unchanged_since` marks, the first
+    batch whose staging file has rows citing the page — `rows_in`, the row `ids`
+    and their `anchors` (the feature each row is of) — else, where the walk ends,
+    the stop line that names the page (`stop_line`; never an `unchanged since`
+    line, which would vouch for itself), else nothing: `why`."""
+    conv = conventions()
+    via: List[str] = []   # batches passed: the page unchanged there too
+    seen: List[str] = []  # every batch looked at
+    b: Optional[str] = since
+    while b and b not in seen and BATCH_RE.match(b):
+        seen.append(b)
+        staging = subject / conv.staging_for(b)
+        if staging.is_file():
+            rows = [r.obj for r in parse_staging(staging).rows
+                    if r.obj and r.obj.get("source_url") == url and r.obj.get("id")]
+            if rows:
+                return {"rows_in": b, "ids": [str(r["id"]) for r in rows],
+                        "anchors": sorted({str(r.get("same_feature_as") or r["id"]) for r in rows}), "via": via}
+        page = receipt_page(subject, b, url)
+        nxt = page.get("unchanged_since") if page else None
+        if not isinstance(nxt, str) or not nxt:
+            break
+        via.append(b)
+        b = nxt
+    reasons = [r for r in _stop_reasons(subject).get(url, [])
+               if stops.scoped_to(r) is None and not r.startswith(OLD_UNCHANGED_REASON)]
+    out: Dict[str, object] = {"rows_in": None, "ids": [], "anchors": [], "via": via}
+    if reasons:
+        out["stop_line"] = reasons[0]
+    else:
+        out["why"] = (f"nothing is recorded for the page since {since}: no staging file of "
+                      f"{', '.join(seen) or since} has a row citing it, and no stop line names it")
+    return out
+
+
+def unchanged_refusal(subject: Path, batch: str, page: dict, since: str) -> Optional[str]:
+    """Why an `unchanged` draft line cannot stand for this page, or None. By
+    text hash only: the page's text sha256 must equal the one the batch named
+    recorded for the same URL, that batch must be the page's latest earlier
+    capture (the receipt's `unchanged_since`), and something must be recorded
+    there to stand."""
+    url = page["url"]
+    if not BATCH_RE.match(since) or since == batch:
+        return f"unchanged {since!r} names no earlier batch (<surface>-<YYYY-MM-DD>-wNN, not this one)"
+    earlier = receipt_page(subject, since, url)
+    if earlier is None:
+        return f"{since} has no receipt listing {url}: the page is not unchanged since it"
+    before, now = earlier.get("text_sha256"), page.get("text_sha256")
+    if not before or not now or before != now:
+        return (f"the page is not unchanged by text hash: {since} recorded "
+                f"{str(before)[:12] if before else 'no text hash'}, this batch "
+                f"{str(now)[:12] if now else 'no text hash'} — draft its rows, or its no_row line")
+    marked = page.get("unchanged_since")
+    if marked != since:
+        return (f"the receipt marks the page unchanged since {marked}" if marked else
+                "the receipt does not mark the page unchanged") + (
+                f", not since {since}: its latest earlier capture is another — draft its rows, or its no_row line")
+    rec = recorded(subject, url, since)
+    if rec.get("why"):
+        return f"{rec['why']} — draft its rows, or its no_row line"
+    return None
+
+
+def unchanged_list(subject: Path, batch: str, pages: List[dict]) -> Tuple[Optional[str], List[dict]]:
+    """The receipt's pages marked unchanged, each with what is recorded for it:
+    (the markdown list the row-writer reads, or None when there are none; the entries)."""
+    entries: List[dict] = []
+    for p in pages:
+        since = p.get("unchanged_since")
+        if not isinstance(since, str) or not since:
+            continue
+        rec = recorded(subject, p["url"], since)
+        entries.append({"page": p["url"], "unchanged_since": since,
+                        **{k: rec[k] for k in ("rows_in", "ids", "stop_line", "why") if k in rec}})
+    if not entries:
+        return None, entries
+    out = [f"# Unchanged pages — {batch}", "",
+           "Written by `kbqa stage --lists`. Each page below has the same text (its `text_sha256`) as its",
+           "latest earlier capture, in the batch named: what is recorded for it there stands. Do not",
+           "draft it again; write one line for it:",
+           "",
+           '`{"page": "<url>", "unchanged": "<the batch named>"}`',
+           "",
+           "A page marked **nothing recorded** is drafted like any other page.",
+           ""]
+    for e in entries:
+        if e.get("ids"):
+            what = f"rows recorded in {e['rows_in']}: {', '.join(e['ids'])}"
+        elif e.get("stop_line"):
+            what = f"no row; stop line: {e['stop_line']}"
+        else:
+            what = f"**nothing recorded** ({e['why']})"
+        out.append(f"- {e['page']} | unchanged since {e['unchanged_since']} | {what}")
+    return "\n".join(out) + "\n", entries
+
+
 def lists(subject: Path, batch: str) -> Dict[str, object]:
     """Write the subject's features list, role-row list and same-feature
     shortlist beside the receipt."""
@@ -309,6 +468,17 @@ def lists(subject: Path, batch: str) -> Dict[str, object]:
     else:
         out["role_rows"] = None
         out["role_rows_note"] = f"not written: {why}"
+    # Collected again: the pages the receipt marks unchanged since an earlier
+    # capture, each with the rows already recorded for it — not drafted again.
+    text_unchanged, entries = unchanged_list(subject, batch, [p for p in receipt.get("pages") or []
+                                                             if isinstance(p, dict) and p.get("url")])
+    if text_unchanged is not None:
+        _write_atomic(raw / UNCHANGED, text_unchanged.encode("utf-8"))
+        out["unchanged"] = f"_raw/{batch}/{UNCHANGED}"
+    else:
+        out["unchanged"] = None
+        out["unchanged_note"] = "not written: no page of this window is unchanged since an earlier capture"
+    out["unchanged_pages"] = entries
     return out
 
 
@@ -349,6 +519,10 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
     staging = subject / conv.staging_for(batch)
     if staging.exists():
         raise Refused(f"{staging.name} already exists — a staging file is never overwritten")
+    closed = subject / closed_name(batch)
+    if closed.exists():
+        raise Refused(f"{closed.name} exists: every draft of this window was left out and the window ended there",
+                      next_step=CLOSED_STEP)
     drafts_path = subject / draft_name(batch)
     if not drafts_path.is_file():
         raise Refused(f"no drafts {drafts_path.name}: the row-writer writes them first")
@@ -385,6 +559,8 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
     no_row_at: Dict[int, str] = {}    # draft line -> page, for `no_row` lines
     no_row: Dict[str, str] = {}
     no_row_lines: Dict[str, int] = {}
+    unchanged: Dict[str, str] = {}      # page -> the earlier batch its rows stand in
+    unchanged_at: Dict[int, str] = {}   # draft line -> page, for `unchanged` lines
     stop_lines: List[str] = []
     stop_lines_refused: List[dict] = []
 
@@ -409,6 +585,20 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
             no_row[url] = words.strip()
             no_row_lines[url] = n
             no_row_at[n] = url
+            continue
+        if "unchanged" in obj:
+            since = obj.get("unchanged")
+            if set(obj) != UNCHANGED_KEYS or not isinstance(since, str) or not since.strip():
+                reject(n, obj, "an unchanged page is exactly {\"page\": <url>, \"unchanged\": \"<the earlier batch "
+                               "the receipt names>\"}")
+                continue
+            # By text hash only: never taken on the draft's word.
+            why = unchanged_refusal(subject, batch, pages[url], since.strip())
+            if why is not None:
+                reject(n, obj, why, "the row-writer drafts the page's rows, or its no_row line, in its correction round")
+                continue
+            unchanged[url] = since.strip()
+            unchanged_at[n] = url
             continue
         unknown = sorted(set(obj) - set(LOCATION) - set(JUDGEMENT) - set(OPTIONAL))
         if unknown:
@@ -501,6 +691,8 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
             reason = f"same_feature_as names this draft's own line ({t})"
         elif t in no_row_at:
             reason = f"same_feature_as names draft line {t}, a page with no row"
+        elif t in unchanged_at:
+            reason = f"same_feature_as names draft line {t}, a page drafted unchanged (no row in this batch)"
         elif t in rejects:
             reason = f"same_feature_as names draft line {t}, which is rejected: {rejects[t]['reason']}"
         elif t not in candidates:
@@ -635,6 +827,24 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
             stop_lines_refused.append({"page": url, "no_row": words, "reason": why})
         else:
             stop_lines.append(line)
+    # An unchanged page adds nothing to the staging file: the rows recorded
+    # earlier stand, and its stop line accounts for the page in this window.
+    unchanged_pages: List[dict] = []
+    for url, since in unchanged.items():
+        n = next(k for k, u in unchanged_at.items() if u == url and k not in rejects)
+        if url in with_rows or url in no_row:
+            reject(n, {"page": url, "unchanged": since},
+                   "the page is drafted `unchanged` but also has " + ("rows" if url in with_rows else "a no_row line")
+                   + ": one or the other")
+            continue
+        rec = recorded(subject, url, since)
+        unchanged_pages.append({"page": url, "unchanged_since": since,
+                                **{k: rec[k] for k in ("rows_in", "ids", "stop_line") if k in rec}})
+        line, why = stops.try_line(url, stops.unchanged_reason(since, batch))
+        if line is not None:
+            stop_lines.append(line)  # g4 counts the page, in this window only, once the fetcher adds it
+        else:
+            stop_lines_refused.append({"page": url, "unchanged": since, "reason": why})
 
     listed = [rejects[n] for n in sorted(rejects)] + page_rejects
     result: Dict[str, object] = {"batch": batch, "round": round_no, "drafts": str(drafts_path),
@@ -644,9 +854,10 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
         _write_new(rp, "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in listed).encode("utf-8"))
         result["rejects"] = str(rp)
         result["rejected_lines"] = [{k: r[k] for k in ("line", "page", "reason") if k in r} for r in listed]
-    accounted = with_rows | set(no_row)
+    accounted = with_rows | set(no_row) | {e["page"] for e in unchanged_pages}
     result["pages_without_row_or_no_row"] = [u for u in pages if u not in accounted]
     result["stop_lines_to_add"] = stop_lines
+    result["unchanged_pages"] = unchanged_pages
     result["linked_by_code"] = linked
     result["respelt_by_code"] = [e for e in respelt if e["line"] in ids and e["line"] not in rejects]
     result["link_conflicts"] = conflicts
@@ -672,7 +883,18 @@ def stage(subject: Path, batch: str, leave_out: bool = False) -> Tuple[int, Dict
         result["note"] = "no draft became a row, so no staging file was written"
         if not listed:  # every page was drafted no_row
             result["next_step"] = NO_ROWS_STEP
-        return (1 if listed else 0), result
+            return 0, result
+        # Every draft that could be a row was left out: the window ends here, on
+        # a record of its own (never overwritten) listing each with its reason.
+        record = {"batch": batch, "round": round_no, "closed_by": f"kbqa stage {LEAVE_OUT}", "rows": 0,
+                  "drafts": drafts_path.name,
+                  "drafts_sha256": hashlib.sha256(drafts_path.read_bytes()).hexdigest(),
+                  "left_out": result["needs_operator"], "stop_lines_to_add": stop_lines,
+                  "next_step": CLOSED_STEP}
+        _write_new(closed, (json.dumps(record, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+        result["closed"] = str(closed)
+        result["next_step"] = CLOSED_STEP
+        return 0, result
     body = frontmatter(receipt) + "\n```json\n" + "".join(
         json.dumps(r, ensure_ascii=False) + "\n" for r in rows) + "```\n"
     _write_new(staging, body.encode("utf-8"))

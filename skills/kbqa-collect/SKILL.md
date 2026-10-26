@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # Collecting a subject
 
-**This copy is kbqa-collect v6.22.0**, installed with kb-qa v6.22.0.
+**This copy is kbqa-collect v6.23.0**, installed with kb-qa v6.23.0.
 
 **Invoked as**, by the operator, in a session opened at the estate root:
 
@@ -181,7 +181,16 @@ is never on it. Each carries its `state`:
 - `no drafts …` — from step 1 below;
 - `drafts written, no staging file …` — from step 3 (the drafts are on disk;
   the lists were built for them);
-- `every page drafted no_row …` — nothing to stage or map: go on to the next.
+- `drafts written, stage not run …` — every page drafted `no_row` or
+  `unchanged`, but the stop lines `kbqa stage` makes of them are not all in
+  `_stop-conditions.md` yet: from step 3 (stage, then add its lines);
+- `every page drafted no_row or unchanged …` — its stop lines are recorded:
+  nothing to stage or map: go on to the next.
+
+A window whose drafts were all left out is not on `unstaged`: it is listed
+under `closed` (`_draft-<batch>.closed.json`, written by `kbqa stage
+--leave-out-rejects`). It has ended — nothing to stage or map; bring its
+left-out pages to the operator.
 
 For each, including a retry run's window:
 
@@ -197,8 +206,10 @@ For each, including a retry run's window:
    with no row — and returns the drafts path.
 3. `kbqa-fetcher`: `kbqa stage` for the batch (its §3a). Code writes the
    staging file from the drafts and the receipt, and turns each page drafted
-   with no row into a `no feature: …` line, which the fetcher adds with
-   `kbqa stop add` (its §4). **A rejected draft blocks the staging file**: the
+   with no row into a `no feature: …` line, and each page drafted `unchanged`
+   into an `unchanged since <earlier batch>, in <this batch>` line — it
+   accounts for the page in this window and its collection only — which the
+   fetcher adds with `kbqa stop add` (its §4). **A rejected draft blocks the staging file**: the
    fetcher returns the drafts it rejected — a quote not found once in its part,
    a field no row carries, a `same_feature_as` that is no anchor of the
    subject, a value outside the profile's (a known grade respelling is not
@@ -219,7 +230,9 @@ For each, including a retry run's window:
    `next_step` says: the staging file is written without them, and each is
    listed under `needs_operator` with its reason and a suggested next step —
    bring every one to the operator with the batch. Never a second correction
-   round.
+   round. When no row is left, there is no staging file: the window ends on
+   `_draft-<batch>.closed.json` and the `next_step` is `no rows — skip
+   mapping; the left-out pages are the operator's` — skip step 5 for it.
 5. The batch's two classification passes, each followed by `kbqa mapstage`
    (§4), before the next window's `kbqa stage --lists`.
 
@@ -229,6 +242,20 @@ runs), with its suggested stop line and options. One may close a whole
 surface on one host (`scope: surface`): a host that refused every page of a
 window after its own copy was tried. On the operator's word, `kbqa-fetcher`
 adds that exact line, or the operator opens the URL and rules on it.
+
+**A subject collected again.** A re-collection is a new dated denominator and
+new windows, collected as above; the rows already staged or merged are never
+edited. A page whose text hash is the same as its latest earlier capture is
+marked by code (`unchanged_since` in the receipt) and listed for the row-writer
+in `_raw/<batch>/UNCHANGED.md` with the rows already recorded for it: it writes
+one `unchanged` line for the page instead of drafting it again, `kbqa stage`
+checks that line by text hash (a reject otherwise) and adds no row for it, only
+its stop line, scoped to that window. A page that **changed** is drafted
+whole: every feature still on it, not only the new ones. What changed between two collections is `kbqa compare <subject
+folder> --from <date> --to <date>`, which the operator runs (it writes
+nothing): added or removed only where the other collection's coverage is
+complete, otherwise `unknown`, with why. You never say what was added or
+removed yourself.
 
 **Failed pages.** `collect-surface` retries failed pages that may still pass
 (a timeout, a network error, throttling) once per run, after the selection is
@@ -347,6 +374,21 @@ Pass those reasons on with the findings, word for word.
 
 Only `fixable` findings come through here. `structural` and `planner` findings
 mean re-fetching or re-planning: a new batch, never an edit.
+
+**After a ruling on a question** (the rows unchanged): the operator brings the
+pattern they ruled on and the passes `kbqa status <subject folder> --pattern
+"<name>"` listed for it — exactly the rows that stopped on it, per batch and
+pass (the operator runs the ledger; it writes nothing). For each pass listed,
+`kbqa-fetcher` runs `kbqa mapstage --reopen "<name>"` for that pass alone (its
+§3b); it moves the pass's files into
+`_qa/retired-<batch>-<A|B>-<n>/` with `REOPENED-FOR-RULING.txt`, and writes a
+draft whose only open lines are placeholders for those rows. Then that pass's
+`kbqa-mapper` rewrites only the placeholders (its §2b) and `kbqa mapstage`
+runs as in §4. A pass the ledger says cannot be reopened goes as its
+`reopen_next_step` says: a `[no rule]` line in it → `--reopen "no rule"` first
+(the mapper writes that line, `kbqa mapstage` writes the map), then the
+ruling's reopen; a map made from other anchors → `kbqa mapstage --retire` and
+both passes mapped again; no sidecar → the operator.
 
 ## 7 · Never
 

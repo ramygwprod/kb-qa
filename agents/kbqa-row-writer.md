@@ -22,6 +22,15 @@ What the capture holds (since kbqa 6.21.0):
 - **No page twice.** A page whose text another URL already gave is not in the
   capture; the receipt lists it under `duplicates`, and code records its stop
   line.
+- **Unchanged pages** (since kbqa 6.23.0). When the subject is collected
+  again, a page whose text is the same as its latest earlier capture has
+  `unchanged_since: <batch>` in the receipt and is listed in
+  `_raw/<batch>/UNCHANGED.md` with the rows already recorded for it. Do not
+  read it or draft it again (§1).
+- **Changed pages.** A page collected again that is **not** marked unchanged
+  has changed since its earlier capture: read it whole and draft every feature
+  still on it, not only the new ones — a feature you leave undrafted has no row
+  in this collection, and nothing else records it.
 
 **You judge; code copies** (since kbqa 6.22.0). You write **drafts**: for each
 row, where its words are and what you make of them. `kbqa stage`, run by the
@@ -37,7 +46,8 @@ capture's path) and `pages` — each with its `url`, its `lines` and its `parts`
 If the file is missing, or its `batch` is not the batch you were given, stop
 and say so. Beside it, `_raw/<batch>/SAME-FEATURE.md` (the same-feature
 shortlist per page) and `_raw/<batch>/FEATURES.md` (the subject's features
-list) are written just before you were started (§2a).
+list) are written just before you were started (§2a) — and, when the subject
+is collected again and pages are unchanged, `_raw/<batch>/UNCHANGED.md` (§1).
 
 **Read one part at a time**, in order. Every page has one or more `parts`; a
 long page is split at its headings by code. For each part, Read the capture
@@ -59,11 +69,12 @@ exists, stop and say so; never overwrite one — except its rejected lines, in
 the one correction round (§4a).
 
 One JSON object per line, nothing else in the file — no frontmatter, no fence,
-no heading. Two kinds of line:
+no heading. Three kinds of line:
 
 ```
 {"page": "<url>", "part": 0, "quote": "<the words>", "vendor_term": "…", "what_it_does": "…", "evidence_grade": "official-doc", "confidence": "high", "mechanism": "Native", "outcome": "yes"}
 {"page": "<url>", "no_row": "pricing page"}
+{"page": "<url>", "unchanged": "<the batch UNCHANGED.md names>"}
 ```
 
 - **A row**: `page` is the page's `url`, copied exactly from the receipt;
@@ -75,9 +86,16 @@ no heading. Two kinds of line:
   a few words (`pricing page`, `legal notice`, `blog index`). Code turns it
   into the page's `no feature: …` stop line, so the check knows the page was
   read and held nothing, not skipped. A page with rows has no `no_row` line.
-- **Every page of the receipt gets one or the other.** A page no line names —
-  no row and no `no_row` — is rejected by `kbqa stage` as "no row and no
-  reason", and blocks the staging file like any reject.
+- **An unchanged page**: a page `_raw/<batch>/UNCHANGED.md` lists (its receipt
+  entry has `unchanged_since`) gets exactly one line `{"page": <url>,
+  "unchanged": "<the batch named>"}` — the rows already recorded for it stand,
+  so you neither read nor draft it. Code checks it by text hash and rejects it
+  if the page is not unchanged; never write it for a page the list does not
+  name. A page the list marks **nothing recorded** is drafted like any other.
+  A page not on the list changed: draft every feature still on it.
+- **Every page of the receipt gets one of these.** A page no line names — no
+  row, no `no_row`, no `unchanged` — is rejected by `kbqa stage` as "no row and
+  no reason", and blocks the staging file like any reject.
 
 `kbqa stage` finds each quote in its part's own lines — spacing, curly or
 straight quotes and dash kinds do not matter, spelling does — and copies the
@@ -217,6 +235,10 @@ round. Given that file:
   draft the capture does not support becomes `{"page": <url>, "no_row": …}` only
   when no other row is on that page; otherwise leave the line as it is and say
   why.
+- A rejected `unchanged` line is a page code found not unchanged by its text
+  hash, or with nothing recorded to stand: replace it, at its line, with the
+  page's first row or its `no_row` line, and add any further rows of the page
+  at the end of the file.
 - A reject that names a `page` and no `line` is a page no line of yours named
   ("no row and no reason"): read it, and **add** its rows, or its one `no_row`
   line, at the end of the file.

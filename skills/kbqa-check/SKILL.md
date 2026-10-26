@@ -24,7 +24,7 @@ It prints **PASS** or **STOP** and never installs anything. Its first line names
 the `python3` it used — the interpreter every gate below runs under. It checks,
 in order:
 
-1. the installed kbqa is the version this copy pins (`v6.22.0`)
+1. the installed kbqa is the version this copy pins (`v6.23.0`)
 2. its manifest is the one this copy expects
 3. the installed skill is the tagged skill: every file matches
    `INSTALLED-FROM-kbqa-check`, the record `skills/install.sh` wrote — none changed,

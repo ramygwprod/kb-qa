@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from kbqa import cli, collect_surface, fetch
+from kbqa import cli, collect_surface, fetch, stops
 from test_capture import DAY, HOST, SeqWeb, _cap, _den, ok_page
 
 
@@ -263,6 +263,12 @@ def test_every_window_with_a_capture_and_no_staging_is_listed_from_every_run(sub
         "".join(json.dumps({"page": p["url"], "no_row": "an overview"}) + "\n" for p in rec["pages"]))
     code, r = _collect(subject, den)  # a later run: the surface is exhausted, nothing new is captured
     assert code == 0 and r["already_exhausted"] and r["windows"] == []
+    # drafted no_row throughout, but kbqa stage has not run: its stop lines are not recorded yet
+    assert [(u["batch"], u["state"]) for u in r["unstaged"]] == [
+        (_batch(2), collect_surface.DRAFTED), (_batch(3), collect_surface.STAGE_NOT_RUN)]
+    for p in rec["pages"]:
+        stops.add(subject, f"- {p['url']} | no feature: an overview")
+    code, r = _collect(subject, den)
     assert [(u["batch"], u["state"]) for u in r["unstaged"]] == [
         (_batch(2), collect_surface.DRAFTED), (_batch(3), collect_surface.ALL_NO_ROW)]
 

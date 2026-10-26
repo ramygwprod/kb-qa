@@ -231,13 +231,19 @@ whole run:
 - `windows` — every window written, in order: `batch`, `kind` (`window`, or
   `retry` for the retry run), `window_end`, `stopped`, `pages_captured`,
   `duplicates` (pages with the same text as a page already captured),
+  `unchanged` (pages with the same text as their own latest earlier capture —
+  a subject collected again; the receipt marks each `unchanged_since`),
   `failures`, `next_offset`, `remaining`, `receipt` and `capture` (`null` when
   the window wrote no capture: nothing in it for the row-writer);
 - `unstaged` — every window of this surface with a capture file and no staging
   file, from this run **and every earlier run**, in order, each with its
-  `state` (no drafts yet; drafts written, not staged; every page drafted
-  `no_row`, nothing to stage). Hand it back whole: the orchestrator runs the
+  `state` (no drafts yet; drafts written, not staged;
+  drafts written, stage not run — every page drafted `no_row` or `unchanged`
+  but the stop lines `kbqa stage` makes of them not yet added; every page drafted `no_row` or
+  `unchanged` and its stop lines added, nothing to stage). Hand it back whole: the orchestrator runs the
   per-window steps for these first, so no captured window is lost;
+- `closed` — windows whose drafts were all left out (`_draft-<batch>.closed.json`):
+  they have ended, nothing to stage or map; the left-out pages are the operator's;
 - `end` and `next_step` — as the table says; `refusal` — capture's refusal,
   word for word, when there is one;
 - `stop_lines_to_add` — the exact lines for §4, each once, including `js-only`
@@ -278,9 +284,11 @@ python3 -m kbqa stage --subject "<subject folder>" --batch <batch> --leave-out-r
 `--lists` writes `_raw/<batch>/FEATURES.md` (the subject's features, every row
 staged so far, earlier windows included), `_raw/<batch>/SAME-FEATURE.md` (the
 same-feature shortlist per page, for the row-writer) and, when the estate names
-patterns, `_raw/<batch>/ROLE-ROWS.md`; it prints their paths (`same_feature`
-or `same_feature_note`, `role_rows` or `role_rows_note`, saying why one is not
-written). Hand back the `role_rows` path or
+patterns, `_raw/<batch>/ROLE-ROWS.md`, and, when the receipt marks pages
+unchanged since an earlier capture, `_raw/<batch>/UNCHANGED.md` (each with the
+rows already recorded for it, for the row-writer); it prints their paths
+(`same_feature` or `same_feature_note`, `role_rows` or `role_rows_note`,
+`unchanged` or `unchanged_note`, saying why one is not written). Hand back the `role_rows` path or
 note: the mappers read it. `--lists` is refused once the batch's staging file
 exists — the lists are what the drafts were written from: return that refusal.
 
@@ -306,7 +314,13 @@ Hand back, copied from the result:
 - `needs_operator` — after `--leave-out-rejects`: every draft left out, word for
   word;
 - `stop_lines_to_add` — one `no feature: …` line per page the row-writer
-  drafted `no_row`: add each with `kbqa stop add` (§4);
+  drafted `no_row`, and one `unchanged since <earlier batch>, in <this batch>`
+  line per page it drafted `unchanged` (it accounts for the page in this window
+  and its collection only — never in a later collection, where the page may
+  have changed): add each with `kbqa stop add` (§4);
+- `unchanged_pages` — the pages drafted `unchanged` that code accepted (by
+  text hash), each with where its rows are recorded: nothing new is staged for
+  them, and nothing earlier is edited;
 - `pages_without_row_or_no_row` — pages that end with neither a staged row nor
   a `no_row` line. A page **no draft line names at all** is a reject of its
   own, by page, "no row and no reason": it blocks the staging file like any
@@ -317,7 +331,13 @@ Hand back, copied from the result:
 - `role_rows_refreshed` (or `role_rows_note`) — `ROLE-ROWS.md` written again
   after the staging file, so the mappers see the batch's own rows;
 - a `next_step` of `no rows — skip mapping for this batch` — every page was
-  drafted `no_row`: there is no staging file, and no mapping pass for it.
+  drafted `no_row` (or `unchanged`): there is no staging file, and no mapping
+  pass for it;
+- `closed` and a `next_step` of `no rows — skip mapping; the left-out pages are
+  the operator's` — after `--leave-out-rejects`, every draft that could be a row
+  was left out: the window ends on `_draft-<batch>.closed.json` (every left-out
+  draft with its reason). There is no staging file and no mapping pass; hand
+  back the `needs_operator` entries. `kbqa stage` refuses the batch from then on.
 
 It never overwrites a staging file, and refuses when the capture no longer
 matches its receipt: return a refusal as a blocker, word for word. Never edit a
@@ -391,6 +411,21 @@ python3 -m kbqa mapstage --subject "<subject folder>" --batch <batch> --pass <A|
 It retires the file like any other and writes `RETIRED-WITHOUT-RECORD.txt` into
 the folder, saying it was retired without a record on the operator's word.
 
+**After the operator's ruling on a pattern** (the rows unchanged), when the
+orchestrator brings the pattern and the passes the ledger listed, run for each
+of those passes alone:
+
+```bash
+python3 -m kbqa mapstage --subject "<subject folder>" --batch <batch> --pass <A|B> --reopen "<pattern>"
+```
+
+It moves the pass's files into `_qa/retired-<batch>-<A|B>-<n>/` with
+`REOPENED-FOR-RULING.txt`, and writes a new draft: every other line carried
+over exactly, a placeholder for each reopened row. Hand back `reopened`,
+`carried_over`, `retired_to` and `next_step`; a refusal, word for word. Then
+that pass's mapper rewrites only the placeholders, and you run `kbqa mapstage`
+as above.
+
 ## 4 · Stop-conditions
 
 `_stop-conditions.md` in the subject folder, one list item per stop:
@@ -425,9 +460,10 @@ exactly so:
 | `not approved: pdf` | a PDF the operator has not approved |
 | `unreachable: <the failure kbqa printed>` | a page no attempt could fetch (a 404, a TLS failure, a page failing in three runs) — only with the operator's word |
 | `no feature: <what the page is>` | a page you captured from which the row-writer recorded no row — say what the page is (`pricing page`, `legal notice`, `blog index`) |
+| `unchanged since <earlier batch>, in <this batch>` | only as `kbqa stage` prints it: a page of <this batch> with the same text as its latest earlier capture, whose rows there stand — it accounts for the page in <this batch> and its collection only |
 
-Every reason but `surface … not published`, `not approved: pdf` and
-`no feature: …` may end with ` (surface <slug>)`, which says the surface's
+Every reason but `surface … not published`, `not approved: pdf`,
+`no feature: …` and `unchanged since …` may end with ` (surface <slug>)`, which says the surface's
 index could not be read. Only `refused: robots` and `refused: HTTP 401|403`
 with that ending, keyed by one of the surface's own denominator items, also
 close the surface's remaining items on that host — every other reason closes
